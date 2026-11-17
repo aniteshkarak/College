@@ -41,7 +41,7 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
   };
 
   return (
-    <div className="relative w-full max-w-sm mx-auto h-[620px] rounded-3xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800 text-white select-none transition-all">
+    <div className="relative w-full max-w-sm mx-auto h-[calc(100vh-11rem)] min-h-[500px] max-h-[640px] rounded-3xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800 text-white select-none transition-all">
       
       {/* Background Image Carousel */}
       <div className="relative w-full h-full">
@@ -159,9 +159,6 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
               <span className="text-xl font-medium text-slate-300">
                 {profile.age}
               </span>
-              {profile.active_now && (
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse ml-1" title="Active now" />
-              )}
             </div>
 
             {/* College & City */}

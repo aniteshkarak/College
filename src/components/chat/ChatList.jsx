@@ -133,9 +133,6 @@ export const ChatList = ({ onSelectMatch }) => {
                       alt={likeItem.user.display_name}
                       className="w-14 h-14 rounded-2xl object-cover ring-2 ring-rose-500/20 shadow-sm"
                     />
-                    {likeItem.user.active_now && (
-                      <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                    )}
                   </div>
 
                   <div>
@@ -238,9 +235,6 @@ export const ChatList = ({ onSelectMatch }) => {
                         alt={m.user.display_name}
                         className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30"
                       />
-                      {m.user.active_now && (
-                        <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                      )}
                     </div>
 
                     <div>

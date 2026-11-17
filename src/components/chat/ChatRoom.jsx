@@ -109,40 +109,37 @@ export const ChatRoom = ({ match, onBack }) => {
       {/* 1. NATIVE MESSENGER TOP BAR */}
       <div className="flex items-center justify-between px-4 py-3 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 backdrop-blur-md z-20 shadow-xs shrink-0">
         
-        {/* Left: Back button & Partner Info */}
-        <div className="flex items-center gap-3">
+        {/* Left: Back button & Partner Info (No online/last-seen per requirement) */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-1.5 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"
               title="Back to Chats list"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <img
               src={match.user.avatar_url}
               alt={match.user.display_name}
-              className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-500/30 shadow-xs"
+              className="w-10 h-10 rounded-2xl object-cover ring-2 ring-emerald-500/30 shadow-xs"
             />
-            {match.user.active_now && (
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-            )}
           </div>
 
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white leading-none">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white leading-none truncate max-w-[110px] sm:max-w-xs">
                 {match.user.display_name}
               </h3>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200">
+              <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 shrink-0">
                 {currentStage === 'Friend' ? 'Mutual Friend' : `${currentStage}`}
               </span>
             </div>
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-              {match.user.active_now ? 'Online now' : match.user.last_seen || 'Active recently'}
+            <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate max-w-[130px] sm:max-w-xs">
+              {match.user.college_name || match.user.city}
             </p>
           </div>
         </div>
@@ -154,22 +151,22 @@ export const ChatRoom = ({ match, onBack }) => {
           {currentStage === 'Friend' && (
             <button
               onClick={() => setShowGoModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 text-white rounded-full text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all animate-pulse-slow"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 text-white rounded-full text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all animate-pulse-slow"
               title="Click 'GO' to advance from Friend to Dating stage"
             >
               <Zap className="w-3.5 h-3.5 fill-white" />
-              <span>GO to Dating</span>
+              <span>GO<span className="hidden sm:inline"> to Dating</span></span>
             </button>
           )}
 
           {currentStage === 'Dating' && (
             <button
               onClick={() => handleSendGoRequest(match.id, 'Relationship')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-xs font-black shadow-md hover:brightness-110"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-xs font-black shadow-md hover:brightness-110"
               title="Confirm mutual Relationship stage"
             >
               <Heart className="w-3.5 h-3.5 fill-white" />
-              <span>Relationship</span>
+              <span><span className="hidden sm:inline">GO </span>Relationship</span>
             </button>
           )}
 

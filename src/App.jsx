@@ -39,11 +39,13 @@ const MainLayout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
-      {/* Top Header Navbar */}
-      <Navbar onOpenMoodModal={() => setIsMoodModalOpen(true)} />
+      {/* Top Header Navbar: Hidden on mobile when inside an active personal chat */}
+      <div className={currentView === 'chats' && activeChatMatch ? 'hidden md:block' : 'block'}>
+        <Navbar onOpenMoodModal={() => setIsMoodModalOpen(true)} />
+      </div>
 
       {/* Main View Area */}
-      <main className="flex-1 pb-16 md:pb-8">
+      <main className={`flex-1 ${currentView === 'chats' ? 'p-0' : 'pb-20 md:pb-8'}`}>
         
         {/* PUBLIC PAGES */}
         {currentView === 'landing' && <LandingPage onOpenAuth={() => setIsAuthModalOpen(true)} />}
@@ -56,14 +58,14 @@ const MainLayout = () => {
 
         {/* AUTHENTICATED APP VIEWS */}
         {currentView === 'discover' && (
-          <div className="py-4">
+          <div className="py-2 sm:py-4">
             <CardDeck />
           </div>
         )}
 
         {/* MATCHES (Who Liked You with Accept/Reject & Mutual Friends) */}
         {currentView === 'matches' && (
-          <div className="py-4">
+          <div className="py-2 sm:py-4">
             <ChatList
               onSelectMatch={(m) => {
                 setActiveChatMatch(m);
@@ -76,7 +78,7 @@ const MainLayout = () => {
         {/* CAMPUS BOARD (Exclusive to user's college) */}
         {currentView === 'campus-board' && <CampusBoard />}
 
-        {/* CHATS (Dedicated personal chat of everyone one by one with GO section) */}
+        {/* CHATS (Dedicated personal chat of everyone one by one with GO section - No footer in chat section) */}
         {currentView === 'chats' && <MessengerView />}
 
         {currentView === 'games' && <GamesHub />}
@@ -88,11 +90,11 @@ const MainLayout = () => {
 
       </main>
 
-      {/* Footer */}
-      <Footer />
+      {/* Footer: Hidden in Chats section per user requirement */}
+      {currentView !== 'chats' && <Footer />}
 
-      {/* Bottom Navigation for Mobile */}
-      {isAuthenticated && <BottomNav />}
+      {/* Bottom Navigation for Mobile: Hidden when inside an active mobile personal chat */}
+      {isAuthenticated && !(currentView === 'chats' && activeChatMatch) && <BottomNav />}
 
       {/* Global Modals & Overlays */}
       <Toast />

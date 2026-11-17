@@ -38,10 +38,10 @@ export const MessengerView = () => {
   });
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-4 h-[calc(100vh-5rem)]">
+    <div className="w-full max-w-7xl mx-auto px-0 md:px-4 py-0 md:py-4 h-[calc(100dvh-4rem)] md:h-[calc(100vh-5rem)]">
       
       {/* 2-COLUMN MESSENGER CONTAINER */}
-      <div className="w-full h-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden flex flex-col md:flex-row">
+      <div className="w-full h-full bg-white dark:bg-slate-900 rounded-none md:rounded-3xl border-0 md:border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden flex flex-col md:flex-row">
         
         {/* LEFT COLUMN: LIST OF PERSONAL CHATS ONE BY ONE */}
         <div
@@ -119,16 +119,13 @@ export const MessengerView = () => {
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
                     }`}
                   >
-                    {/* Avatar & Online Dot */}
+                    {/* Avatar */}
                     <div className="relative shrink-0">
                       <img
                         src={m.user.avatar_url}
                         alt={m.user.display_name}
                         className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/20 shadow-xs"
                       />
-                      {m.user.active_now && (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
-                      )}
                     </div>
 
                     {/* Chat preview details */}
@@ -206,7 +203,7 @@ export const MessengerView = () => {
         {/* RIGHT COLUMN: ACTIVE PERSONAL CHAT ROOM OR PLACEHOLDER */}
         <div
           className={`flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 ${
-            activeChatMatch ? 'flex' : 'hidden md:flex'
+            activeChatMatch ? 'fixed inset-0 z-50 md:static md:inset-auto md:z-auto flex' : 'hidden md:flex'
           }`}
         >
           {activeChatMatch ? (

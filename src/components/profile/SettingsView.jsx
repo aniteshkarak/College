@@ -19,7 +19,6 @@ export const SettingsView = () => {
 
   const [settings, setSettings] = useState({
     discovery_enabled: true,
-    show_online_status: true,
     read_receipts_enabled: true,
     push_notifications_enabled: true,
     voice_note_preview: true
@@ -92,15 +91,12 @@ export const SettingsView = () => {
 
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">Show Online / Active Status</p>
-                <p className="text-[11px] text-slate-500">Display a green active indicator to your matches.</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">Online & Last Seen Privacy</p>
+                <p className="text-[11px] text-slate-500">Always hidden. Collégé never broadcasts your active or last seen status.</p>
               </div>
-              <input
-                type="checkbox"
-                checked={settings.show_online_status}
-                onChange={() => toggleSetting('show_online_status')}
-                className="w-4 h-4 accent-rose-500 cursor-pointer"
-              />
+              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 shrink-0">
+                Hidden & Private
+              </span>
             </div>
 
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
