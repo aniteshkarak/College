@@ -247,6 +247,17 @@ export const ChatList = ({ onSelectMatch }) => {
                         </span>
                       </div>
 
+                      {m.user.mood && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50">
+                            <span>{typeof m.user.mood === 'object' ? m.user.mood.emoji : '✨'}</span>
+                            <span className="truncate max-w-[140px]">
+                              {typeof m.user.mood === 'object' ? m.user.mood.label : m.user.mood}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[220px] sm:max-w-xs mt-1">
                         {m.last_message ? (
                           m.last_message.message_type === 'voice' ? (

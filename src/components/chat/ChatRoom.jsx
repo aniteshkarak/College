@@ -49,7 +49,6 @@ export const ChatRoom = ({ match, onBack }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showGoModal, setShowGoModal] = useState(false);
-  const [isGoJourneyExpanded, setIsGoJourneyExpanded] = useState(true);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
 
@@ -137,6 +136,18 @@ export const ChatRoom = ({ match, onBack }) => {
               <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 shrink-0">
                 {currentStage === 'Friend' ? 'Mutual Friend' : `${currentStage}`}
               </span>
+              {/* Partner's live Mood badge */}
+              {match.user.mood && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 shrink-0 shadow-2xs"
+                  title={`${match.user.display_name}'s current campus mood`}
+                >
+                  <span>{typeof match.user.mood === 'object' ? match.user.mood.emoji : '✨'}</span>
+                  <span className="truncate max-w-[130px]">
+                    {typeof match.user.mood === 'object' ? match.user.mood.label : match.user.mood}
+                  </span>
+                </span>
+              )}
             </div>
             <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 truncate max-w-[130px] sm:max-w-xs">
               {match.user.college_name || match.user.city}
@@ -216,147 +227,54 @@ export const ChatRoom = ({ match, onBack }) => {
 
       </div>
 
-      {/* 2. THE DEDICATED "GO SECTION" & STAGE JOURNEY (Expandable Roadmap) */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2 text-xs shadow-2xs z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="p-1 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400">
-              <Zap className="w-3.5 h-3.5 fill-amber-500" />
-            </span>
-            <span className="font-bold text-slate-800 dark:text-slate-200">
-              Connection Journey:
-            </span>
-            <span className="font-extrabold text-rose-600 dark:text-rose-400">
-              Stage {currentStage === 'Friend' ? '1: Mutual Friend (Talking)' : (currentStage === 'Dating' ? '2: Dating' : '3: Relationship')}
-            </span>
-          </div>
-
-          <button
-            onClick={() => setIsGoJourneyExpanded(!isGoJourneyExpanded)}
-            className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 font-semibold"
-          >
-            <span>{isGoJourneyExpanded ? 'Hide' : 'Show Roadmap'}</span>
-            {isGoJourneyExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-
-        {/* Expandable 3-Stage Progress Timeline */}
-        {isGoJourneyExpanded && (
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2 text-center animate-slide-up">
-            
-            {/* Step 1: Mutual Friend */}
-            <div className={`p-2 rounded-xl border text-[11px] ${
-              currentStage === 'Friend'
-                ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 font-bold text-emerald-800 dark:text-emerald-300'
-                : 'border-slate-200 dark:border-slate-800 text-slate-500'
-            }`}>
-              <div className="flex items-center justify-center gap-1 mb-0.5">
-                <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
-                <span>1. Friend (Talking)</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-normal">Active mutual chat</p>
-            </div>
-
-            {/* Step 2: Dating */}
-            <div className={`p-2 rounded-xl border text-[11px] ${
-              currentStage === 'Dating'
-                ? 'border-rose-500 bg-rose-50/60 dark:bg-rose-950/40 font-bold text-rose-700 dark:text-rose-300'
-                : 'border-slate-200 dark:border-slate-800 text-slate-400'
-            }`}>
-              <div className="flex items-center justify-center gap-1 mb-0.5">
-                <Zap className="w-3 h-3 text-amber-500" />
-                <span>2. Dating Stage</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-normal">Via "GO" Button</p>
-            </div>
-
-            {/* Step 3: Relationship */}
-            <div className={`p-2 rounded-xl border text-[11px] ${
-              currentStage === 'Relationship'
-                ? 'border-purple-500 bg-purple-50/60 dark:bg-purple-950/40 font-bold text-purple-700 dark:text-purple-300'
-                : 'border-slate-200 dark:border-slate-800 text-slate-400'
-            }`}>
-              <div className="flex items-center justify-center gap-1 mb-0.5">
-                <Heart className="w-3 h-3 text-rose-500" />
-                <span>3. Relationship</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-normal">Mutual confirmation</p>
-            </div>
-
-          </div>
-        )}
-      </div>
-
-      {/* OUTGOING "GO" REQUEST STATUS BANNER */}
-      {isOutgoingGoRequest && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900/60 flex items-center justify-between text-xs animate-slide-up">
-          <div className="flex items-center gap-2 text-amber-900 dark:text-amber-300 font-medium">
-            <Zap className="w-4 h-4 text-amber-500 fill-amber-500 animate-bounce" />
-            <span>
-              You clicked <strong>"GO"</strong> to transition to Dating! Waiting for {match.user.display_name} to respond...
-            </span>
-          </div>
-          <span className="text-[10px] font-bold text-amber-700 bg-amber-200 dark:bg-amber-900 px-2 py-0.5 rounded-full">
-            Pending Response
-          </span>
-        </div>
-      )}
-
-      {/* INCOMING "GO" REQUEST REACTION BANNER (THE 4 EXACT CHOICES) */}
+      {/* INCOMING "GO" REQUEST ACTION (Shown only if partner actively clicks GO during chat) */}
       {isIncomingGoRequest && (
-        <div className="p-4 bg-gradient-to-r from-rose-500/15 via-amber-500/15 to-purple-500/15 border-b border-rose-300 dark:border-rose-900/60 shadow-inner animate-slide-up">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles className="w-4 h-4 text-rose-600" />
-            <h4 className="font-bold text-xs text-slate-900 dark:text-white">
-              {match.user.display_name} clicked "GO" and wants to transition from Friend to Dating stage!
-            </h4>
-          </div>
-          <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-3">
-            Select how you would like to react:
-          </p>
+        <div className="p-3 bg-gradient-to-r from-rose-50/90 via-amber-50/70 to-rose-50/90 dark:from-slate-900 dark:via-rose-950/40 dark:to-slate-900 border-b border-rose-200 dark:border-rose-900/60 z-10 animate-slide-up">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-600 flex items-center justify-center shrink-0">
+                <Zap className="w-3.5 h-3.5 fill-rose-500" />
+              </span>
+              <div>
+                <p className="font-bold text-xs text-slate-900 dark:text-white">
+                  Stage Transition Proposal: Advance to Dating
+                </p>
+                <p className="text-[10px] text-slate-500">React to {match.user.display_name}'s invitation:</p>
+              </div>
+            </div>
 
-          {/* THE 4 REQUIRED BUTTONS:
-              1. Accept
-              2. Reject
-              3. Sometimes later
-              4. We are good as a friend */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <button
-              onClick={() => handleRespondToGoRequest(match.id, 'accept')}
-              className="py-2.5 px-3 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Heart className="w-3.5 h-3.5 fill-white" />
-              <span>Accept (Date)</span>
-            </button>
-
-            <button
-              onClick={() => handleRespondToGoRequest(match.id, 'reject')}
-              className="py-2.5 px-3 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <ThumbsDown className="w-3.5 h-3.5" />
-              <span>Reject</span>
-            </button>
-
-            <button
-              onClick={() => handleRespondToGoRequest(match.id, 'sometimes_later')}
-              className="py-2.5 px-3 rounded-xl text-xs font-bold bg-amber-100 dark:bg-amber-950/80 hover:bg-amber-200 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-900 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Sometimes later</span>
-            </button>
-
-            <button
-              onClick={() => handleRespondToGoRequest(match.id, 'we_are_good_as_a_friend')}
-              className="py-2.5 px-3 rounded-xl text-xs font-bold bg-emerald-100 dark:bg-emerald-950/80 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-900 flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Coffee className="w-3.5 h-3.5" />
-              <span>Good as a friend</span>
-            </button>
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5">
+              <button
+                onClick={() => handleRespondToGoRequest(match.id, 'accept')}
+                className="py-1.5 px-3 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs flex items-center justify-center gap-1 transition-all"
+              >
+                <Heart className="w-3 h-3 fill-white" />
+                <span>Accept</span>
+              </button>
+              <button
+                onClick={() => handleRespondToGoRequest(match.id, 'reject')}
+                className="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => handleRespondToGoRequest(match.id, 'sometimes_later')}
+                className="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+              >
+                Later
+              </button>
+              <button
+                onClick={() => handleRespondToGoRequest(match.id, 'we_are_good_as_a_friend')}
+                className="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+              >
+                Stay Friends
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 3. MESSAGE FEED AREA (LOOK LIKE REAL MESSENGER FEATURE) */}
+      {/* 2. MESSAGE FEED AREA (LOOK LIKE REAL MESSENGER FEATURE) */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5 bg-gradient-to-b from-slate-50/50 to-slate-100/50 dark:from-slate-950 dark:to-slate-900/60">
         
         {/* End-to-end privacy notice */}

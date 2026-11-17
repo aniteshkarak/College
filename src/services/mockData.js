@@ -177,7 +177,7 @@ export const INITIAL_INCOMING_LIKES = [
       bio: 'Physics geek who loves dancing Kathak and sci-fi series. Zero relationship drama, just happy vibes!',
       interests: ['Dancing', 'Movies', 'Reading', 'Coding'],
       verification_status: 'Selfie Verified',
-      active_now: false
+      mood: { id: 'happy', label: 'Happy', emoji: '✨' }
     },
     liked_at: '2026-11-17T21:10:00.000Z'
   },
@@ -199,7 +199,7 @@ export const INITIAL_INCOMING_LIKES = [
       bio: 'Debater, cafe hopper, movie buff. Tell me your top 3 comfort movies!',
       interests: ['Movies', 'Food', 'Travelling'],
       verification_status: 'Phone Verified',
-      active_now: false
+      mood: { id: 'chat', label: 'Looking for a conversation', emoji: '💬' }
     },
     liked_at: '2026-11-17T22:30:00.000Z'
   },
@@ -221,7 +221,7 @@ export const INITIAL_INCOMING_LIKES = [
       bio: 'Filter coffee advocate, podcaster. Looking for genuine campus conversations and fun games.',
       interests: ['Music', 'Fitness', 'Food', 'Gaming'],
       verification_status: 'Selfie Verified',
-      active_now: true
+      mood: { id: 'friends', label: 'Want to make friends', emoji: '🤝' }
     },
     liked_at: '2026-11-17T23:00:00.000Z'
   }
@@ -239,8 +239,7 @@ export const INITIAL_MUTUAL_FRIENDS = [
       city: 'Kolkata',
       college_name: 'St. Xavier\'s College, Kolkata',
       avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-      active_now: true,
-      last_seen: 'Online now'
+      mood: { id: 'chat', label: 'Looking for a conversation', emoji: '💬' }
     },
     matched_at: '2026-11-17T18:00:00.000Z',
     status: 'active',
@@ -265,21 +264,13 @@ export const INITIAL_MUTUAL_FRIENDS = [
       city: 'Kharagpur',
       college_name: 'IIT Kharagpur',
       avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-      active_now: true,
-      last_seen: 'Active 10m ago'
+      mood: { id: 'romantic', label: 'Feeling romantic', emoji: '🌹' }
     },
     matched_at: '2026-11-16T12:00:00.000Z',
     status: 'active',
     stage: 'Friend',
     unread_count: 0,
-    // Demo incoming Go request from Tanvi proposing to advance to Dating stage!
-    go_request: {
-      from: 'usr_004',
-      to: 'usr_me_001',
-      targetStage: 'Dating',
-      status: 'pending',
-      requested_at: '2026-11-17T23:30:00.000Z'
-    },
+    go_request: null,
     last_message: {
       content: 'Audio Note (0:24)',
       created_at: '2026-11-17T21:40:00.000Z',
