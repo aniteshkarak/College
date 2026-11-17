@@ -187,9 +187,12 @@ export const AppProvider = ({ children }) => {
   };
 
   // "GO BUTTON" STAGE TRANSITION (Friend -> Dating -> Relationship)
-  const handleSendGoRequest = (matchId, targetStage = 'Dating') => {
+  const handleSendGoRequest = (matchId, targetStage = 'Dating', senderId = currentUser.id) => {
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
+
+    const goMsgId = 'go_req_' + Date.now();
+    const isFromMe = senderId === currentUser.id;
 
     // Set pending go request
     setMatches((prev) =>
@@ -198,7 +201,8 @@ export const AppProvider = ({ children }) => {
           ? {
               ...m,
               go_request: {
-                from: currentUser.id,
+                id: goMsgId,
+                from: senderId,
                 targetStage,
                 status: 'pending',
                 requested_at: new Date().toISOString()
@@ -208,49 +212,37 @@ export const AppProvider = ({ children }) => {
       )
     );
 
-    addToast(`"Go" request sent to ${match.user.display_name}! Asked to transition to ${targetStage} stage.`, 'info');
+    // Append GO request message to conversation thread so it appears directly in chat
+    const newGoMessage = {
+      id: goMsgId,
+      sender_id: senderId,
+      message_type: 'go_request',
+      target_stage: targetStage,
+      go_status: 'pending',
+      content: isFromMe
+        ? `🚀 Sent a GO request to transition from Friendship to ${targetStage} stage!`
+        : `🚀 ${match.user.display_name} sent a GO request to transition from Friendship to ${targetStage} stage!`,
+      created_at: new Date().toISOString()
+    };
 
-    // Simulate partner response after 3 seconds for demonstration
-    setTimeout(() => {
-      // Possible reactions: 'accept' | 'reject' | 'sometimes_later' | 'we_are_good_as_a_friend'
-      const simulatedResponse = 'accept';
+    setConversations((prev) => ({
+      ...prev,
+      [matchId]: [...(prev[matchId] || []), newGoMessage]
+    }));
 
-      if (simulatedResponse === 'accept') {
-        setMatches((prev) =>
-          prev.map((m) =>
-            m.id === matchId
-              ? {
-                  ...m,
-                  stage: targetStage,
-                  go_request: null
-                }
-              : m
-          )
-        );
-
-        try {
-          confetti({
-            particleCount: 100,
-            spread: 80,
-            origin: { y: 0.5 }
-          });
-        } catch (e) {}
-
-        addToast(
-          `❤️ ${match.user.display_name} Accepted your "Go" request! You are now in the ${targetStage} stage!`,
-          'success'
-        );
-      }
-    }, 3000);
+    if (isFromMe) {
+      addToast(`"GO" invitation sent to ${match.user.display_name} to advance to ${targetStage} stage!`, 'info');
+    }
   };
 
-  // Handle responding to an incoming Go request (the 4 specified choices)
-  const handleRespondToGoRequest = (matchId, choice) => {
+  // Handle responding to an incoming Go request with accept or refuse (with explanation sent via chat)
+  const handleRespondToGoRequest = (matchId, choice, explanation = '') => {
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
 
+    const nextStage = match.go_request?.targetStage || 'Dating';
+
     if (choice === 'accept') {
-      const nextStage = match.go_request?.targetStage || 'Dating';
       setMatches((prev) =>
         prev.map((m) =>
           m.id === matchId
@@ -258,25 +250,55 @@ export const AppProvider = ({ children }) => {
             : m
         )
       );
+
+      // Add celebratory celebration system message to chat
+      const celebrationMsg = {
+        id: 'msg_' + Date.now(),
+        sender_id: 'system',
+        message_type: 'system',
+        content: `🎉 Mutual agreement! You and ${match.user.display_name} accepted the GO request and are now officially in the ${nextStage} Stage! ❤️`,
+        created_at: new Date().toISOString()
+      };
+
+      // Also update the go_request message status in conversations
+      setConversations((prev) => ({
+        ...prev,
+        [matchId]: (prev[matchId] || []).map((msg) =>
+          msg.message_type === 'go_request' && msg.go_status === 'pending'
+            ? { ...msg, go_status: 'accepted' }
+            : msg
+        ).concat(celebrationMsg)
+      }));
+
       try {
         confetti({ particleCount: 90, spread: 70 });
       } catch (e) {}
       addToast(`Accepted! You and ${match.user.display_name} are now in the ${nextStage} stage! ❤️`, 'success');
-    } else if (choice === 'reject') {
-      setMatches((prev) =>
-        prev.map((m) => (m.id === matchId ? { ...m, go_request: null } : m))
-      );
-      addToast(`Declined the stage transition request.`, 'info');
-    } else if (choice === 'sometimes_later') {
-      setMatches((prev) =>
-        prev.map((m) => (m.id === matchId ? { ...m, go_request: null } : m))
-      );
-      addToast(`Replied: 'Sometimes later'. Take your time! 😊`, 'info');
-    } else if (choice === 'we_are_good_as_a_friend') {
+    } else if (choice === 'refuse' || choice === 'reject' || choice === 'we_are_good_as_a_friend') {
       setMatches((prev) =>
         prev.map((m) => (m.id === matchId ? { ...m, stage: 'Friend', go_request: null } : m))
       );
-      addToast(`Replied: 'We are good as a friend'. Staying as mutual friends 🤝`, 'info');
+
+      // When refused, send the explanation directly as a chat message per requirement!
+      const finalExplanation = explanation.trim() || 'I really value our friendship and want to take things slower for now.';
+      const explanationMsg = {
+        id: 'msg_' + Date.now(),
+        sender_id: currentUser.id,
+        message_type: 'text',
+        content: `I appreciate you asking, but I'd prefer to stay friends for now 😊\nReason: "${finalExplanation}"`,
+        created_at: new Date().toISOString()
+      };
+
+      setConversations((prev) => ({
+        ...prev,
+        [matchId]: (prev[matchId] || []).map((msg) =>
+          msg.message_type === 'go_request' && msg.go_status === 'pending'
+            ? { ...msg, go_status: 'refused', refusal_reason: finalExplanation }
+            : msg
+        ).concat(explanationMsg)
+      }));
+
+      addToast(`Explanation sent in chat. Staying as mutual friends! 🤝`, 'info');
     }
   };
 
