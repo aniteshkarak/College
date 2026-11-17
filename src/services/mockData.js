@@ -162,46 +162,68 @@ export const INITIAL_INCOMING_LIKES = [
   {
     id: 'like_inc_001',
     user: {
-      id: 'usr_002',
-      display_name: 'Riya Sen',
-      full_name: 'Riya Sen',
-      date_of_birth: '2004-08-20',
-      age: 22,
+      id: 'usr_003',
+      display_name: 'Sneha Roy',
+      full_name: 'Sneha Roy',
+      date_of_birth: '2003-11-05',
+      age: 23,
       gender: 'Female',
-      city: 'Kolkata',
+      city: 'Midnapore',
       state: 'West Bengal',
-      college_name: 'St. Xavier\'s College, Kolkata',
-      course: 'English Literature',
-      relationship_intention: 'Dating Connection',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-      bio: 'Poetry in cafes, vinyl records, street photography on Park Street. Looking for genuine sparks.',
-      interests: ['Reading', 'Photography', 'Music', 'Food'],
+      college_name: 'Midnapore College (Autonomous)',
+      course: 'B.Sc Physics',
+      relationship_intention: 'Casual Connection',
+      avatar_url: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=800&q=80',
+      bio: 'Physics geek who loves dancing Kathak and sci-fi series. Zero relationship drama, just happy vibes!',
+      interests: ['Dancing', 'Movies', 'Reading', 'Coding'],
       verification_status: 'Selfie Verified',
-      active_now: true
+      active_now: false
     },
     liked_at: '2026-11-17T21:10:00.000Z'
   },
   {
     id: 'like_inc_002',
     user: {
-      id: 'usr_004',
-      display_name: 'Tanvi Sharma',
-      full_name: 'Tanvi Sharma',
-      date_of_birth: '2004-03-12',
-      age: 22,
+      id: 'usr_005',
+      display_name: 'Priyanka Das',
+      full_name: 'Priyanka Das',
+      date_of_birth: '2002-09-17',
+      age: 24,
       gender: 'Female',
-      city: 'Kharagpur',
+      city: 'Kolkata',
       state: 'West Bengal',
-      college_name: 'IIT Kharagpur',
-      course: 'Architecture & Regional Planning',
-      relationship_intention: 'Serious Relationship',
-      avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-      bio: 'Heritage sketcher, fellow KGPian. Believer in starting as friends before rushing into anything.',
-      interests: ['Travelling', 'Music', 'Photography', 'Reading'],
+      college_name: 'Jadavpur University',
+      course: 'International Relations',
+      relationship_intention: 'Casual Connection',
+      avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=80',
+      bio: 'Debater, cafe hopper, movie buff. Tell me your top 3 comfort movies!',
+      interests: ['Movies', 'Food', 'Travelling'],
+      verification_status: 'Phone Verified',
+      active_now: false
+    },
+    liked_at: '2026-11-17T22:30:00.000Z'
+  },
+  {
+    id: 'like_inc_003',
+    user: {
+      id: 'usr_006',
+      display_name: 'Aditi Rao',
+      full_name: 'Aditi Rao',
+      date_of_birth: '2003-01-22',
+      age: 23,
+      gender: 'Female',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      college_name: 'Christ University',
+      course: 'Media and Communications',
+      relationship_intention: 'Dating Connection',
+      avatar_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80',
+      bio: 'Filter coffee advocate, podcaster. Looking for genuine campus conversations and fun games.',
+      interests: ['Music', 'Fitness', 'Food', 'Gaming'],
       verification_status: 'Selfie Verified',
       active_now: true
     },
-    liked_at: '2026-11-17T22:30:00.000Z'
+    liked_at: '2026-11-17T23:00:00.000Z'
   }
 ];
 
@@ -217,19 +239,53 @@ export const INITIAL_MUTUAL_FRIENDS = [
       city: 'Kolkata',
       college_name: 'St. Xavier\'s College, Kolkata',
       avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-      active_now: true
+      active_now: true,
+      last_seen: 'Online now'
     },
     matched_at: '2026-11-17T18:00:00.000Z',
     status: 'active',
     // Stages: 'Friend' (talking) -> 'Dating' (via Go button) -> 'Relationship'
     stage: 'Friend', 
     unread_count: 1,
-    go_request: null, // or { from: 'usr_002', to: 'usr_me_001', stage: 'Dating', status: 'pending' }
+    go_request: null,
     last_message: {
       content: 'Hey Anirban! Happy to connect as mutual friends 😊',
       created_at: '2026-11-17T20:15:00.000Z',
       sender_id: 'usr_002',
       message_type: 'text'
+    }
+  },
+  {
+    id: 'match_002',
+    user: {
+      id: 'usr_004',
+      display_name: 'Tanvi Sharma',
+      full_name: 'Tanvi Sharma',
+      age: 22,
+      city: 'Kharagpur',
+      college_name: 'IIT Kharagpur',
+      avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
+      active_now: true,
+      last_seen: 'Active 10m ago'
+    },
+    matched_at: '2026-11-16T12:00:00.000Z',
+    status: 'active',
+    stage: 'Friend',
+    unread_count: 0,
+    // Demo incoming Go request from Tanvi proposing to advance to Dating stage!
+    go_request: {
+      from: 'usr_004',
+      to: 'usr_me_001',
+      targetStage: 'Dating',
+      status: 'pending',
+      requested_at: '2026-11-17T23:30:00.000Z'
+    },
+    last_message: {
+      content: 'Audio Note (0:24)',
+      created_at: '2026-11-17T21:40:00.000Z',
+      sender_id: 'usr_004',
+      message_type: 'voice',
+      duration_seconds: 24
     }
   }
 ];
@@ -240,7 +296,7 @@ export const INITIAL_CONVERSATIONS = {
       id: 'sys_100',
       sender_id: 'system',
       message_type: 'system',
-      content: 'You and Riya accepted each other and are now Mutual Friends! Start talking freely, send voice notes, or play conversation games.',
+      content: 'You and Riya accepted each other and are now Mutual Friends! You can now start talking freely as friends.',
       created_at: '2026-11-17T18:00:00.000Z'
     },
     {
@@ -249,6 +305,41 @@ export const INITIAL_CONVERSATIONS = {
       message_type: 'text',
       content: 'Hey Anirban! Happy to connect as mutual friends 😊 Saw you like acoustic guitar. What hall are you in?',
       created_at: '2026-11-17T20:15:00.000Z',
+      reactions: [{ user_id: 'usr_me_001', reaction: '❤️' }]
+    }
+  ],
+  match_002: [
+    {
+      id: 'sys_200',
+      sender_id: 'system',
+      message_type: 'system',
+      content: 'You and Tanvi accepted each other and became Mutual Friends! Starting in the Friend (Talking) stage.',
+      created_at: '2026-11-16T12:00:00.000Z'
+    },
+    {
+      id: 'msg_201',
+      sender_id: 'usr_004',
+      message_type: 'text',
+      content: 'Hey Anirban! It’s cool seeing another IIT KGP student here 😄 How is your architecture/tech thesis going?',
+      created_at: '2026-11-16T12:05:00.000Z',
+      reactions: []
+    },
+    {
+      id: 'msg_202',
+      sender_id: 'usr_me_001',
+      message_type: 'text',
+      content: 'Hey Tanvi! Just finished our lab evaluation today, finally taking a breather! Have you checked out the Spring Fest band notice on our Campus Board?',
+      created_at: '2026-11-16T12:10:00.000Z',
+      reactions: [{ user_id: 'usr_004', reaction: '👏' }]
+    },
+    {
+      id: 'msg_203',
+      sender_id: 'usr_004',
+      message_type: 'voice',
+      content: 'Audio Note',
+      duration_seconds: 24,
+      audio_url: 'mock_audio.mp3',
+      created_at: '2026-11-17T21:40:00.000Z',
       reactions: [{ user_id: 'usr_me_001', reaction: '❤️' }]
     }
   ]

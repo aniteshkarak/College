@@ -22,6 +22,7 @@ import ContactPage from './components/public/ContactPage';
 import CardDeck from './components/discover/CardDeck';
 import ChatList from './components/chat/ChatList';
 import ChatRoom from './components/chat/ChatRoom';
+import MessengerView from './components/chat/MessengerView';
 import CampusBoard from './components/campus/CampusBoard';
 import GamesHub from './components/games/GamesHub';
 import RelationshipHub from './components/relationship/RelationshipHub';
@@ -75,20 +76,8 @@ const MainLayout = () => {
         {/* CAMPUS BOARD (Exclusive to user's college) */}
         {currentView === 'campus-board' && <CampusBoard />}
 
-        {/* CHATS */}
-        {currentView === 'chats' && (
-          <div className="py-4">
-            {activeChatMatch ? (
-              <ChatRoom match={activeChatMatch} onBack={() => setActiveChatMatch(null)} />
-            ) : (
-              <ChatList
-                onSelectMatch={(m) => {
-                  setActiveChatMatch(m);
-                }}
-              />
-            )}
-          </div>
-        )}
+        {/* CHATS (Dedicated personal chat of everyone one by one with GO section) */}
+        {currentView === 'chats' && <MessengerView />}
 
         {currentView === 'games' && <GamesHub />}
         {currentView === 'relationship' && <RelationshipHub />}
