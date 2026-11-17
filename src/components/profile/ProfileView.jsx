@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export const ProfileView = () => {
-  const { currentUser, navigateTo, activeRelationship, setIsPremiumModalOpen } = useApp();
+  const { currentUser, navigateTo, activeRelationship, setIsPremiumModalOpen, currentPlanConfig, matches } = useApp();
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-6">
@@ -167,22 +167,26 @@ export const ProfileView = () => {
         </div>
       )}
 
-      {/* Collégé Premium Banner */}
+      {/* Collégé Membership & Subscription Banner */}
       <div className="p-5 bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-orange-500/10 border border-amber-200 dark:border-amber-900/40 rounded-3xl flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0">
             <Crown className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="font-bold text-xs text-slate-900 dark:text-white">Collégé Free Plan</h4>
-            <p className="text-[11px] text-slate-500">{currentUser.daily_likes_remaining} daily likes remaining today</p>
+            <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+              {currentPlanConfig.name} ({currentPlanConfig.period})
+            </h4>
+            <p className="text-[11px] text-slate-500">
+              Matches: {matches.length}/{currentPlanConfig.max_mutual_matches === 9999 ? '∞' : currentPlanConfig.max_mutual_matches} • Sent: {currentUser.sent_requests_count}/{currentPlanConfig.max_sent_requests === 9999 ? '∞' : currentPlanConfig.max_sent_requests}
+            </p>
           </div>
         </div>
         <button
           onClick={() => setIsPremiumModalOpen(true)}
           className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-bold shadow hover:brightness-105"
         >
-          Upgrade
+          {currentUser.subscription_plan === 'free' ? 'Upgrade to ₹49' : 'Manage Plan'}
         </button>
       </div>
 

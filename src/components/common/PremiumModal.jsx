@@ -1,97 +1,187 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Crown, Check, Sparkles, X, Heart, Zap, Sliders, ShieldCheck } from 'lucide-react';
+import { SUBSCRIPTION_PLANS } from '../../services/mockData';
+import { Crown, Check, X, ShieldCheck, Zap, Sparkles, Heart } from 'lucide-react';
 
 export const PremiumModal = () => {
-  const { isPremiumModalOpen, setIsPremiumModalOpen, addToast } = useApp();
+  const { isPremiumModalOpen, setIsPremiumModalOpen, currentUser, handleUpgradePlan } = useApp();
 
   if (!isPremiumModalOpen) return null;
 
-  const features = [
-    { title: 'Unlimited Daily Likes', desc: 'Browse and connect without 15 daily limits' },
-    { title: 'See Who Liked You', desc: 'Instantly view interested peers before matching' },
-    { title: 'Campus Boost (1x / week)', desc: 'Top visibility in your college town feed for 1 hour' },
-    { title: 'Advanced Filters', desc: 'Filter by specific majors, distance radius, and hobbies' },
-    { title: 'Deep Compatibility Insights', desc: 'Full answer breakdowns on Conversation Games' }
-  ];
-
-  const handleUpgrade = (tier) => {
-    addToast(`Subscribed to Collégé ${tier}! Enjoy your premium perks 👑`, 'success');
-    setIsPremiumModalOpen(false);
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-amber-200 dark:border-amber-900/50 animate-slide-up relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-amber-200 dark:border-amber-900/50 animate-slide-up relative overflow-hidden max-h-[92vh] overflow-y-auto">
         
-        {/* Glow accent */}
+        {/* Glow backdrop */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-amber-400/20 to-rose-400/20 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
-        <div className="flex items-center justify-between pb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md">
               <Crown className="w-6 h-6" />
             </div>
             <div>
               <h3 className="font-display font-bold text-xl text-slate-900 dark:text-white">
-                Collégé Premium
+                Collégé Membership Plans
               </h3>
-              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                Elevate your campus networking experience
+              <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                Transparent campus plans • 28-day billing cycles
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsPremiumModalOpen(false)}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Features checklist */}
-        <div className="my-6 space-y-3">
-          {features.map((f, i) => (
-            <div key={i} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-              <div className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">{f.title}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{f.desc}</p>
+        {/* 3 Tier Cards: Free, ₹49 / 28 days, ₹99 / 28 days */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-6">
+          
+          {/* FREE PLAN */}
+          <div className="p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Free Plan</span>
+              <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">₹0</div>
+              <span className="text-[10px] text-slate-400">Always Free</span>
+
+              <div className="mt-4 space-y-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <p className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100">
+                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  5 Mutual Matches
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  50 Sent Requests
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  Campus Board Access
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  Voice Notes & Games
+                </p>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Pricing tiers */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div
-            onClick={() => handleUpgrade('Monthly')}
-            className="p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-amber-500 cursor-pointer text-center transition-all bg-white dark:bg-slate-900"
-          >
-            <span className="text-[10px] uppercase font-bold text-slate-500">1 Month</span>
-            <div className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">₹149</div>
-            <span className="text-[10px] text-slate-400">Cancel anytime</span>
+            <div className="mt-5">
+              {currentUser.subscription_plan === 'free' ? (
+                <span className="block text-center py-2 text-[11px] font-bold text-slate-500 bg-slate-200 dark:bg-slate-700 rounded-xl">
+                  Current Plan
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleUpgradePlan('free')}
+                  className="w-full py-2 text-[11px] font-semibold text-slate-700 bg-slate-200 rounded-xl"
+                >
+                  Downgrade
+                </button>
+              )}
+            </div>
           </div>
-          <div
-            onClick={() => handleUpgrade('Semester Pass')}
-            className="p-4 rounded-2xl border-2 border-amber-500 relative cursor-pointer text-center transition-all bg-gradient-to-b from-amber-500/5 to-rose-500/5 dark:bg-slate-800/80 shadow-md"
-          >
-            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gradient-to-r from-amber-500 to-rose-500 text-white rounded-full text-[9px] font-bold">
-              BEST VALUE
+
+          {/* ₹49 PLAN (28 DAYS) */}
+          <div className="p-4 rounded-2xl border-2 border-rose-500 bg-rose-50/40 dark:bg-rose-950/20 flex flex-col justify-between relative shadow-md">
+            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-rose-600 text-white rounded-full text-[9px] font-extrabold uppercase tracking-wider">
+              POPULAR
             </span>
-            <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">Semester (6 Mos)</span>
-            <div className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">₹499</div>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Save 45%</span>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 tracking-wider">Campus Pro</span>
+              <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">₹49</div>
+              <span className="text-[10px] font-bold text-rose-500">Per 28 Days</span>
+
+              <div className="mt-4 space-y-2 text-[11px] text-slate-700 dark:text-slate-200">
+                <p className="flex items-center gap-1.5 font-bold text-rose-600 dark:text-rose-400">
+                  <Check className="w-3.5 h-3.5 text-rose-600 shrink-0 stroke-[2.5]" />
+                  20 Mutual Matches
+                </p>
+                <p className="flex items-center gap-1.5 font-bold">
+                  <Check className="w-3.5 h-3.5 text-rose-600 shrink-0 stroke-[2.5]" />
+                  100 Sent Requests
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  Instant Likes View
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                  Campus Board Badge
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              {currentUser.subscription_plan === 'pro_49' ? (
+                <span className="block text-center py-2 text-[11px] font-bold text-emerald-600 bg-emerald-100 rounded-xl">
+                  Active (₹49)
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleUpgradePlan('pro_49')}
+                  className="w-full py-2.5 text-xs font-bold text-white gradient-brand-bg rounded-xl shadow hover:brightness-105 active:scale-95 transition-all"
+                >
+                  Upgrade to ₹49
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* ₹99 PLAN (28 DAYS) */}
+          <div className="p-4 rounded-2xl border-2 border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 flex flex-col justify-between relative shadow-md">
+            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full text-[9px] font-extrabold uppercase tracking-wider">
+              UNLIMITED
+            </span>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 tracking-wider">Campus VIP</span>
+              <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">₹99</div>
+              <span className="text-[10px] font-bold text-amber-600">Per 28 Days</span>
+
+              <div className="mt-4 space-y-2 text-[11px] text-slate-700 dark:text-slate-200">
+                <p className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5]" />
+                  Unlimited Matches
+                </p>
+                <p className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0 stroke-[2.5]" />
+                  Unlimited Requests
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  Top Campus Spotlight
+                </p>
+                <p className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  VIP Gold Profile Badge
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              {currentUser.subscription_plan === 'unlimited_99' ? (
+                <span className="block text-center py-2 text-[11px] font-bold text-amber-600 bg-amber-100 rounded-xl">
+                  Active (₹99)
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleUpgradePlan('unlimited_99')}
+                  className="w-full py-2.5 text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl shadow hover:brightness-105 active:scale-95 transition-all"
+                >
+                  Upgrade to ₹99
+                </button>
+              )}
+            </div>
+          </div>
+
         </div>
 
-        {/* Safety pledge notice per PRD */}
+        {/* Safety & Compliance Pledge */}
         <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300">
           <ShieldCheck className="w-4 h-4 shrink-0" />
           <span>
-            Collégé Pledge: We never charge for user safety, reporting, unmatching, blocking, or privacy controls.
+            Collégé Safety Commitment: Reporting, blocking, unmatching, and DPDP privacy controls are ALWAYS 100% free for everyone.
           </span>
         </div>
 

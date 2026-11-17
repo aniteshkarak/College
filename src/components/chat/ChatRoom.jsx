@@ -17,7 +17,11 @@ import {
   Check,
   CheckCheck,
   Sparkles,
-  Info
+  Zap,
+  Clock,
+  ThumbsDown,
+  Coffee,
+  X
 } from 'lucide-react';
 
 export const ChatRoom = ({ match, onBack }) => {
@@ -29,10 +33,8 @@ export const ChatRoom = ({ match, onBack }) => {
     handleDeleteMessage,
     setReportTarget,
     setBlockTarget,
-    sendRelationshipRequest,
-    relationshipRequests,
-    activeRelationship,
-    confirmMutualRelationship,
+    handleSendGoRequest,
+    handleRespondToGoRequest,
     navigateTo,
     addToast
   } = useApp();
@@ -41,6 +43,7 @@ export const ChatRoom = ({ match, onBack }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showGoModal, setShowGoModal] = useState(false);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -73,21 +76,21 @@ export const ChatRoom = ({ match, onBack }) => {
 
   const emojiList = ['❤️', '😂', '🔥', '✨', '👏', '😍', '☕', '🎸', '💯', '🌸', '⚡', '🙌'];
 
-  // Check relationship request status for this match
-  const activeReq = relationshipRequests.find(
-    (r) => r.matchId === match.id && (r.status === 'pending' || r.status === 'mutual_accepted')
-  );
+  const currentStage = match.stage || 'Friend';
+  const hasPendingGoRequest = Boolean(match.go_request);
+  const isIncomingGoRequest = match.go_request && match.go_request.from !== currentUser.id;
+  const isOutgoingGoRequest = match.go_request && match.go_request.from === currentUser.id;
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] md:h-[680px] w-full max-w-2xl mx-auto bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
       
       {/* Chat Room Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
         
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-1.5 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -96,7 +99,7 @@ export const ChatRoom = ({ match, onBack }) => {
             <img
               src={match.user.avatar_url}
               alt={match.user.display_name}
-              className="w-10 h-10 rounded-full object-cover ring-2 ring-rose-500/30"
+              className="w-10 h-10 rounded-2xl object-cover ring-2 ring-emerald-500/30"
             />
             {match.user.active_now && (
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full" />
@@ -108,11 +111,21 @@ export const ChatRoom = ({ match, onBack }) => {
               <h3 className="font-bold text-sm text-slate-900 dark:text-white">
                 {match.user.display_name}
               </h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/40">
-                {match.relationship_stage || 'Matched'}
+              
+              {/* Stage indicator */}
+              <span
+                className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
+                  currentStage === 'Friend'
+                    ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200'
+                    : currentStage === 'Dating'
+                    ? 'bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border-rose-200'
+                    : 'bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 border-purple-200'
+                }`}
+              >
+                {currentStage === 'Friend' ? 'Mutual Friend (Talking)' : `${currentStage} Stage`}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[180px] sm:max-w-xs">
+            <p className="text-[11px] text-slate-400 truncate max-w-[150px] sm:max-w-xs">
               {match.user.college_name || match.user.city}
             </p>
           </div>
@@ -120,24 +133,37 @@ export const ChatRoom = ({ match, onBack }) => {
 
         {/* Header Action Shortcuts */}
         <div className="flex items-center gap-1.5">
+          
+          {/* THE "GO" BUTTON (Transition from Talking as Friend to Dating Stage) */}
+          {currentStage === 'Friend' && (
+            <button
+              onClick={() => setShowGoModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-rose-500 to-orange-500 text-white rounded-full text-xs font-extrabold shadow-md hover:brightness-110 active:scale-95 transition-all"
+              title="Click 'Go' to propose transitioning to Dating stage"
+            >
+              <Zap className="w-3.5 h-3.5 fill-white" />
+              <span>GO to Dating</span>
+            </button>
+          )}
+
+          {currentStage === 'Dating' && (
+            <button
+              onClick={() => handleSendGoRequest(match.id, 'Relationship')}
+              className="flex items-center gap-1 px-3 py-1.5 gradient-brand-bg text-white rounded-full text-xs font-bold shadow-sm"
+              title="Mutual Relationship Confirmation"
+            >
+              <Heart className="w-3.5 h-3.5 fill-white" />
+              <span>Relationship</span>
+            </button>
+          )}
+
           {/* Quick Play Conversation Game button */}
           <button
             onClick={() => navigateTo('games')}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-400 rounded-full text-xs font-semibold transition-colors"
+            className="flex items-center gap-1 p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-full text-xs font-semibold"
             title="Launch Conversation Games"
           >
-            <Gamepad2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Play Game</span>
-          </button>
-
-          {/* Relationship Request Button (PRD 4.9) */}
-          <button
-            onClick={() => sendRelationshipRequest(match.id)}
-            className="flex items-center gap-1 px-2.5 py-1.5 gradient-brand-bg text-white rounded-full text-xs font-semibold shadow-sm hover:brightness-105 transition-all"
-            title="Express Relationship Intention"
-          >
-            <Heart className="w-3.5 h-3.5 fill-white" />
-            <span className="hidden sm:inline">Relationship</span>
+            <Gamepad2 className="w-4 h-4 text-purple-500" />
           </button>
 
           {/* Options Dropdown */}
@@ -177,25 +203,72 @@ export const ChatRoom = ({ match, onBack }) => {
 
       </div>
 
-      {/* Mutual Relationship Request Banner if Pending / Mutual */}
-      {activeReq && (
-        <div className="p-3 bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-purple-500/10 border-b border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between text-xs animate-slide-up">
+      {/* OUTGOING "GO" REQUEST STATUS BANNER */}
+      {isOutgoingGoRequest && (
+        <div className="p-3 bg-gradient-to-r from-amber-500/10 to-rose-500/10 border-b border-amber-200 dark:border-amber-900/40 flex items-center justify-between text-xs animate-slide-up">
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-medium">
-            <Sparkles className="w-4 h-4 text-rose-500" />
+            <Zap className="w-4 h-4 text-amber-500 fill-amber-500 animate-bounce" />
             <span>
-              {activeReq.status === 'mutual_accepted'
-                ? `${match.user.display_name} reciprocated! Confirm relationship status:`
-                : 'Mutual relationship request sent. Waiting for partner confirmation.'}
+              You clicked <strong>"Go"</strong> to transition to Dating stage! Waiting for {match.user.display_name} to respond...
             </span>
           </div>
-          {activeReq.status === 'mutual_accepted' && (
+          <span className="text-[10px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-full">
+            Pending
+          </span>
+        </div>
+      )}
+
+      {/* INCOMING "GO" REQUEST (THE 4 SPECIFIED REACTION BUTTONS) */}
+      {isIncomingGoRequest && (
+        <div className="p-4 bg-gradient-to-r from-rose-500/15 via-amber-500/15 to-purple-500/15 border-b border-rose-300 dark:border-rose-900/60 shadow-inner animate-slide-up">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-4 h-4 text-rose-600" />
+            <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+              {match.user.display_name} clicked "Go" and wants to transition from Friend to Dating stage!
+            </h4>
+          </div>
+          <p className="text-[11px] text-slate-600 dark:text-slate-300 mb-3">
+            How would you like to react?
+          </p>
+
+          {/* THE 4 REQUIRED BUTTONS:
+              1. Accept
+              2. Reject
+              3. Sometimes later
+              4. We are good as a friend */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
-              onClick={() => confirmMutualRelationship(match.id)}
-              className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full font-bold shadow-sm"
+              onClick={() => handleRespondToGoRequest(match.id, 'accept')}
+              className="py-2 px-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm flex items-center justify-center gap-1 transition-all"
             >
-              Confirm Official Status ❤️
+              <Heart className="w-3.5 h-3.5 fill-white" />
+              <span>Accept (Date)</span>
             </button>
-          )}
+
+            <button
+              onClick={() => handleRespondToGoRequest(match.id, 'reject')}
+              className="py-2 px-2.5 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-1 transition-all"
+            >
+              <ThumbsDown className="w-3.5 h-3.5" />
+              <span>Reject</span>
+            </button>
+
+            <button
+              onClick={() => handleRespondToGoRequest(match.id, 'sometimes_later')}
+              className="py-2 px-2.5 rounded-xl text-xs font-bold bg-amber-100 dark:bg-amber-950/80 hover:bg-amber-200 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-900 flex items-center justify-center gap-1 transition-all"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Sometimes later</span>
+            </button>
+
+            <button
+              onClick={() => handleRespondToGoRequest(match.id, 'we_are_good_as_a_friend')}
+              className="py-2 px-2.5 rounded-xl text-xs font-bold bg-emerald-100 dark:bg-emerald-950/80 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-900 flex items-center justify-center gap-1 transition-all"
+            >
+              <Coffee className="w-3.5 h-3.5" />
+              <span>Good as a friend</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -208,7 +281,7 @@ export const ChatRoom = ({ match, onBack }) => {
           if (isSystem) {
             return (
               <div key={msg.id} className="text-center my-4">
-                <span className="inline-block px-4 py-1.5 rounded-full text-[11px] font-medium bg-rose-50/80 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/50 dark:border-rose-900/40">
+                <span className="inline-block px-4 py-1.5 rounded-full text-[11px] font-medium bg-rose-50/80 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/50">
                   {msg.content}
                 </span>
               </div>
@@ -241,7 +314,7 @@ export const ChatRoom = ({ match, onBack }) => {
                   {/* Timestamp & Read Receipt */}
                   <div
                     className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${
-                      isMe ? 'text-rose-200' : 'text-slate-400 dark:text-slate-500'
+                      isMe ? 'text-rose-200' : 'text-slate-400'
                     }`}
                   >
                     <span>
@@ -251,7 +324,7 @@ export const ChatRoom = ({ match, onBack }) => {
                   </div>
                 </div>
 
-                {/* Quick Reaction Pill Bar (on hover) */}
+                {/* Quick Reaction Pill Bar */}
                 {hoveredMessageId === msg.id && (
                   <div className="absolute -top-7 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-md rounded-full px-2 py-0.5 z-20 animate-fade-in">
                     {['❤️', '😂', '🔥', '👏'].map((emoji) => (
@@ -367,6 +440,43 @@ export const ChatRoom = ({ match, onBack }) => {
         )}
 
       </div>
+
+      {/* "GO" STAGE PROPOSAL MODAL */}
+      {showGoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-rose-200 dark:border-rose-900">
+            <div className="w-14 h-14 rounded-2xl gradient-brand-bg text-white flex items-center justify-center mx-auto mb-3 shadow-lg animate-bounce-soft">
+              <Zap className="w-7 h-7 fill-white" />
+            </div>
+
+            <h3 className="font-display font-bold text-lg text-slate-900 dark:text-white mb-2">
+              Ready to "GO" to Dating Stage?
+            </h3>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+              You both started as mutual friends. Clicking <strong>GO</strong> sends an invitation to {match.user.display_name} to explore the Dating stage together. They can Accept, Reject, Decide Later, or stay Friends.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowGoModal(false)}
+                className="flex-1 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 dark:bg-slate-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowGoModal(false);
+                  handleSendGoRequest(match.id, 'Dating');
+                }}
+                className="flex-1 py-2.5 text-xs font-bold text-white gradient-brand-bg rounded-xl shadow"
+              >
+                Send "GO" Request 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

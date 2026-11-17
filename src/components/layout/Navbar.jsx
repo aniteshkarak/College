@@ -5,7 +5,7 @@ import {
   Heart,
   MessageCircle,
   Gamepad2,
-  Users2,
+  Megaphone,
   Bell,
   Sparkles,
   ShieldAlert,
@@ -24,9 +24,11 @@ export const Navbar = ({ onOpenMoodModal }) => {
     currentView,
     navigateTo,
     matches,
+    incomingLikes,
     notifications,
     markAllNotificationsRead,
     currentMood,
+    currentPlanConfig,
     setIsPremiumModalOpen,
     isAuthenticated,
     setIsAuthenticated
@@ -50,7 +52,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
       id: 'matches',
       label: 'Matches',
       icon: <Heart className="w-4 h-4" />,
-      badge: matches.length > 0 ? matches.length : null
+      badge: incomingLikes.length > 0 ? incomingLikes.length : null
     },
     {
       id: 'chats',
@@ -58,18 +60,18 @@ export const Navbar = ({ onOpenMoodModal }) => {
       icon: <MessageCircle className="w-4 h-4" />,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : null
     },
-    { id: 'games', label: 'Games', icon: <Gamepad2 className="w-4 h-4" /> },
-    { id: 'relationship', label: 'Relationship', icon: <Users2 className="w-4 h-4" /> }
+    { id: 'campus-board', label: 'Campus Board', icon: <Megaphone className="w-4 h-4" /> },
+    { id: 'games', label: 'Games', icon: <Gamepad2 className="w-4 h-4" /> }
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full glass-panel border-b border-rose-100 dark:border-rose-950/40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full glass-panel border-b border-rose-100 dark:border-rose-950/40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
         {/* Brand Logo & Tagline */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigateTo(isAuthenticated ? 'discover' : 'landing')}
+            onClick={() => navigateTo(isAuthenticated ? 'matches' : 'landing')}
             className="flex items-center gap-2 group text-left focus:outline-none"
           >
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-md shadow-rose-500/20 group-hover:scale-105 transition-transform">
@@ -102,7 +104,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
                 <button
                   key={link.id}
                   onClick={() => navigateTo(link.id)}
-                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-sm'
                       : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
@@ -111,7 +113,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
                   {link.icon}
                   <span>{link.label}</span>
                   {link.badge && (
-                    <span className="ml-0.5 px-1.5 py-0.2 text-[10px] font-bold bg-rose-500 text-white rounded-full">
+                    <span className="px-1.5 py-0.2 text-[10px] font-extrabold bg-rose-500 text-white rounded-full">
                       {link.badge}
                     </span>
                   )}
@@ -129,21 +131,21 @@ export const Navbar = ({ onOpenMoodModal }) => {
             <button
               onClick={onOpenMoodModal}
               title="Update your current campus mood"
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-rose-50 dark:bg-slate-800/80 hover:bg-rose-100 dark:hover:bg-slate-700/80 border border-rose-200/60 dark:border-rose-900/40 rounded-full text-xs font-medium text-rose-700 dark:text-rose-300 transition-colors"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-rose-50 dark:bg-slate-800/80 hover:bg-rose-100 border border-rose-200/60 dark:border-rose-900/40 rounded-full text-xs font-medium text-rose-700 dark:text-rose-300 transition-colors"
             >
               <span>{currentMood?.emoji || '✨'}</span>
               <span className="max-w-[110px] truncate">{currentMood?.label || 'Mood'}</span>
             </button>
           )}
 
-          {/* Collégé Premium Button */}
+          {/* Collégé Subscription Plan Button (₹49 / ₹99 / Free) */}
           {isAuthenticated && (
             <button
               onClick={() => setIsPremiumModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full text-xs font-semibold shadow-sm hover:shadow-md hover:brightness-105 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full text-xs font-bold shadow-xs hover:shadow-md hover:brightness-105 transition-all"
             >
               <Crown className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Premium</span>
+              <span>{currentUser.subscription_plan === 'free' ? '₹49/mo' : currentPlanConfig.name}</span>
             </button>
           )}
 
@@ -198,12 +200,12 @@ export const Navbar = ({ onOpenMoodModal }) => {
                         }`}
                       >
                         <div className="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-950 flex items-center justify-center shrink-0 text-rose-600">
-                          {n.type === 'match' ? <Heart className="w-4 h-4 fill-rose-500" /> : <MessageCircle className="w-4 h-4" />}
+                          {n.type === 'like' ? <Heart className="w-4 h-4 fill-rose-500" /> : <Megaphone className="w-4 h-4" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-slate-900 dark:text-white">{n.title}</p>
                           <p className="text-xs text-slate-600 dark:text-slate-300 truncate mt-0.5">{n.body}</p>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500">{n.time}</span>
+                          <span className="text-[10px] text-slate-400">{n.time}</span>
                         </div>
                       </div>
                     ))}
@@ -264,6 +266,15 @@ export const Navbar = ({ onOpenMoodModal }) => {
                     </button>
                     <button
                       onClick={() => {
+                        navigateTo('campus-board');
+                        setIsProfileOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl"
+                    >
+                      <Megaphone className="w-4 h-4 text-rose-500" /> Campus Board (Exclusive)
+                    </button>
+                    <button
+                      onClick={() => {
                         navigateTo('settings');
                         setIsProfileOpen(false);
                       }}
@@ -302,18 +313,18 @@ export const Navbar = ({ onOpenMoodModal }) => {
               <button
                 onClick={() => {
                   setIsAuthenticated(true);
-                  navigateTo('discover');
+                  navigateTo('matches');
                 }}
-                className="px-4 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-full transition-colors"
+                className="px-4 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-full"
               >
                 Log In
               </button>
               <button
                 onClick={() => {
                   setIsAuthenticated(true);
-                  navigateTo('discover');
+                  navigateTo('matches');
                 }}
-                className="px-4 py-1.5 text-xs font-semibold text-white gradient-brand-bg rounded-full shadow-sm hover:shadow-md transition-all"
+                className="px-4 py-1.5 text-xs font-semibold text-white gradient-brand-bg rounded-full shadow-sm hover:shadow-md"
               >
                 Join Collégé
               </button>

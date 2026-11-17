@@ -209,28 +209,28 @@ Matching algorithm:
 
 Never reveal who has passed on another user.
 
-## 4.4 Mutual Matching
+## 4.4 Mutual Matching & Connection Progression
 
-Matching logic:
+### 4.4.1 Who Liked You & Mutual Friend Acceptance
+In the Match section, users can see **who liked them** (Received Match Requests).
+Each pending like displays:
+- Profile photo and basic details.
+- **Accept** button.
+- **Reject** button.
 
-User A likes User B.
+Rules:
+- **Acceptance Required to Message:** If User B accepts User A's like, they both become **Mutual Friends**. Only after acceptance can they message each other.
+- **No Unaccepted Messaging:** If someone does not accept, neither person can message the other.
+- **Initial Connection:** Once accepted, they first start talking as a **Friend** (Friend / Talking stage).
 
-User B likes User A.
-
-System automatically creates a match.
-
-Match notification:
-
-"It's a match! You both liked each other."
-
-Users can then open the chat.
-
-Important business rules:
-- One active match per user pair.
-- Duplicate likes must be prevented.
-- A blocked relationship cannot create a new match.
-- Unmatching ends access to the conversation according to the retention policy.
-- Neither user can force a match.
+### 4.4.2 The "Go" Button (Stage Progression to Dating)
+Inside the conversation, there is a dedicated **"Go" button**:
+- If either user wants to advance from the **Talking as a Friend** stage to the **Dating** stage, they click the **"Go"** button.
+- The opponent receives the stage transition prompt and can react with one of **four specific options**:
+  1. **Accept:** Both users enter the **Dating Stage**!
+  2. **Reject:** The request is declined.
+  3. **Sometimes later:** Decision is deferred ("Decide later / Maybe later").
+  4. **We are good as a friend:** Both stay comfortably in the Friend stage without pressure.
 
 ## 4.5 Private Chat System
 
@@ -329,18 +329,20 @@ Game safety:
 - No coercive or humiliating challenges.
 - Every user can skip or leave a game.
 
-## 4.7 Daily Question
+## 4.7 Campus Board (College-Exclusive Announcement Group)
 
-Every day, display a question.
+A dedicated public space for every college community:
 
-Examples:
-
-- What is your biggest life goal?
-- What is your favourite childhood memory?
-- What does love mean to you?
-- If you could travel anywhere, where would you go?
-
-Users can answer privately or choose to share an answer publicly.
+- **Automatic College Group Enrollment:** Every verified student is added automatically to their college's exclusive group based on their verified college identity.
+- **Strictly Campus-Exclusive:** No student from another college can join, view, or post in a different college's board.
+- **Announcement-Only Model:** No direct 1-on-1 chatting or messaging is allowed in this group to prevent spam, trolling, and harassment.
+- **Broadcast Notices:** Any student from the college can announce anything happening in campus:
+  - Cultural and technical fest auditions and events.
+  - Club recruitment and workshops.
+  - Sports tournaments and inter-hostel matches.
+  - Lost & found notices.
+  - Academic reminders and campus buzz.
+- **Peer Engagement:** Students can upvote and share announcements.
 
 ## 4.8 Mood Status
 
@@ -988,41 +990,34 @@ Before launch, obtain a legal review of:
 
 Do not assume that a simple 18+ checkbox alone is sufficient for all age-assurance and compliance requirements.
 
-# 10. Monetisation
+# 10. Monetisation & 28-Day Subscription System
 
-Use a freemium business model.
+Collégé implements a transparent, affordable tiered model designed for Indian college student budgets with 28-day validity cycles:
 
-## Free membership
+## 10.1 Free Plan (Always Free)
+- Up to **5 Mutual Matches** (by accepting or sent).
+- Send up to **50 Match Requests**.
+- Access to your college's exclusive **Campus Board**.
+- 1-on-1 text messaging and 60-second voice notes with mutual friends.
+- All 6 Conversation Games.
+- Essential trust and safety features (blocking, reporting, DPDP privacy controls).
 
-- Create profile.
-- Discover profiles.
-- Daily likes.
-- Mutual matching.
-- Text chat.
-- Voice notes.
-- Conversation games.
-- Relationship requests.
-- Basic filters.
+## 10.2 Campus Pro Plan (₹49 for 28 Days)
+- Up to **20 Mutual Matches** (by accepting or sent — 4x increase).
+- Send up to **100 Match Requests**.
+- Priority announcement broadcasting on your College Campus Board.
+- Instantly view all received likes under "Who Liked You".
+- Exclusive "Campus Pro" profile badge.
 
-## Collégé Premium
+## 10.3 Campus Unlimited Plan (₹99 for 28 Days)
+- **Unlimited Mutual Matches**.
+- **Unlimited Sent Match Requests**.
+- Spotlight top discovery placement across college feeds.
+- Broadcast highlighted notices on Campus Board.
+- VIP Gold profile badge.
 
-Potential features:
-
-- Additional daily likes.
-- Advanced discovery filters.
-- Profile boosts.
-- Additional profile customisation.
-- Advanced compatibility insights.
-- See received likes, subject to privacy controls.
-
-Never charge for consent, blocking, reporting or essential safety functions.
-
-## Revenue sources
-
-1. Premium subscription.
-2. Optional profile boosts.
-3. Optional cosmetic themes.
-4. Carefully selected advertising, subject to privacy requirements.
+## 10.4 Fundamental Safety Principle
+**Never charge for safety:** Consent management, blocking, reporting, and statutory DPDP privacy controls are ALWAYS 100% free for every user.
 
 # 11. Non-Functional Requirements
 

@@ -1,9 +1,9 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { Flame, Heart, MessageCircle, Gamepad2, User } from 'lucide-react';
+import { Flame, Heart, MessageCircle, Megaphone, User } from 'lucide-react';
 
 export const BottomNav = () => {
-  const { currentView, navigateTo, matches } = useApp();
+  const { currentView, navigateTo, matches, incomingLikes } = useApp();
 
   const unreadMessagesCount = matches.reduce((sum, m) => sum + (m.unread_count || 0), 0);
 
@@ -13,15 +13,15 @@ export const BottomNav = () => {
       id: 'matches',
       label: 'Matches',
       icon: <Heart className="w-5 h-5" />,
-      badge: matches.length > 0 ? matches.length : null
+      badge: incomingLikes.length > 0 ? incomingLikes.length : null
     },
+    { id: 'campus-board', label: 'Campus', icon: <Megaphone className="w-5 h-5" /> },
     {
       id: 'chats',
       label: 'Chats',
       icon: <MessageCircle className="w-5 h-5" />,
       badge: unreadMessagesCount > 0 ? unreadMessagesCount : null
     },
-    { id: 'games', label: 'Games', icon: <Gamepad2 className="w-5 h-5" /> },
     { id: 'profile', label: 'Profile', icon: <User className="w-5 h-5" /> }
   ];
 
@@ -34,7 +34,7 @@ export const BottomNav = () => {
             <button
               key={tab.id}
               onClick={() => navigateTo(tab.id)}
-              className={`relative flex flex-col items-center justify-center py-1.5 px-3 rounded-2xl transition-all ${
+              className={`relative flex flex-col items-center justify-center py-1.5 px-2.5 rounded-2xl transition-all ${
                 isActive
                   ? 'text-rose-600 dark:text-rose-400 font-bold scale-105'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'

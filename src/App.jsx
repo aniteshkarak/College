@@ -9,7 +9,6 @@ import ReportModal from './components/common/ReportModal';
 import BlockConfirmModal from './components/common/BlockConfirmModal';
 import MoodPickerModal from './components/daily/MoodPickerModal';
 import AuthModal from './components/auth/AuthModal';
-import MatchCelebrationModal from './components/discover/MatchCelebrationModal';
 
 // Views
 import LandingPage from './components/public/LandingPage';
@@ -21,9 +20,9 @@ import TermsPage from './components/public/TermsPage';
 import ContactPage from './components/public/ContactPage';
 
 import CardDeck from './components/discover/CardDeck';
-import DailyQuestionCard from './components/daily/DailyQuestionCard';
 import ChatList from './components/chat/ChatList';
 import ChatRoom from './components/chat/ChatRoom';
+import CampusBoard from './components/campus/CampusBoard';
 import GamesHub from './components/games/GamesHub';
 import RelationshipHub from './components/relationship/RelationshipHub';
 import ProfileView from './components/profile/ProfileView';
@@ -32,7 +31,7 @@ import SettingsView from './components/profile/SettingsView';
 import AdminDashboard from './components/admin/AdminDashboard';
 
 const MainLayout = () => {
-  const { currentView, activeChatMatch, setActiveChatMatch, isAuthenticated } = useApp();
+  const { currentView, activeChatMatch, setActiveChatMatch, isAuthenticated, navigateTo } = useApp();
   const [isMoodModalOpen, setIsMoodModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -57,21 +56,26 @@ const MainLayout = () => {
         {/* AUTHENTICATED APP VIEWS */}
         {currentView === 'discover' && (
           <div className="py-4">
-            <DailyQuestionCard />
             <CardDeck />
           </div>
         )}
 
+        {/* MATCHES (Who Liked You with Accept/Reject & Mutual Friends) */}
         {currentView === 'matches' && (
           <div className="py-4">
             <ChatList
               onSelectMatch={(m) => {
                 setActiveChatMatch(m);
+                navigateTo('chats');
               }}
             />
           </div>
         )}
 
+        {/* CAMPUS BOARD (Exclusive to user's college) */}
+        {currentView === 'campus-board' && <CampusBoard />}
+
+        {/* CHATS */}
         {currentView === 'chats' && (
           <div className="py-4">
             {activeChatMatch ? (
@@ -95,15 +99,14 @@ const MainLayout = () => {
 
       </main>
 
-      {/* Footer on full views */}
+      {/* Footer */}
       <Footer />
 
       {/* Bottom Navigation for Mobile */}
       {isAuthenticated && <BottomNav />}
 
-      {/* Global Modals & Notifications */}
+      {/* Global Modals & Overlays */}
       <Toast />
-      <MatchCelebrationModal />
       <PremiumModal />
       <ReportModal />
       <BlockConfirmModal />
