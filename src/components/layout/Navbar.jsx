@@ -285,15 +285,6 @@ export const Navbar = ({ onOpenMoodModal }) => {
                     >
                       <ShieldAlert className="w-4 h-4 text-slate-500" /> Privacy & DPDP Consent
                     </button>
-                    <button
-                      onClick={() => {
-                        navigateTo('admin');
-                        setIsProfileOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30 rounded-xl"
-                    >
-                      <Sparkles className="w-4 h-4 text-purple-500" /> Admin Dashboard (Role)
-                    </button>
                   </div>
 
                   <div className="pt-1 border-t border-slate-100 dark:border-slate-800">

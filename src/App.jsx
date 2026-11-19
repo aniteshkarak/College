@@ -47,13 +47,13 @@ const MainLayout = () => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
-      {/* Top Header Navbar: Hidden on mobile when inside an active personal chat */}
-      <div className={currentView === 'chats' && activeChatMatch ? 'hidden md:block' : 'block'}>
+      {/* Top Header Navbar: Hidden on mobile when inside an active personal chat, and hidden in Admin Panel */}
+      <div className={(currentView === 'chats' && activeChatMatch) || currentView === 'admin' ? 'hidden' : 'block'}>
         <Navbar onOpenMoodModal={() => setIsMoodModalOpen(true)} />
       </div>
 
       {/* Main View Area */}
-      <main className={`flex-1 ${currentView === 'chats' ? 'p-0' : 'pb-20 md:pb-8'}`}>
+      <main className={`flex-1 ${currentView === 'chats' ? 'p-0' : currentView === 'admin' ? 'p-0' : 'pb-20 md:pb-8'}`}>
         
         {/* PUBLIC PAGES */}
         {currentView === 'landing' && <LandingPage onOpenAuth={() => setIsAuthModalOpen(true)} />}
@@ -98,11 +98,11 @@ const MainLayout = () => {
 
       </main>
 
-      {/* Footer: Hidden in Chats section per user requirement */}
-      {currentView !== 'chats' && <Footer />}
+      {/* Footer: Hidden in Chats section and Admin Panel per user requirement */}
+      {currentView !== 'chats' && currentView !== 'admin' && <Footer />}
 
-      {/* Bottom Navigation for Mobile: Hidden when inside an active mobile personal chat */}
-      {isAuthenticated && !(currentView === 'chats' && activeChatMatch) && <BottomNav />}
+      {/* Bottom Navigation for Mobile: Hidden when inside an active mobile personal chat or Admin Panel */}
+      {isAuthenticated && currentView !== 'admin' && !(currentView === 'chats' && activeChatMatch) && <BottomNav />}
 
       {/* Global Modals & Overlays */}
       <Toast />

@@ -44,7 +44,7 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
     } catch (err) {
       console.error('Admin login failed:', err);
       if (err.status === 401) {
-        setErrorMessage('Invalid administrator credentials. Access denied.');
+        setErrorMessage('Access Denied: Invalid administrator credentials. Student and general user accounts cannot log in to the Admin Panel.');
       } else if (err.status === 403) {
         setErrorMessage('This administrator account is currently inactive.');
       } else if (err.status === 429) {
@@ -79,10 +79,13 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
           <p className="text-xs text-slate-500 max-w-xs mx-auto">
             Authorized Campus Reviewers & Security Administrators Only.
           </p>
-          <div className="pt-1">
+          <div className="pt-1 flex flex-col items-center gap-1.5">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
               <KeyRound className="w-3 h-3" />
-              Dedicated Administrator Authentication
+              Restricted Area • Database Admin Accounts Only
+            </span>
+            <span className="text-[11px] text-rose-500 dark:text-rose-400 font-semibold">
+              Student and user accounts cannot log in here
             </span>
           </div>
         </div>
@@ -194,7 +197,7 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
             className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white font-semibold inline-flex items-center gap-1 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Collégé Student Community</span>
+            <span>Return to Collégé Website (User Login / Register)</span>
           </button>
         </div>
 

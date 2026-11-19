@@ -87,7 +87,7 @@ export const Footer = () => {
               </li>
               <li>
                 <button onClick={() => navigateTo('admin')} className="hover:text-purple-400 transition-colors flex items-center gap-1.5 text-slate-400">
-                  <ShieldCheck className="w-3.5 h-3.5 text-purple-400" /> Admin Verification Portal
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-400" /> Admin Portal (Staff Only)
                 </button>
               </li>
             </ul>

@@ -46,9 +46,8 @@ export const AppProvider = ({ children }) => {
           if (res?.data) {
             setCurrentUser(res.data);
             setIsAuthenticated(true);
-            if (res.data.role === 'SUPER_ADMIN' || res.data.role === 'VERIFICATION_ADMIN') {
-              setCurrentView('admin');
-            }
+            // User sessions ALWAYS stay on student platform
+            setCurrentView('matches');
           }
         })
         .catch(() => {
@@ -69,7 +68,7 @@ export const AppProvider = ({ children }) => {
       password: 'password123',
       verification_status: 'APPROVED',
       accountStatus: 'ACTIVE',
-      role: 'ADMIN' // Super Admin
+      role: 'STUDENT'
     }
   ]);
 
@@ -634,18 +633,18 @@ export const AppProvider = ({ children }) => {
       }
     }
 
-    // Check in registered users (including default Anirban demo account)
+    // Check in registered users (including default Anirban demo student account)
     const userMatch = registeredUsers.find(
       (u) =>
         (u.email && u.email.toLowerCase() === cleanId) ||
         (u.mobile && u.mobile === cleanId) ||
-        (cleanId === 'anirban' || cleanId === 'admin')
+        cleanId === 'anirban'
     );
 
     if (userMatch) {
       setCurrentUser(userMatch);
       setIsAuthenticated(true);
-      setCurrentView(userMatch.role === 'ADMIN' ? 'admin' : 'matches');
+      setCurrentView('matches');
       addToast(`Welcome back, ${userMatch.display_name}! ✨`, 'success');
       return { success: true, user: userMatch };
     }
@@ -667,8 +666,9 @@ export const AppProvider = ({ children }) => {
         if (accessToken) setStoredToken(accessToken);
         setCurrentUser(user);
         setIsAuthenticated(true);
-        setCurrentView(user.role === 'SUPER_ADMIN' || user.role === 'VERIFICATION_ADMIN' ? 'admin' : 'matches');
-        addToast(`Welcome back, ${user.display_name}! ✨`, 'success');
+        // User login always opens the student platform, never the admin panel
+        setCurrentView('matches');
+        addToast(`Welcome back, ${user.displayName || user.fullName || user.display_name}! ✨`, 'success');
         return { success: true, user };
       }
     } catch (err) {
