@@ -17,8 +17,6 @@ import {
   Clock,
   CheckCircle2,
   Building,
-  Search,
-  PlusCircle,
   HelpCircle,
   AlertTriangle,
   UserCheck,
@@ -49,7 +47,6 @@ export const AuthModal = ({ isOpen, onClose }) => {
     loginWithCredentials,
     registerStudent,
     resubmitVerification,
-    collegesList,
     addToast
   } = useApp();
 
@@ -118,9 +115,6 @@ export const AuthModal = ({ isOpen, onClose }) => {
   });
 
   const [ageError, setAgeError] = useState('');
-  const [collegeSearchQuery, setCollegeSearchQuery] = useState('');
-  const [showRequestCollegeModal, setShowRequestCollegeModal] = useState(false);
-  const [customCollegeName, setCustomCollegeName] = useState('');
 
   // Toggle URL input visibility if user prefers manual URL over file upload
   const [showIdUrlInput, setShowIdUrlInput] = useState(false);
@@ -298,12 +292,6 @@ export const AuthModal = ({ isOpen, onClose }) => {
     });
     setCorrectionTarget(null);
   };
-
-  // Filtered colleges list
-  const filteredColleges = collegesList.filter((c) =>
-    c.name.toLowerCase().includes(collegeSearchQuery.toLowerCase()) ||
-    c.city.toLowerCase().includes(collegeSearchQuery.toLowerCase())
-  );
 
   // Check if all 3 personal pics are entered
   const allThreePicsEntered = Boolean(formData.photo_1 && formData.photo_2 && formData.photo_3);
@@ -766,57 +754,18 @@ export const AuthModal = ({ isOpen, onClose }) => {
               <div className="space-y-3 text-xs">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Search & Select College / Institution
+                    College / University Name
                   </label>
-                  <div className="relative mb-2">
+                  <div className="relative">
                     <input
                       type="text"
-                      value={collegeSearchQuery}
-                      onChange={(e) => setCollegeSearchQuery(e.target.value)}
-                      placeholder="Type college name (e.g. IIT, Xavier's, Jadavpur)..."
-                      className="w-full p-2 pl-8 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
+                      required
+                      value={formData.college_name}
+                      onChange={(e) => setFormData({ ...formData, college_name: e.target.value })}
+                      placeholder="Enter your college or university name"
+                      className="w-full p-2.5 pl-9 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
                     />
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                  </div>
-
-                  {/* Searchable Options */}
-                  <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
-                    {filteredColleges.map((col) => (
-                      <div
-                        key={col.id || col.name}
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            college_name: col.name,
-                            university_name: col.university || col.universityName || col.name
-                          });
-                          setCollegeSearchQuery(col.name);
-                        }}
-                        className={`p-2.5 cursor-pointer text-xs transition-colors flex items-center justify-between ${
-                          formData.college_name === col.name
-                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 font-bold'
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        <div>
-                          <span>{col.name}</span>
-                          <span className="block text-[10px] text-slate-400">{col.city}, {col.state}</span>
-                        </div>
-                        {formData.college_name === col.name && <Check className="w-4 h-4 text-rose-500" />}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Request New College Option */}
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-[11px] text-slate-500">Institution missing?</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowRequestCollegeModal(true)}
-                      className="text-[11px] text-rose-600 dark:text-rose-400 font-bold hover:underline flex items-center gap-1"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" /> Request New College Entry
-                    </button>
+                    <Building className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   </div>
                 </div>
 
@@ -1688,49 +1637,6 @@ export const AuthModal = ({ isOpen, onClose }) => {
         )}
 
       </div>
-
-      {/* Request New College Modal */}
-      {showRequestCollegeModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 max-w-sm w-full space-y-3 text-xs border border-slate-200 dark:border-slate-800 animate-slide-up">
-            <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-              Request College Entry
-            </h4>
-            <p className="text-slate-500">
-              Enter your college name. It will be recorded for administrative verification.
-            </p>
-            <input
-              type="text"
-              value={customCollegeName}
-              onChange={(e) => setCustomCollegeName(e.target.value)}
-              placeholder="Full college or institute name"
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border rounded-lg"
-            />
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowRequestCollegeModal(false)}
-                className="px-3 py-1.5 text-slate-500"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!customCollegeName.trim()}
-                onClick={() => {
-                  setFormData({ ...formData, college_name: customCollegeName.trim() });
-                  setCollegeSearchQuery(customCollegeName.trim());
-                  setShowRequestCollegeModal(false);
-                  addToast(`College "${customCollegeName.trim()}" selected and saved for review!`, 'success');
-                }}
-                className="px-3 py-1.5 bg-rose-500 text-white rounded-lg font-bold"
-              >
-                Add & Select
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
