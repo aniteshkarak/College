@@ -148,7 +148,151 @@ export const AppProvider = ({ children }) => {
 
   const markAllNotificationsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    api.notifications.markAllRead().catch((err) => console.warn('Sync markAllNotificationsRead:', err.message));
   };
+
+  // Load live data from PostgreSQL Backend whenever student is authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser?.id) return;
+
+    let isMounted = true;
+
+    // 1. Fetch Discovery Profiles
+    api.discovery.getProfiles()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data?.users && res.data.users.length > 0) {
+          const mapped = res.data.users.map((u) => ({
+            id: u.id,
+            display_name: u.displayName || u.fullName,
+            age: u.profile?.age || u.age || 21,
+            gender: u.profile?.gender || 'Student',
+            city: u.profile?.city || 'Campus',
+            state: u.profile?.state || '',
+            college_name: u.education?.collegeName || u.collegeName || 'Premier College',
+            course: u.education?.course || u.course || 'Degree Program',
+            relationship_intention: u.profile?.relationshipIntention || 'Casual Connection',
+            avatar_url: u.photos?.[0]?.url || u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
+            additional_photos: (u.photos?.slice(1) || []).map((p) => p.url),
+            bio: u.profile?.bio || u.bio || 'Verified college student on Collégé.',
+            interests: u.profile?.interests || u.interests || ['Music', 'Coding'],
+            languages: u.profile?.languagesSpoken || ['English'],
+            mood: u.profile?.currentMood || 'Looking for a conversation',
+            verified: true,
+          }));
+          setProfiles(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not load discovery profiles:', err.message));
+
+    // 2. Fetch Incoming Likes / Requests
+    api.matching.getIncoming()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data?.requests && res.data.requests.length > 0) {
+          const mapped = res.data.requests.map((r) => ({
+            id: r.id,
+            sender_id: r.senderId,
+            user: {
+              id: r.sender?.id || r.senderId,
+              display_name: r.sender?.displayName || r.sender?.fullName,
+              avatar_url: r.sender?.photos?.[0]?.url || r.sender?.avatarUrl,
+              college_name: r.sender?.education?.collegeName || 'Campus',
+              course: r.sender?.education?.course || 'Student',
+              age: r.sender?.profile?.age || 21,
+              gender: r.sender?.profile?.gender || 'Student',
+              bio: r.sender?.profile?.bio || '',
+              interests: r.sender?.profile?.interests || [],
+              city: r.sender?.profile?.city || '',
+            },
+            created_at: r.createdAt,
+          }));
+          setIncomingLikes(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not load incoming likes:', err.message));
+
+    // 3. Fetch Matches
+    api.matching.getMatches()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data?.matches && res.data.matches.length > 0) {
+          const mapped = res.data.matches.map((m) => {
+            const partner = m.user1Id === currentUser.id ? m.user2 : m.user1;
+            return {
+              id: m.id,
+              user: {
+                id: partner?.id,
+                display_name: partner?.displayName || partner?.fullName || 'Campus Match',
+                avatar_url: partner?.photos?.[0]?.url || partner?.avatarUrl,
+                additional_photos: (partner?.photos?.slice(1) || []).map((p) => p.url),
+                college_name: partner?.education?.collegeName || 'Campus',
+                course: partner?.education?.course || 'Student',
+                bio: partner?.profile?.bio || '',
+                interests: partner?.profile?.interests || [],
+                mood: partner?.profile?.currentMood || 'Want to make friends',
+                age: partner?.profile?.age || 21,
+                gender: partner?.profile?.gender || 'Student',
+                city: partner?.profile?.city || '',
+              },
+              matched_at: m.createdAt,
+              status: 'active',
+              stage: 'Friend',
+              unread_count: 0,
+              go_request: null,
+              last_message: null,
+            };
+          });
+          setMatches(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not load matches:', err.message));
+
+    // 4. Fetch Conversations
+    api.chat.getConversations()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data?.conversations && res.data.conversations.length > 0) {
+          const convMap = {};
+          res.data.conversations.forEach((conv) => {
+            const key = conv.matchId || conv.id;
+            convMap[key] = (conv.messages || []).map((msg) => ({
+              id: msg.id,
+              sender_id: msg.senderId,
+              content: msg.content,
+              message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : (msg.messageType === 'SYSTEM_PROMPT' ? 'system' : 'text'),
+              duration_seconds: msg.voiceDuration,
+              audio_url: msg.mediaUrl ? api.chat.getAudioUrl(conv.id, msg.id) : null,
+              created_at: msg.createdAt,
+            }));
+          });
+          setConversations((prev) => ({ ...prev, ...convMap }));
+        }
+      })
+      .catch((err) => console.warn('Could not load conversations:', err.message));
+
+    // 5. Fetch Notifications
+    api.notifications.getAll()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data?.notifications && res.data.notifications.length > 0) {
+          const mapped = res.data.notifications.map((n) => ({
+            id: n.id,
+            type: n.type.toLowerCase(),
+            title: n.title,
+            body: n.body,
+            time: new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            read: n.isRead,
+          }));
+          setNotifications(mapped);
+        }
+      })
+      .catch((err) => console.warn('Could not load notifications:', err.message));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, currentUser?.id]);
 
   // Current Plan Limits Helper
   const currentPlanConfig = SUBSCRIPTION_PLANS[currentUser?.subscription_plan] || SUBSCRIPTION_PLANS.free;
@@ -165,8 +309,11 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
+    // Call backend API (if likeItem is from backend, likeItem.id is the MatchRequest id)
+    api.matching.acceptRequest(likeItem.id).catch((err) => console.warn('Accept API sync:', err.message));
+
     // Create mutual friend connection
-    const newMatchId = 'match_' + Date.now();
+    const newMatchId = likeItem.id || ('match_' + Date.now());
     const newMutualFriend = {
       id: newMatchId,
       user: likeItem.user,
@@ -207,6 +354,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const handleRejectLike = (likeId) => {
+    api.matching.rejectRequest(likeId).catch((err) => console.warn('Reject API sync:', err.message));
     setIncomingLikes((prev) => prev.filter((item) => item.id !== likeId));
     addToast('Match request declined.', 'info');
   };
@@ -214,7 +362,7 @@ export const AppProvider = ({ children }) => {
   // SEND MATCH REQUEST (In Discover feed)
   const handleSendMatchRequest = (profile) => {
     // Check sent requests limit
-    if (currentUser.sent_requests_count >= currentPlanConfig.max_sent_requests) {
+    if ((currentUser?.sent_requests_count || 0) >= currentPlanConfig.max_sent_requests) {
       addToast(
         `Sent request limit reached (${currentPlanConfig.max_sent_requests} on ${currentPlanConfig.name}). Upgrade to Campus Pro!`,
         'warning'
@@ -223,14 +371,16 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
+    api.matching.sendRequest(profile.id).catch((err) => console.warn('Send request API sync:', err.message));
+
     setLikedProfiles((prev) => [...prev, profile.id]);
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
     setCurrentUser((prev) => ({
       ...prev,
-      sent_requests_count: (prev.sent_requests_count || 0) + 1
+      sent_requests_count: (prev?.sent_requests_count || 0) + 1
     }));
 
-    addToast(`Match request sent to ${profile.display_name}! (Used ${currentUser.sent_requests_count + 1}/${currentPlanConfig.max_sent_requests})`, 'info');
+    addToast(`Match request sent to ${profile.display_name}! (Used ${(currentUser?.sent_requests_count || 0) + 1}/${currentPlanConfig.max_sent_requests})`, 'info');
   };
 
   const handlePass = (profile) => {
@@ -400,6 +550,7 @@ export const AppProvider = ({ children }) => {
 
   // Block & Report
   const handleBlockUser = (userId, userName) => {
+    api.matching.blockUser(userId, 'Blocked by user').catch((err) => console.warn('Block user API sync:', err.message));
     setProfiles((prev) => prev.filter((p) => p.id !== userId));
     setMatches((prev) => prev.filter((m) => m.user.id !== userId));
     setIncomingLikes((prev) => prev.filter((i) => i.user.id !== userId));
@@ -447,6 +598,15 @@ export const AppProvider = ({ children }) => {
       ...prev,
       [matchId]: [...(prev[matchId] || []), newMessage]
     }));
+
+    // Synchronize to PostgreSQL Backend via API
+    if (messagePayload.message_type === 'voice' && messagePayload.audio_blob) {
+      api.chat.sendVoiceMessage(matchId, messagePayload.audio_blob, messagePayload.duration_seconds)
+        .catch((err) => console.warn('Send voice message API sync:', err.message));
+    } else if (messagePayload.content) {
+      api.chat.sendMessage(matchId, messagePayload.content, 'TEXT')
+        .catch((err) => console.warn('Send text message API sync:', err.message));
+    }
 
     // Update match last message
     setMatches((prev) =>

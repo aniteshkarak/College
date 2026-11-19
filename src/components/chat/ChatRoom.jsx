@@ -370,8 +370,14 @@ export const ChatRoom = ({ match, onBack }) => {
                       : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-2xl rounded-bl-xs border border-slate-200/70 dark:border-slate-800 shadow-slate-900/5'
                   }`}
                 >
-                  {msg.message_type === 'voice' ? (
-                    <VoicePlayer duration={msg.duration_seconds || 24} isSender={isMe} />
+                  {msg.message_type === 'voice' || msg.messageType === 'VOICE_NOTE' ? (
+                    <VoicePlayer
+                      duration={msg.duration_seconds || msg.voiceDuration || 24}
+                      isSender={isMe}
+                      audioUrl={msg.audio_url || msg.audioUrl}
+                      conversationId={match.id}
+                      messageId={msg.id}
+                    />
                   ) : (
                     <p className="whitespace-pre-wrap font-sans">{msg.content}</p>
                   )}

@@ -17,13 +17,13 @@ router.patch('/mood', requireAuth, async (req, res) => {
       return error(res, 'Validation failed', 400, parsed.error.issues);
     }
 
-    const updated = await prisma.user.update({
-      where: { id: req.user.id },
+    const updated = await prisma.userProfile.update({
+      where: { userId: req.user.id },
       data: { currentMood: parsed.data.mood },
-      select: { id: true, currentMood: true, displayName: true },
+      select: { currentMood: true },
     });
 
-    return success(res, updated, 'Mood updated successfully');
+    return success(res, { currentMood: updated.currentMood }, 'Mood updated successfully');
   } catch (err) {
     return error(res, err.message, 500);
   }
@@ -33,21 +33,10 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
-      select: {
-        id: true,
-        displayName: true,
-        age: true,
-        gender: true,
-        city: true,
-        state: true,
-        collegeName: true,
-        course: true,
-        avatarUrl: true,
-        bio: true,
-        interests: true,
-        relationshipIntention: true,
-        currentMood: true,
-        verificationStatus: true,
+      include: {
+        profile: true,
+        education: true,
+        photos: { orderBy: { photoOrder: 'asc' } },
       },
     });
 
@@ -55,7 +44,30 @@ router.get('/:id', requireAuth, async (req, res) => {
       return error(res, 'User not found', 404);
     }
 
-    return success(res, { user }, 'User profile retrieved');
+    const p = user.profile || {};
+    const edu = user.education || {};
+    const photoUrls = (user.photos || []).map((ph) => ph.photoUrl);
+
+    const formatted = {
+      id: user.id,
+      fullName: user.fullName,
+      displayName: user.displayName,
+      age: user.age,
+      gender: user.gender,
+      city: p.city,
+      state: p.state,
+      collegeName: edu.collegeName,
+      course: edu.degreeName || edu.departmentStream,
+      avatarUrl: photoUrls[0] || null,
+      additionalPhotos: photoUrls.slice(1),
+      bio: p.bio,
+      interests: p.interests || [],
+      relationshipIntention: p.relationshipIntention,
+      currentMood: p.currentMood,
+      verificationStatus: user.verificationStatus,
+    };
+
+    return success(res, { user: formatted }, 'User profile retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }

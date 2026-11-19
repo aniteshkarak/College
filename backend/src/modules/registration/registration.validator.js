@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 // Helper to normalize array fields that may arrive as JSON strings in multipart/form-data
 const arrayOrString = (fallback = []) =>
-  z.union([z.array(z.string()), z.string()]).transform((val) => {
+  z.union([z.array(z.string()), z.string()]).optional().transform((val) => {
+    if (!val) return fallback;
     if (Array.isArray(val)) return val;
     if (typeof val === 'string') {
       try {

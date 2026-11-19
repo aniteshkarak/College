@@ -291,7 +291,131 @@ export const api = {
       const blob = await res.blob();
       return URL.createObjectURL(blob);
     },
-  }
+  },
+
+  // Discovery
+  discovery: {
+    getProfiles: (params = {}) => {
+      const searchParams = new URLSearchParams();
+      if (params.minAge) searchParams.set('minAge', params.minAge);
+      if (params.maxAge) searchParams.set('maxAge', params.maxAge);
+      if (params.gender && params.gender !== 'All') searchParams.set('gender', params.gender);
+      if (params.city && params.city !== 'All') searchParams.set('city', params.city);
+      const q = searchParams.toString();
+      return request(`/discovery${q ? `?${q}` : ''}`);
+    },
+  },
+
+  // Matching & Likes
+  matching: {
+    getIncoming: () => request('/matching/incoming'),
+    getMatches: () => request('/matching/matches'),
+    sendRequest: (receiverId) =>
+      request('/matching/send-request', {
+        method: 'POST',
+        body: JSON.stringify({ receiverId }),
+      }),
+    acceptRequest: (requestId) =>
+      request(`/matching/requests/${encodeURIComponent(requestId)}/accept`, {
+        method: 'POST',
+      }),
+    rejectRequest: (requestId) =>
+      request(`/matching/requests/${encodeURIComponent(requestId)}/reject`, {
+        method: 'POST',
+      }),
+    unmatch: (matchId) =>
+      request(`/matching/matches/${encodeURIComponent(matchId)}/unmatch`, {
+        method: 'POST',
+      }),
+    blockUser: (blockedId, reason) =>
+      request('/matching/block', {
+        method: 'POST',
+        body: JSON.stringify({ blockedId, reason }),
+      }),
+    sendGoRequest: (matchId, targetStage) =>
+      request(`/matching/${encodeURIComponent(matchId)}/go`, {
+        method: 'POST',
+        body: JSON.stringify({ targetStage }),
+      }),
+    acceptGoRequest: (matchId) =>
+      request(`/matching/${encodeURIComponent(matchId)}/go/accept`, {
+        method: 'POST',
+      }),
+    refuseGoRequest: (matchId, explanation) =>
+      request(`/matching/${encodeURIComponent(matchId)}/go/refuse`, {
+        method: 'POST',
+        body: JSON.stringify({ explanation }),
+      }),
+  },
+
+  // Real-time Chat & Voice Messaging
+  chat: {
+    getConversations: () => request('/chat/conversations'),
+    getMessages: (conversationId, params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.limit) sp.set('limit', params.limit);
+      if (params.before) sp.set('before', params.before);
+      const q = sp.toString();
+      return request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages${q ? `?${q}` : ''}`);
+    },
+    sendMessage: (conversationId, content, messageType = 'TEXT') =>
+      request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content, messageType }),
+      }),
+    sendVoiceMessage: (conversationId, audioBlob, duration = 0) => {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice.webm');
+      formData.append('duration', duration);
+      return request(`/chat/conversations/${encodeURIComponent(conversationId)}/voice`, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    getAudioUrl: (conversationId, messageId) =>
+      `${API_BASE_URL}/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/audio`,
+    fetchAudioBlob: async (url) => {
+      const token = getStoredToken();
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Failed to load voice audio (${res.status})`);
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
+    markRead: (conversationId) =>
+      request(`/chat/conversations/${encodeURIComponent(conversationId)}/read`, {
+        method: 'POST',
+      }),
+  },
+
+  // Notifications
+  notifications: {
+    getAll: () => request('/notifications'),
+    markRead: (id) =>
+      request(`/notifications/${encodeURIComponent(id)}/read`, {
+        method: 'PATCH',
+      }),
+    markAllRead: () =>
+      request('/notifications/mark-all-read', {
+        method: 'POST',
+      }),
+  },
+
+  // Profile Management
+  profile: {
+    update: (data) =>
+      request('/profiles/me', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    updateMood: (mood) =>
+      request('/users/mood', {
+        method: 'PATCH',
+        body: JSON.stringify({ mood }),
+      }),
+    getUser: (id) => request(`/users/${encodeURIComponent(id)}`),
+  },
 };
 
 export default api;

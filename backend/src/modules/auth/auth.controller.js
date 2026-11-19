@@ -48,6 +48,14 @@ export const login = async (req, res) => {
 
     return success(res, result, result.message);
   } catch (err) {
+    if (err.code === 'ACCOUNT_NOT_ACTIVE') {
+      return res.status(err.statusCode || 403).json({
+        success: false,
+        code: err.code,
+        message: err.message,
+        details: err.details,
+      });
+    }
     return error(res, err.message, 401);
   }
 };

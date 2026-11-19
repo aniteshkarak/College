@@ -1,45 +1,153 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Trash2, Send, Play, Pause } from 'lucide-react';
+import { Mic, Square, Trash2, Send, Play, Pause, AlertCircle } from 'lucide-react';
 
 export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
-  const [isRecording, setIsRecording] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [audioUrl, setAudioUrl] = useState(null);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [micError, setMicError] = useState(null);
+
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
   const timerRef = useRef(null);
+  const previewAudioRef = useRef(null);
 
   // 60-second limit per PRD 4.5
   const MAX_DURATION = 60;
 
+  // Start recording on mount
   useEffect(() => {
-    if (isRecording) {
+    startRecording();
+
+    return () => {
+      cleanupMedia();
+    };
+  }, []);
+
+  const cleanupMedia = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      setMicError(null);
+      audioChunksRef.current = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : 'audio/webm';
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        setAudioBlob(blob);
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+
+        // Stop microphone tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        }
+      };
+
+      mediaRecorder.start(200); // 200ms slice
+      setIsRecording(true);
+      setSeconds(0);
+
       timerRef.current = setInterval(() => {
         setSeconds((prev) => {
           if (prev >= MAX_DURATION - 1) {
-            handleStopRecording();
+            stopRecording();
             return MAX_DURATION;
           }
           return prev + 1;
         });
       }, 1000);
+    } catch (err) {
+      console.warn('Microphone access error:', err);
+      setMicError(err.message || 'Microphone access denied or not available.');
+      setIsRecording(false);
     }
-    return () => clearInterval(timerRef.current);
-  }, [isRecording]);
+  };
 
-  const handleStopRecording = () => {
-    clearInterval(timerRef.current);
+  const stopRecording = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     setIsRecording(false);
-    // Simulated recorded blob URL
-    setAudioUrl('mock_voice_recording.webm');
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const togglePreviewPlay = () => {
+    if (!previewUrl) return;
+
+    if (!previewAudioRef.current) {
+      previewAudioRef.current = new Audio(previewUrl);
+      previewAudioRef.current.onended = () => setIsPlayingPreview(false);
+    }
+
+    if (isPlayingPreview) {
+      previewAudioRef.current.pause();
+      setIsPlayingPreview(false);
+    } else {
+      previewAudioRef.current.play().then(() => {
+        setIsPlayingPreview(true);
+      }).catch((e) => {
+        console.warn('Audio play preview error:', e);
+        setIsPlayingPreview(false);
+      });
+    }
   };
 
   const handleSend = () => {
+    if (isPlayingPreview && previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+
     onSendVoice({
       message_type: 'voice',
-      content: 'Audio Note',
-      duration_seconds: seconds,
-      audio_url: audioUrl
+      content: `Audio Note (${seconds}s)`,
+      duration_seconds: seconds || 1,
+      audio_blob: audioBlob,
+      audio_url: previewUrl
     });
+  };
+
+  const handleCancelClick = () => {
+    cleanupMedia();
+    onCancel();
   };
 
   const formatTime = (sec) => {
@@ -48,9 +156,25 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  if (micError) {
+    return (
+      <div className="flex items-center justify-between p-3 bg-rose-50 dark:bg-rose-950/60 rounded-2xl border border-rose-300 dark:border-rose-900 shadow-md">
+        <div className="flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{micError} Please check browser microphone permissions.</span>
+        </div>
+        <button
+          onClick={handleCancelClick}
+          className="p-1.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-between p-3 bg-rose-50/90 dark:bg-rose-950/40 rounded-2xl border border-rose-200 dark:border-rose-900/60 shadow-md animate-slide-up">
-      
       {/* Recording status or preview */}
       <div className="flex items-center gap-3">
         {isRecording ? (
@@ -63,8 +187,9 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
         ) : (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsPlayingPreview(!isPlayingPreview)}
-              className="p-1.5 rounded-full bg-rose-600 text-white"
+              onClick={togglePreviewPlay}
+              className="p-1.5 rounded-full bg-rose-600 text-white hover:brightness-110 active:scale-95 transition-transform"
+              title={isPlayingPreview ? 'Pause preview' : 'Play preview'}
             >
               {isPlayingPreview ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
             </button>
@@ -75,7 +200,7 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
         )}
       </div>
 
-      {/* Simulated Waveform Animation */}
+      {/* Dynamic Waveform Visualizer */}
       <div className="hidden sm:flex items-center gap-1 h-6">
         {[40, 70, 30, 90, 60, 45, 80, 55, 95, 35, 75, 50].map((h, i) => (
           <div
@@ -91,7 +216,7 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
       {/* Actions */}
       <div className="flex items-center gap-2">
         <button
-          onClick={onCancel}
+          onClick={handleCancelClick}
           className="p-2 text-slate-400 hover:text-rose-600 rounded-full hover:bg-white dark:hover:bg-slate-800 transition-colors"
           title="Discard recording"
         >
@@ -100,21 +225,20 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
 
         {isRecording ? (
           <button
-            onClick={handleStopRecording}
-            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow"
+            onClick={stopRecording}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow active:scale-95 transition-transform"
           >
             <Square className="w-3 h-3 fill-white" /> Stop
           </button>
         ) : (
           <button
             onClick={handleSend}
-            className="px-3.5 py-1.5 gradient-brand-bg text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow hover:brightness-105"
+            className="px-3.5 py-1.5 gradient-brand-bg text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow hover:brightness-105 active:scale-95 transition-transform"
           >
             <Send className="w-3.5 h-3.5" /> Send
           </button>
         )}
       </div>
-
     </div>
   );
 };

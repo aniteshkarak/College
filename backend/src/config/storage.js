@@ -11,6 +11,7 @@ export const STORAGE_PATHS = {
   PHOTOS_DIR: path.join(PRIVATE_ROOT, 'photos'),
   THUMBNAILS_DIR: path.join(PRIVATE_ROOT, 'thumbnails'),
   DISCOVERY_DIR: path.join(PRIVATE_ROOT, 'discovery'),
+  VOICE_DIR: path.join(PRIVATE_ROOT, 'voice'),
 };
 
 // Ensure all isolated private storage directories exist on boot

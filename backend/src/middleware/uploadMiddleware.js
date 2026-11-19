@@ -68,4 +68,37 @@ export const registrationUpload = upload.fields([
   { name: 'document', maxCount: 1 },
 ]);
 
+const ALLOWED_AUDIO_MIMES = [
+  'audio/webm',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/wav',
+  'audio/x-m4a',
+  'audio/mpeg',
+  'audio/aac',
+];
+
+export const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname !== 'audio' && file.fieldname !== 'voice') {
+      const error = new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname);
+      error.message = "Unexpected upload field. Expected 'audio' or 'voice'.";
+      return cb(error, false);
+    }
+    const mime = file.mimetype.toLowerCase();
+    if (!ALLOWED_AUDIO_MIMES.includes(mime) && !mime.startsWith('audio/')) {
+      const error = new Error(`Unsupported audio format: ${file.mimetype}. Allowed formats: WebM, OGG, MP4, WAV, MP3.`);
+      error.statusCode = 400;
+      error.code = 'UNSUPPORTED_MEDIA_TYPE';
+      return cb(error, false);
+    }
+    cb(null, true);
+  },
+}).single('audio');
+
 export default upload;

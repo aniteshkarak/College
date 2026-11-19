@@ -24,45 +24,173 @@ router.get('/incoming', requireAuth, async (req, res) => {
       },
       include: {
         sender: {
-          select: {
-            id: true,
-            fullName: true,
-            displayName: true,
-            age: true,
-            gender: true,
-            collegeName: true,
-            course: true,
-            currentMood: true,
-            avatarUrl: true,
-            bio: true,
-            interests: true,
-            relationshipIntention: true,
+          include: {
+            profile: true,
+            education: true,
+            photos: { orderBy: { photoOrder: 'asc' } },
           },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    const formatted = incoming.map((reqItem) => ({
-      requestId: reqItem.id,
-      user: reqItem.sender,
-      likedAt: reqItem.createdAt,
-    }));
+    const formatted = incoming.map((reqItem) => {
+      const s = reqItem.sender;
+      const p = s.profile || {};
+      const edu = s.education || {};
+      const photoUrls = s.photos.map((ph) => ph.photoUrl);
+      const avatarUrl = photoUrls[0] || null;
 
-    return success(res, { incomingLikes: formatted }, 'Incoming likes retrieved');
+      return {
+        id: reqItem.id,
+        requestId: reqItem.id,
+        user: {
+          id: s.id,
+          full_name: s.fullName,
+          display_name: s.displayName,
+          age: s.age,
+          gender: s.gender,
+          college_name: edu.collegeName || 'College',
+          course: edu.degreeName || edu.departmentStream,
+          avatar_url: avatarUrl,
+          additional_photos: photoUrls.slice(1),
+          bio: p.bio,
+          interests: p.interests || [],
+          relationship_intention: p.relationshipIntention || 'Casual Connection',
+          city: p.city,
+          state: p.state,
+        },
+        likedAt: reqItem.createdAt,
+      };
+    });
+
+    return success(res, { incomingLikes: formatted, requests: formatted }, 'Incoming likes retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }
 });
 
-// 2. Send Match Request (Like)
+// 2. Get Mutual Matches
+router.get('/matches', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+
+    const matches = await prisma.match.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
+      },
+      include: {
+        user1: {
+          include: {
+            profile: true,
+            education: true,
+            photos: { orderBy: { photoOrder: 'asc' } },
+          },
+        },
+        user2: {
+          include: {
+            profile: true,
+            education: true,
+            photos: { orderBy: { photoOrder: 'asc' } },
+          },
+        },
+        conversation: {
+          include: {
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+        goRequests: {
+          where: { status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const formatted = matches.map((m) => {
+      const partner = m.user1Id === currentUserId ? m.user2 : m.user1;
+      const p = partner.profile || {};
+      const edu = partner.education || {};
+      const photoUrls = partner.photos.map((ph) => ph.photoUrl);
+      const avatarUrl = photoUrls[0] || null;
+      const lastMsg = m.conversation?.messages[0] || null;
+      const activeGoReq = m.goRequests[0] || null;
+
+      return {
+        id: m.id,
+        matchId: m.id,
+        stage: m.stage,
+        createdAt: m.createdAt,
+        matched_at: m.createdAt,
+        conversationId: m.conversation?.id || null,
+        unread_count: 0,
+        last_message: lastMsg
+          ? {
+              content: lastMsg.content,
+              created_at: lastMsg.createdAt,
+              sender_id: lastMsg.senderId,
+              message_type: lastMsg.messageType,
+            }
+          : null,
+        go_request: activeGoReq
+          ? {
+              id: activeGoReq.id,
+              from: activeGoReq.initiatorId,
+              targetStage: activeGoReq.targetStage,
+            }
+          : null,
+        user: {
+          id: partner.id,
+          full_name: partner.fullName,
+          display_name: partner.displayName,
+          age: partner.age,
+          gender: partner.gender,
+          college_name: edu.collegeName || 'College',
+          course: edu.degreeName || edu.departmentStream,
+          avatar_url: avatarUrl,
+          additional_photos: photoUrls.slice(1),
+          bio: p.bio,
+          interests: p.interests || [],
+          relationship_intention: p.relationshipIntention || 'Casual Connection',
+          city: p.city,
+          state: p.state,
+        },
+      };
+    });
+
+    return success(res, { matches: formatted }, 'Matches retrieved');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 3. Send Match Request (Like)
 router.post('/send-request', requireAuth, async (req, res) => {
   try {
     const sender = req.user;
     const { receiverId } = req.body;
 
     if (!receiverId || receiverId === sender.id) {
-      return error(res, 'Invalid receiver ID', 400);
+      return error(res, 'Invalid receiver ID. You cannot like yourself.', 400);
+    }
+
+    // Check if either user has blocked the other
+    const blockCheck = await prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: sender.id, blockedId: receiverId },
+          { blockerId: receiverId, blockedId: sender.id },
+        ],
+      },
+    });
+
+    if (blockCheck) {
+      return error(res, 'Unable to interact with this profile.', 403);
     }
 
     // Check sent request limit based on plan
@@ -89,17 +217,32 @@ router.post('/send-request', requireAuth, async (req, res) => {
       return error(res, 'A request or match already exists between these users', 400);
     }
 
-    const newRequest = await prisma.matchRequest.create({
-      data: {
-        senderId: sender.id,
-        receiverId,
-        status: 'PENDING',
-      },
-    });
+    const newRequest = await prisma.$transaction(async (tx) => {
+      const r = await tx.matchRequest.create({
+        data: {
+          senderId: sender.id,
+          receiverId,
+          status: 'PENDING',
+        },
+      });
 
-    await prisma.user.update({
-      where: { id: sender.id },
-      data: { sentRequestsCount: { increment: 1 } },
+      await tx.user.update({
+        where: { id: sender.id },
+        data: { sentRequestsCount: { increment: 1 } },
+      });
+
+      // Create in-app notification for receiver
+      await tx.notification.create({
+        data: {
+          userId: receiverId,
+          type: 'LIKE',
+          title: 'New Like Received',
+          body: `${sender.displayName} sent you a match request! Check your Match Requests.`,
+          data: { senderId: sender.id, requestId: r.id },
+        },
+      });
+
+      return r;
     });
 
     return success(res, { request: newRequest }, 'Match request sent', 201);
@@ -108,7 +251,7 @@ router.post('/send-request', requireAuth, async (req, res) => {
   }
 });
 
-// 3. Accept Match Request -> Creates Mutual Match & Conversation
+// 4. Accept Match Request -> Creates Mutual Match & Conversation
 router.post('/requests/:id/accept', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -178,6 +321,17 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
         },
       });
 
+      // Create notification for sender
+      await tx.notification.create({
+        data: {
+          userId: matchReq.senderId,
+          type: 'MATCH',
+          title: 'Mutual Match!',
+          body: `${currentUser.displayName} accepted your match request! You are now Mutual Friends.`,
+          data: { matchId: newMatch.id, conversationId: newConversation.id },
+        },
+      });
+
       return { match: newMatch, conversation: newConversation };
     });
 
@@ -187,7 +341,7 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
   }
 });
 
-// 4. Reject Match Request
+// 5. Reject Match Request
 router.post('/requests/:id/reject', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -209,7 +363,82 @@ router.post('/requests/:id/reject', requireAuth, async (req, res) => {
   }
 });
 
-// 5. GO Stage Transition Request (Friend -> Dating -> Relationship)
+// 6. Unmatch Users
+router.post('/matches/:id/unmatch', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { id } = req.params;
+
+    const match = await prisma.match.findUnique({ where: { id } });
+    if (!match || (match.user1Id !== currentUserId && match.user2Id !== currentUserId)) {
+      return error(res, 'Match not found or unauthorized', 404);
+    }
+
+    await prisma.match.update({
+      where: { id },
+      data: { status: 'UNMATCHED' },
+    });
+
+    return success(res, null, 'Unmatched successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 7. Block User
+router.post('/block', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { blockedId, reason } = req.body;
+
+    if (!blockedId || blockedId === currentUserId) {
+      return error(res, 'Invalid blocked user ID', 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Create block record (or ignore if already blocked)
+      await tx.userBlock.upsert({
+        where: {
+          blockerId_blockedId: { blockerId: currentUserId, blockedId },
+        },
+        create: {
+          blockerId: currentUserId,
+          blockedId,
+          reason: reason || null,
+        },
+        update: {},
+      });
+
+      // 2. Mark any active match as BLOCKED
+      await tx.match.updateMany({
+        where: {
+          OR: [
+            { user1Id: currentUserId, user2Id: blockedId },
+            { user1Id: blockedId, user2Id: currentUserId },
+          ],
+        },
+        data: { status: 'BLOCKED' },
+      });
+
+      // 3. Mark any pending match request as REJECTED
+      await tx.matchRequest.updateMany({
+        where: {
+          OR: [
+            { senderId: currentUserId, receiverId: blockedId },
+            { senderId: blockedId, receiverId: currentUserId },
+          ],
+        },
+        data: { status: 'REJECTED' },
+      });
+    });
+
+    return success(res, null, 'User has been blocked successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 8. GO Stage Transition Request (Friend -> Dating -> Relationship)
 const goTransitionSchema = z.object({
   targetStage: z.enum(['Dating', 'Relationship']),
 });
@@ -248,7 +477,65 @@ router.post('/:matchId/go', requireAuth, async (req, res) => {
   }
 });
 
-// 6. Refuse GO Request (With explanation sent via Chat as required)
+// 9. Accept GO Request
+router.post('/:matchId/go/accept', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { matchId } = req.params;
+
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { conversation: true },
+    });
+
+    if (!match || (match.user1Id !== currentUserId && match.user2Id !== currentUserId)) {
+      return error(res, 'Match not found or unauthorized', 404);
+    }
+
+    const pendingGo = await prisma.goStageRequest.findFirst({
+      where: {
+        matchId,
+        status: 'PENDING',
+        initiatorId: { not: currentUserId },
+      },
+    });
+
+    if (!pendingGo) {
+      return error(res, 'No pending GO request to accept', 404);
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.goStageRequest.update({
+        where: { id: pendingGo.id },
+        data: { status: 'ACCEPTED' },
+      });
+
+      const updatedMatch = await tx.match.update({
+        where: { id: matchId },
+        data: { stage: pendingGo.targetStage },
+      });
+
+      if (match.conversation) {
+        await tx.message.create({
+          data: {
+            conversationId: match.conversation.id,
+            senderId: currentUserId,
+            content: `Mutual agreement! Both of you accepted to advance to "${pendingGo.targetStage}" stage! 🎉`,
+            messageType: 'SYSTEM_PROMPT',
+          },
+        });
+      }
+
+      return updatedMatch;
+    });
+
+    return success(res, { match: result }, `Successfully moved to ${pendingGo.targetStage} stage!`);
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 10. Refuse GO Request (With explanation sent via Chat as required)
 const refuseSchema = z.object({
   explanation: z.string().min(2, 'Please provide a polite explanation').max(500),
 });

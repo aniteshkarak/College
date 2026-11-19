@@ -93,9 +93,40 @@ export const loginUser = async (identifier, password) => {
     where: isEmail
       ? { email: identifier.toLowerCase() }
       : { mobileNumber: identifier.trim() },
+    include: {
+      profile: true,
+      education: true,
+      photos: { orderBy: { photoOrder: 'asc' } },
+    },
   });
 
   if (!user) {
+    const pending = await prisma.pendingRegistration.findFirst({
+      where: isEmail
+        ? { email: identifier.toLowerCase() }
+        : { mobileNumber: identifier.trim() },
+    });
+
+    if (pending) {
+      const isMatch = await argon2.verify(pending.passwordHash, password);
+      if (isMatch) {
+        const err = new Error(`Application status: ${pending.status}. Review may take up to 72 hours.`);
+        err.code = 'ACCOUNT_NOT_ACTIVE';
+        err.statusCode = 403;
+        err.details = {
+          applicationId: pending.applicationId,
+          status: pending.status,
+          submittedAt: pending.submittedAt,
+          reviewDeadline: pending.reviewDeadline,
+          isOverdue: pending.isOverdue,
+          correctionFields: pending.correctionFields || [],
+          correctionMessage: pending.correctionMessage || null,
+          rejectionReason: pending.rejectionReason || null,
+        };
+        throw err;
+      }
+    }
+
     throw new Error('Incorrect credentials. No account found with this email or mobile number.');
   }
 
@@ -112,16 +143,15 @@ export const loginUser = async (identifier, password) => {
     displayName: user.displayName,
     age: user.age,
     gender: user.gender,
-    collegeName: user.collegeName,
-    course: user.course,
-    relationshipIntention: user.relationshipIntention,
-    currentMood: user.currentMood,
+    collegeName: user.education?.collegeName || '',
+    course: user.education?.course || user.education?.degreeName || '',
+    relationshipIntention: user.profile?.relationshipIntention || '',
+    currentMood: user.profile?.currentMood || 'Want to make friends',
     subscriptionPlan: user.subscriptionPlan,
     sentRequestsCount: user.sentRequestsCount,
-    avatarUrl: user.avatarUrl,
-    additionalPhotos: user.additionalPhotos,
+    avatarUrl: user.photos?.[0]?.url || '',
+    additionalPhotos: user.photos?.slice(1).map((p) => p.url) || [],
     verificationStatus: user.verificationStatus,
-    rejectionReason: user.rejectionReason,
     role: user.role,
   };
 

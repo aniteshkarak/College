@@ -20,6 +20,27 @@ export const storageService = {
   },
 
   /**
+   * Save private voice message audio file
+   */
+  storePrivateVoiceAudio: async (fileBuffer, originalName = 'voice.webm', mimeType = 'audio/webm') => {
+    const ext = path.extname(originalName) || (mimeType.includes('ogg') ? '.ogg' : mimeType.includes('mp4') ? '.mp4' : '.webm');
+    const filename = `voice_${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
+    const fullPath = path.join(STORAGE_PATHS.VOICE_DIR, filename);
+
+    if (!fs.existsSync(STORAGE_PATHS.VOICE_DIR)) {
+      fs.mkdirSync(STORAGE_PATHS.VOICE_DIR, { recursive: true });
+    }
+
+    await fs.promises.writeFile(fullPath, fileBuffer);
+    return {
+      filename,
+      filePath: fullPath,
+      fileSize: fileBuffer.length,
+      mimeType,
+    };
+  },
+
+  /**
    * Securely retrieve stream for private documents or photos
    * Strictly prevents directory traversal attacks via path.basename
    */
@@ -33,6 +54,8 @@ export const storageService = {
       baseDir = STORAGE_PATHS.THUMBNAILS_DIR;
     } else if (subfolder === 'discovery') {
       baseDir = STORAGE_PATHS.DISCOVERY_DIR;
+    } else if (subfolder === 'voice') {
+      baseDir = STORAGE_PATHS.VOICE_DIR;
     }
 
     const fullPath = path.join(baseDir, filename);
@@ -54,6 +77,11 @@ export const storageService = {
     if (ext === '.pdf') mimeType = 'application/pdf';
     else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
     else if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.webm') mimeType = 'audio/webm';
+    else if (ext === '.ogg') mimeType = 'audio/ogg';
+    else if (ext === '.mp3') mimeType = 'audio/mpeg';
+    else if (ext === '.wav') mimeType = 'audio/wav';
+    else if (ext === '.m4a' || ext === '.mp4') mimeType = 'audio/mp4';
 
     return {
       stream: fs.createReadStream(fullPath),

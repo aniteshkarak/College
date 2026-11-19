@@ -9,7 +9,7 @@ import redis from './config/redis.js';
 const httpServer = createServer(app);
 
 // Socket.IO Real-time server
-const io = new Server(httpServer, {
+export const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
       if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || (config.corsOrigins && config.corsOrigins.includes(origin))) {
@@ -21,6 +21,9 @@ const io = new Server(httpServer, {
     credentials: true,
   },
 });
+
+// Attach io to express app for routes
+app.set('io', io);
 
 io.on('connection', (socket) => {
   logger.info(`⚡ Socket.IO client connected: ${socket.id}`);
