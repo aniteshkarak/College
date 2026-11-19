@@ -11,7 +11,12 @@ const httpServer = createServer(app);
 // Socket.IO Real-time server
 const io = new Server(httpServer, {
   cors: {
-    origin: config.corsOrigin,
+    origin: (origin, callback) => {
+      if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || (config.corsOrigins && config.corsOrigins.includes(origin))) {
+        return callback(null, true);
+      }
+      return callback(new Error('Origin not allowed by Socket.IO CORS'));
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
