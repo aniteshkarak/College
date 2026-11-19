@@ -97,8 +97,14 @@ export const resubmitVerification = async (req, res) => {
   }
 };
 
+export const logout = async (_req, res) => {
+  res.clearCookie('token');
+  res.clearCookie('refreshToken');
+  return success(res, null, 'Logged out successfully');
+};
+
 export const getMe = async (req, res) => {
   return success(res, { user: req.user }, 'Current user profile');
 };
 
-export default { register, login, resubmitVerification, getMe };
+export default { register, login, logout, resubmitVerification, getMe };
