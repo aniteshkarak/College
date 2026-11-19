@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api, getStoredAdminUser } from '../../services/api';
+import AdminLogin from './AdminLogin';
 import {
   ShieldAlert,
   Users,
@@ -31,42 +33,169 @@ import {
   MapPin,
   ExternalLink,
   ChevronRight,
-  Info
+  Info,
+  LogOut,
+  Database,
+  Lock,
+  Activity
 } from 'lucide-react';
+
+/**
+ * Secure Admin Asset Image component
+ * Automatically fetches private storage assets using admin Bearer token,
+ * or displays standard URL for public/demo assets.
+ */
+const AdminAssetImage = ({ src, applicationId, assetType, assetId, alt, className, onClick }) => {
+  const [imgUrl, setImgUrl] = useState(src || '');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!src) return;
+
+    // If it's already a full HTTP URL or blob/data URL, use directly
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('blob:') || src.startsWith('data:')) {
+      setImgUrl(src);
+      return;
+    }
+
+    // Otherwise, fetch private asset from backend vault using admin token
+    if (applicationId && assetId) {
+      setIsLoading(true);
+      const url = assetType === 'document'
+        ? api.admin.getDocumentUrl(applicationId, assetId)
+        : api.admin.getPhotoUrl(applicationId, assetId);
+
+      api.admin.fetchPrivateAssetBlob(url)
+        .then((blobUrl) => {
+          if (isMounted) {
+            setImgUrl(blobUrl);
+            setIsLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setImgUrl('');
+            setIsLoading(false);
+          }
+        });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [src, applicationId, assetType, assetId]);
+
+  if (isLoading) {
+    return (
+      <div className={`flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 ${className}`}>
+        <RefreshCw className="w-5 h-5 animate-spin text-purple-500" />
+      </div>
+    );
+  }
+
+  if (!imgUrl) {
+    return (
+      <div className={`flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 ${className}`}>
+        <ImageIcon className="w-5 h-5 opacity-40" />
+      </div>
+    );
+  }
+
+  return <img src={imgUrl} alt={alt || 'Asset'} className={className} onClick={onClick} />;
+};
+
+/**
+ * Helper to normalize backend Prisma application vs frontend mock application fields
+ */
+const normalizeApplication = (app) => {
+  if (!app) return null;
+
+  const photos = app.photographs || [];
+  const photo1 = photos.find((p) => p.photoOrder === 1)?.photoUrl || app.photo_1 || app.photo1;
+  const photo2 = photos.find((p) => p.photoOrder === 2)?.photoUrl || app.photo_2 || app.photo2;
+  const photo3 = photos.find((p) => p.photoOrder === 3)?.photoUrl || app.photo_3 || app.photo3;
+
+  const idDoc = app.identityDocument;
+  const idDocUrl = idDoc?.filePath || app.verification_id_url || app.documentUrl;
+  const idDocType = idDoc?.documentType || app.verification_id_type || app.documentType || 'College Student ID';
+
+  return {
+    ...app,
+    id: app.id,
+    application_id: app.applicationId || app.application_id || app.id,
+    legal_name: app.legalName || app.legal_name || app.full_name,
+    display_name: app.displayName || app.display_name,
+    date_of_birth: app.dateOfBirth
+      ? (typeof app.dateOfBirth === 'string' ? app.dateOfBirth.split('T')[0] : new Date(app.dateOfBirth).toISOString().split('T')[0])
+      : app.date_of_birth,
+    age: app.age,
+    gender: app.gender,
+    city: app.city,
+    state: app.state,
+    languages_spoken: app.languagesSpoken || app.languages_spoken || ['English', 'Hindi'],
+    email: app.email,
+    mobile: app.mobileNumber || app.mobile,
+    college_name: app.collegeName || app.college_name,
+    university_name: app.universityName || app.university_name,
+    degree_name: app.degreeName || app.degree_name || app.course,
+    department_stream: app.departmentStream || app.department_stream,
+    academic_year: app.academicYear || app.academic_year,
+    current_semester: app.currentSemester || app.current_semester,
+    graduation_year: app.graduationYear || app.graduation_year,
+    student_status: app.studentStatus || app.student_status,
+    bio: app.bio,
+    interests: app.interests || [],
+    hobbies: app.hobbies || [],
+    looking_for: app.lookingFor || app.looking_for,
+    status: app.status,
+    assigned_admin: app.assignedAdminId || app.assigned_admin,
+    submitted_at: app.submittedAt || app.submitted_at,
+    review_deadline: app.reviewDeadline || app.review_deadline,
+    rejection_reason: app.rejectionReason || app.rejection_reason,
+    correction_message: app.correctionMessage || app.correction_message,
+    correction_fields: app.correctionFields || app.correction_fields || [],
+    verification_id_url: idDocUrl,
+    verification_id_type: idDocType,
+    identityDocumentId: idDoc?.id,
+    photo_1: photo1,
+    photo_2: photo2,
+    photo_3: photo3,
+    photo1_id: photos.find((p) => p.photoOrder === 1)?.id,
+    photo2_id: photos.find((p) => p.photoOrder === 2)?.id,
+    photo3_id: photos.find((p) => p.photoOrder === 3)?.id,
+  };
+};
 
 export const AdminDashboard = () => {
   const {
     adminMetrics,
     adminReports,
-    setAdminReports,
     adminAuditLogs,
-    setAdminAuditLogs,
-    currentUser,
     navigateTo,
     addToast,
-    pendingVerifications,
-    approveStudentVerification,
-    rejectStudentVerification,
-    startApplicationReview,
-    requestCorrectionOnApplication
+    pendingVerifications
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState('verifications'); // 'verifications' | 'overview' | 'reports' | 'logs'
-  const [reportFilter, setReportFilter] = useState('All');
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [investigationNotes, setInvestigationNotes] = useState('');
+  // Administrator Session State
+  const [adminUser, setAdminUser] = useState(() => getStoredAdminUser());
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Verifications Filtering and Search
-  const [verificationFilter, setVerificationFilter] = useState('ALL'); // 'ALL' | 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'NEEDS_CORRECTION' | 'RESUBMITTED' | 'APPROVED' | 'REJECTED' | 'OVERDUE'
+  // Live Applications State (fetched from PostgreSQL API)
+  const [liveApplications, setLiveApplications] = useState([]);
+  const [liveMetrics, setLiveMetrics] = useState(null);
+
+  // UI Tabs & Filters
+  const [activeTab, setActiveTab] = useState('verifications'); // 'verifications' | 'overview' | 'reports' | 'logs'
+  const [verificationFilter, setVerificationFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Detailed Sections A-F Review Modal
+  // Modals
   const [selectedApplication, setSelectedApplication] = useState(null);
+  const [previewImageModal, setPreviewImageModal] = useState(null);
 
-  // Modal states for primary actions
-  const [previewImageModal, setPreviewImageModal] = useState(null); // { url, title }
-
-  // Action 1: Approve Confirmation Checklist Modal
+  // Action 1: Approval Confirmation Checklist Modal
   const [approveModalApp, setApproveModalApp] = useState(null);
   const [approvalChecklist, setApprovalChecklist] = useState({
     age18: false,
@@ -75,6 +204,7 @@ export const AdminDashboard = () => {
     threePhotos: false,
     consents: false
   });
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
 
   // Action 2: Reject Modal
   const [rejectModalApp, setRejectModalApp] = useState(null);
@@ -85,6 +215,82 @@ export const AdminDashboard = () => {
   const [correctionModalApp, setCorrectionModalApp] = useState(null);
   const [selectedCorrectionFields, setSelectedCorrectionFields] = useState([]);
   const [correctionNoteText, setCorrectionNoteText] = useState('');
+
+  // Safety Reports state
+  const [selectedReport, setSelectedReport] = useState(null);
+
+  // -------------------------------------------------------------
+  // Data Fetching: Live Applications & Platform Metrics
+  // -------------------------------------------------------------
+  const loadLiveData = useCallback(async () => {
+    setIsRefreshing(true);
+    let connected = false;
+
+    // 1. Fetch Live Applications from PostgreSQL backend
+    try {
+      const res = await api.admin.listApplications({
+        status: verificationFilter === 'OVERDUE' ? 'ALL' : verificationFilter,
+        search: searchQuery.trim() || undefined,
+      });
+
+      if (res && res.success && res.data) {
+        connected = true;
+        const normalized = (res.data.applications || []).map(normalizeApplication);
+        setLiveApplications(normalized);
+        if (res.data.metrics) {
+          setLiveMetrics(res.data.metrics);
+        }
+      }
+    } catch (err) {
+      console.warn('Backend live application fetch error:', err.message);
+    }
+
+    // 2. If Super Admin, fetch live metrics
+    if (adminUser?.roleName === 'SUPER_ADMIN') {
+      try {
+        const metricsRes = await api.admin.getMetrics();
+        if (metricsRes && metricsRes.success && metricsRes.data) {
+          connected = true;
+          setLiveMetrics(metricsRes.data.metrics);
+        }
+      } catch (err) {
+        // Verification Admin or non-superadmin will get 403 on metrics per audit rules
+      }
+    }
+
+    setIsBackendConnected(connected);
+    setIsRefreshing(false);
+  }, [verificationFilter, searchQuery, adminUser?.roleName]);
+
+  useEffect(() => {
+    if (adminUser) {
+      loadLiveData();
+    }
+  }, [adminUser, loadLiveData]);
+
+  // If not logged in as Administrator, render AdminLogin view
+  if (!adminUser) {
+    return (
+      <AdminLogin
+        onLoginSuccess={(admin) => {
+          setAdminUser(admin);
+          addToast(`Logged in as ${admin.fullName} (${admin.roleName})`, 'success');
+        }}
+        onCancel={() => navigateTo('landing')}
+      />
+    );
+  }
+
+  const handleAdminLogout = () => {
+    api.admin.logout();
+    setAdminUser(null);
+    addToast('Administrator session ended.', 'info');
+  };
+
+  // Applications list: use live applications if backend connected; fallback to normalized local
+  const currentApplications = isBackendConnected && liveApplications.length > 0
+    ? liveApplications
+    : pendingVerifications.map(normalizeApplication);
 
   // Helper: compute remaining review hours and overdue state (72 hours target)
   const getDeadlineStatus = (deadlineIso, status) => {
@@ -109,22 +315,21 @@ export const AdminDashboard = () => {
   };
 
   // Metrics computation
-  const totalApps = pendingVerifications.length;
-  const pendingApps = pendingVerifications.filter((v) => v.status === 'PENDING_REVIEW').length;
-  const underReviewApps = pendingVerifications.filter((v) => v.status === 'UNDER_REVIEW').length;
-  const needsCorrectionApps = pendingVerifications.filter((v) => v.status === 'NEEDS_CORRECTION').length;
-  const resubmittedApps = pendingVerifications.filter((v) => v.status === 'RESUBMITTED').length;
-  const approvedApps = pendingVerifications.filter((v) => v.status === 'APPROVED').length;
-  const rejectedApps = pendingVerifications.filter((v) => v.status === 'REJECTED').length;
-  const overdueApps = pendingVerifications.filter(
+  const totalApps = currentApplications.length;
+  const pendingApps = currentApplications.filter((v) => v.status === 'PENDING_REVIEW').length;
+  const underReviewApps = currentApplications.filter((v) => v.status === 'UNDER_REVIEW').length;
+  const needsCorrectionApps = currentApplications.filter((v) => v.status === 'NEEDS_CORRECTION').length;
+  const resubmittedApps = currentApplications.filter((v) => v.status === 'RESUBMITTED').length;
+  const approvedApps = currentApplications.filter((v) => v.status === 'APPROVED').length;
+  const rejectedApps = currentApplications.filter((v) => v.status === 'REJECTED').length;
+  const overdueApps = currentApplications.filter(
     (v) =>
       ['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(v.status) &&
       new Date(v.review_deadline) < new Date()
   ).length;
 
   // Filtered applications
-  const filteredVerifications = pendingVerifications.filter((app) => {
-    // 1. Status Filter
+  const filteredVerifications = currentApplications.filter((app) => {
     if (verificationFilter === 'OVERDUE') {
       const isOverdue =
         ['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(app.status) &&
@@ -134,7 +339,6 @@ export const AdminDashboard = () => {
       return false;
     }
 
-    // 2. Search Query (App ID, Name, Display Name, Email, College)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchId = (app.application_id || app.id || '').toLowerCase().includes(q);
@@ -148,12 +352,18 @@ export const AdminDashboard = () => {
     return true;
   });
 
-  // Action Handlers
+  // Action Handlers (Live Backend + Local State Synchronization)
   const handleStartReview = async (app) => {
-    const adminName = currentUser?.display_name || 'Admin';
-    await startApplicationReview(app.id, adminName);
-    if (selectedApplication && selectedApplication.id === app.id) {
-      setSelectedApplication({ ...selectedApplication, status: 'UNDER_REVIEW', assigned_admin: adminName });
+    setIsSubmittingAction(true);
+    try {
+      await api.admin.claim(app.id);
+      addToast(`Review claimed for application ${app.application_id}`, 'success');
+      loadLiveData();
+    } catch (err) {
+      console.warn('Backend claim review error:', err.message);
+      addToast(err.message || 'Unable to claim application review.', 'warning');
+    } finally {
+      setIsSubmittingAction(false);
     }
   };
 
@@ -173,15 +383,24 @@ export const AdminDashboard = () => {
     if (!approveModalApp) return;
     const allChecked = Object.values(approvalChecklist).every(Boolean);
     if (!allChecked) {
-      addToast('Please confirm all 5 verification requirements in the checklist.', 'warning');
+      addToast('Please confirm all 5 verification conditions in the checklist.', 'warning');
       return;
     }
 
-    await approveStudentVerification(approveModalApp.id);
-    if (selectedApplication && selectedApplication.id === approveModalApp.id) {
-      setSelectedApplication({ ...selectedApplication, status: 'APPROVED', rejection_reason: null });
+    setIsSubmittingAction(true);
+    try {
+      await api.admin.approve(approveModalApp.id);
+      addToast(`Application ${approveModalApp.application_id} approved! Active student account created. 🎉`, 'success');
+      setApproveModalApp(null);
+      if (selectedApplication && selectedApplication.id === approveModalApp.id) {
+        setSelectedApplication(null);
+      }
+      loadLiveData();
+    } catch (err) {
+      addToast(err.message || 'Approval transaction failed.', 'error');
+    } finally {
+      setIsSubmittingAction(false);
     }
-    setApproveModalApp(null);
   };
 
   const handleOpenRejectModal = (app) => {
@@ -198,13 +417,21 @@ export const AdminDashboard = () => {
       return;
     }
 
+    setIsSubmittingAction(true);
     const fullReason = `[${rejectCategory}] ${rejectReasonText.trim()}`;
-    await rejectStudentVerification(rejectModalApp.id, fullReason);
-    if (selectedApplication && selectedApplication.id === rejectModalApp.id) {
-      setSelectedApplication({ ...selectedApplication, status: 'REJECTED', rejection_reason: fullReason });
+    try {
+      await api.admin.reject(rejectModalApp.id, fullReason);
+      addToast(`Application ${rejectModalApp.application_id} was rejected. Notice dispatched to applicant.`, 'info');
+      setRejectModalApp(null);
+      if (selectedApplication && selectedApplication.id === rejectModalApp.id) {
+        setSelectedApplication(null);
+      }
+      loadLiveData();
+    } catch (err) {
+      addToast(err.message || 'Rejection request failed.', 'error');
+    } finally {
+      setIsSubmittingAction(false);
     }
-    setRejectModalApp(null);
-    setRejectReasonText('');
   };
 
   const handleOpenCorrectionModal = (app) => {
@@ -231,19 +458,26 @@ export const AdminDashboard = () => {
       return;
     }
 
-    await requestCorrectionOnApplication(correctionModalApp.id, selectedCorrectionFields, correctionNoteText.trim());
-    if (selectedApplication && selectedApplication.id === correctionModalApp.id) {
-      setSelectedApplication({
-        ...selectedApplication,
-        status: 'NEEDS_CORRECTION',
-        correction_fields: selectedCorrectionFields,
-        correction_message: correctionNoteText.trim()
-      });
+    setIsSubmittingAction(true);
+    try {
+      await api.admin.requestCorrection(
+        correctionModalApp.id,
+        selectedCorrectionFields,
+        correctionNoteText.trim()
+      );
+      addToast(`Correction request dispatched for application ${correctionModalApp.application_id}.`, 'info');
+      setCorrectionModalApp(null);
+      if (selectedApplication && selectedApplication.id === correctionModalApp.id) {
+        setSelectedApplication(null);
+      }
+      loadLiveData();
+    } catch (err) {
+      addToast(err.message || 'Correction request failed.', 'error');
+    } finally {
+      setIsSubmittingAction(false);
     }
-    setCorrectionModalApp(null);
   };
 
-  // Status Badge Component
   const renderStatusBadge = (status, isOverdue) => {
     let bg = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     let label = status;
@@ -291,16 +525,20 @@ export const AdminDashboard = () => {
     );
   };
 
+  // Role permissions check
+  const isSuperAdmin = adminUser.roleName === 'SUPER_ADMIN';
+  const canPerformReviews = ['SUPER_ADMIN', 'VERIFICATION_ADMIN'].includes(adminUser.roleName);
+
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 py-6">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 py-6 animate-fade-in">
       
-      {/* Top Banner */}
+      {/* Top Administrator Command Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigateTo('matches')}
             className="p-2 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-white bg-slate-100 dark:bg-slate-800 transition-colors"
-            title="Return to App"
+            title="Return to Student Portal"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -309,38 +547,84 @@ export const AdminDashboard = () => {
               <h1 className="font-display font-extrabold text-2xl text-slate-900 dark:text-white tracking-tight">
                 Collégé Admin & Verification Portal
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                100% Manual Verification System
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                adminUser.roleName === 'SUPER_ADMIN'
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-300'
+                  : adminUser.roleName === 'VERIFICATION_ADMIN'
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300'
+                  : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300'
+              }`}>
+                {adminUser.roleName}
+              </span>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                isBackendConnected
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200'
+                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200'
+              }`}>
+                <Database className="w-3 h-3" />
+                {isBackendConnected ? 'PostgreSQL Live' : 'Local Fallback'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Strict 72-hour human verification protocol. Every applicant is reviewed before account activation.
+              Signed in as <strong>{adminUser.fullName}</strong> ({adminUser.email}) • Strict 72-Hour Verification Protocol
             </p>
           </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto">
-          {[
-            { id: 'verifications', label: `Application Queue (${pendingApps + underReviewApps + resubmittedApps})` },
-            { id: 'overview', label: 'Overview Metrics' },
-            { id: 'reports', label: `Safety Reports (${adminReports.length})` },
-            { id: 'logs', label: 'Audit Trail' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Action Controls: Refresh, Tab Switcher, Logout */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={loadLiveData}
+            disabled={isRefreshing}
+            className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+            title="Refresh Live Data from Backend"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-purple-600' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            onClick={handleAdminLogout}
+            className="px-3 py-2 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-rose-200 dark:border-rose-900"
+            title="Sign out of Admin Session"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
+
+          {/* Tab Switcher */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto">
+            {[
+              { id: 'verifications', label: `Queue (${pendingApps + underReviewApps + resubmittedApps})` },
+              { id: 'overview', label: 'Platform Metrics' },
+              { id: 'reports', label: `Safety Reports (${adminReports.length})` },
+              { id: 'logs', label: 'Audit Trail' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Role Warning for SUPPORT_ADMIN */}
+      {!canPerformReviews && (
+        <div className="mb-4 p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 text-blue-900 dark:text-blue-300 text-xs flex items-center gap-2">
+          <Info className="w-4 h-4 shrink-0 text-blue-600" />
+          <span>
+            You are signed in with the <strong>SUPPORT_ADMIN</strong> role. Application review and approval actions are restricted to <strong>VERIFICATION_ADMIN</strong> and <strong>SUPER_ADMIN</strong>.
+          </span>
+        </div>
+      )}
 
       {/* Overdue Urgent Alert Banner */}
       {overdueApps > 0 && activeTab === 'verifications' && (
@@ -475,9 +759,12 @@ export const AdminDashboard = () => {
                           {/* 2. Applicant */}
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2.5">
-                              <img
+                              <AdminAssetImage
                                 src={app.photo_1}
-                                alt="Applicant Avatar"
+                                applicationId={app.id}
+                                assetType="photo"
+                                assetId={app.photo1_id}
+                                alt="Avatar"
                                 className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                               />
                               <div>
@@ -542,9 +829,10 @@ export const AdminDashboard = () => {
                               <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-300">
                                 {app.assigned_admin}
                               </span>
-                            ) : isPendingState ? (
+                            ) : isPendingState && canPerformReviews ? (
                               <button
                                 onClick={() => handleStartReview(app)}
+                                disabled={isSubmittingAction}
                                 className="text-[11px] font-bold text-purple-600 hover:text-purple-700 hover:underline flex items-center gap-1"
                               >
                                 <UserCheck className="w-3 h-3" />
@@ -568,7 +856,7 @@ export const AdminDashboard = () => {
                                 <span>Review</span>
                               </button>
 
-                              {isPendingState && (
+                              {isPendingState && canPerformReviews && (
                                 <>
                                   <button
                                     onClick={() => handleOpenApproveModal(app)}
@@ -611,6 +899,19 @@ export const AdminDashboard = () => {
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-fade-in">
           
+          {/* Non-Super Admin notice */}
+          {!isSuperAdmin && (
+            <div className="p-4 rounded-3xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-3">
+              <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Platform-Wide Metrics Gated (Audit Rule 2)</p>
+                <p className="mt-0.5 text-amber-700 dark:text-amber-300 leading-relaxed">
+                  Full server statistics, database sizes, and financial metrics are restricted to <strong>SUPER_ADMIN</strong>. You are currently logged in as <strong>{adminUser.roleName}</strong>. Application-level metrics remain visible below.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Pending ID Verifications Spotlight */}
@@ -641,10 +942,10 @@ export const AdminDashboard = () => {
                 <Users className="w-5 h-5 text-emerald-500" />
               </div>
               <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
-                {(adminMetrics.total_users || 0).toLocaleString()}
+                {(liveMetrics?.totalUsers || adminMetrics.total_users || 0).toLocaleString()}
               </p>
               <span className="text-xs text-emerald-600 font-bold mt-1 inline-block">
-                +{adminMetrics.new_registrations_today || 12} registered today
+                {isBackendConnected ? 'PostgreSQL Active Users' : 'Verified Profiles'}
               </span>
             </div>
 
@@ -654,7 +955,7 @@ export const AdminDashboard = () => {
                 <Sparkles className="w-5 h-5 text-purple-500" />
               </div>
               <p className="text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
-                {(adminMetrics.total_matches || 0).toLocaleString()}
+                {(liveMetrics?.totalMatches || adminMetrics.total_matches || 0).toLocaleString()}
               </p>
               <span className="text-xs text-purple-600 font-bold mt-1 inline-block">
                 Mutual Student Matches
@@ -667,7 +968,7 @@ export const AdminDashboard = () => {
                 <AlertTriangle className="w-5 h-5 text-rose-500" />
               </div>
               <p className="text-3xl font-extrabold text-rose-600 dark:text-rose-400 mt-2">
-                {adminReports.length}
+                {liveMetrics?.pendingReports || adminReports.length}
               </p>
               <span className="text-xs text-rose-500 font-bold mt-1 inline-block">
                 Active Flags for Review
@@ -696,7 +997,7 @@ export const AdminDashboard = () => {
               </div>
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
                 <span className="text-[10px] uppercase font-bold text-slate-400">Document Privacy</span>
-                <p className="font-bold text-sm text-slate-800 dark:text-slate-200 mt-0.5">Private Storage & Admin Only</p>
+                <p className="font-bold text-sm text-slate-800 dark:text-slate-200 mt-0.5">Private Vault & Bearer Protected</p>
               </div>
             </div>
           </div>
@@ -783,7 +1084,8 @@ export const AdminDashboard = () => {
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs animate-fade-in">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <FileCheck2 className="w-5 h-5 text-purple-600" />
                 Immutable Administrative Audit Trail
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -791,7 +1093,7 @@ export const AdminDashboard = () => {
               </p>
             </div>
             <span className="px-2.5 py-1 bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 rounded-xl font-mono text-xs font-bold">
-              {adminAuditLogs.length} Events
+              Audit Trail Active
             </span>
           </div>
 
@@ -808,7 +1110,7 @@ export const AdminDashboard = () => {
                       {log.admin}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Reason / Note: {log.reason}</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Details: {log.reason}</p>
                 </div>
                 <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">
                   {new Date(log.timestamp).toLocaleString()}
@@ -1031,13 +1333,19 @@ export const AdminDashboard = () => {
 
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center gap-5">
                   <div className="relative group shrink-0">
-                    <img
+                    <AdminAssetImage
                       src={selectedApplication.verification_id_url}
+                      applicationId={selectedApplication.id}
+                      assetType="document"
+                      assetId={selectedApplication.identityDocumentId}
                       alt="Student ID Document"
                       className="w-48 h-32 object-cover rounded-xl border-2 border-purple-500 shadow-md cursor-pointer hover:opacity-90"
                       onClick={() =>
                         setPreviewImageModal({
-                          url: selectedApplication.verification_id_url,
+                          src: selectedApplication.verification_id_url,
+                          applicationId: selectedApplication.id,
+                          assetType: 'document',
+                          assetId: selectedApplication.identityDocumentId,
                           title: `${selectedApplication.legal_name || selectedApplication.full_name} - ${selectedApplication.verification_id_type}`
                         })
                       }
@@ -1045,7 +1353,10 @@ export const AdminDashboard = () => {
                     <button
                       onClick={() =>
                         setPreviewImageModal({
-                          url: selectedApplication.verification_id_url,
+                          src: selectedApplication.verification_id_url,
+                          applicationId: selectedApplication.id,
+                          assetType: 'document',
+                          assetId: selectedApplication.identityDocumentId,
                           title: `${selectedApplication.legal_name || selectedApplication.full_name} - ${selectedApplication.verification_id_type}`
                         })
                       }
@@ -1064,9 +1375,9 @@ export const AdminDashboard = () => {
                       </p>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400">Applicant Notes / Details</span>
+                      <span className="text-[10px] uppercase font-bold text-slate-400">Applicant Verification Status</span>
                       <p className="text-slate-700 dark:text-slate-300">
-                        {selectedApplication.verification_notes || 'Official college ID card submitted for student verification.'}
+                        {selectedApplication.status === 'APPROVED' ? 'Verified & Authenticated by Admin' : 'Pending verification by authorized officer.'}
                       </p>
                     </div>
                     <div className="pt-1 flex items-center gap-2 text-emerald-600 font-semibold text-[11px]">
@@ -1098,13 +1409,19 @@ export const AdminDashboard = () => {
                       <span className="text-purple-600">Primary</span>
                     </div>
                     <div className="relative group">
-                      <img
+                      <AdminAssetImage
                         src={selectedApplication.photo_1}
+                        applicationId={selectedApplication.id}
+                        assetType="photo"
+                        assetId={selectedApplication.photo1_id}
                         alt="Photo 1"
                         className="w-full h-48 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer hover:opacity-90"
                         onClick={() =>
                           setPreviewImageModal({
-                            url: selectedApplication.photo_1,
+                            src: selectedApplication.photo_1,
+                            applicationId: selectedApplication.id,
+                            assetType: 'photo',
+                            assetId: selectedApplication.photo1_id,
                             title: `${selectedApplication.legal_name || selectedApplication.full_name} - Photo 1 (Avatar)`
                           })
                         }
@@ -1112,7 +1429,10 @@ export const AdminDashboard = () => {
                       <button
                         onClick={() =>
                           setPreviewImageModal({
-                            url: selectedApplication.photo_1,
+                            src: selectedApplication.photo_1,
+                            applicationId: selectedApplication.id,
+                            assetType: 'photo',
+                            assetId: selectedApplication.photo1_id,
                             title: `${selectedApplication.legal_name || selectedApplication.full_name} - Photo 1 (Avatar)`
                           })
                         }
@@ -1131,13 +1451,19 @@ export const AdminDashboard = () => {
                       <span className="text-slate-400">Secondary</span>
                     </div>
                     <div className="relative group">
-                      <img
+                      <AdminAssetImage
                         src={selectedApplication.photo_2}
+                        applicationId={selectedApplication.id}
+                        assetType="photo"
+                        assetId={selectedApplication.photo2_id}
                         alt="Photo 2"
                         className="w-full h-48 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer hover:opacity-90"
                         onClick={() =>
                           setPreviewImageModal({
-                            url: selectedApplication.photo_2,
+                            src: selectedApplication.photo_2,
+                            applicationId: selectedApplication.id,
+                            assetType: 'photo',
+                            assetId: selectedApplication.photo2_id,
                             title: `${selectedApplication.legal_name || selectedApplication.full_name} - Photo 2 (Campus)`
                           })
                         }
@@ -1145,7 +1471,10 @@ export const AdminDashboard = () => {
                       <button
                         onClick={() =>
                           setPreviewImageModal({
-                            url: selectedApplication.photo_2,
+                            src: selectedApplication.photo_2,
+                            applicationId: selectedApplication.id,
+                            assetType: 'photo',
+                            assetId: selectedApplication.photo2_id,
                             title: `${selectedApplication.legal_name || selectedApplication.full_name} - Photo 2 (Campus)`
                           })
                         }
@@ -1164,13 +1493,19 @@ export const AdminDashboard = () => {
                       <span className="text-slate-400">Secondary</span>
                     </div>
                     <div className="relative group">
-                      <img
+                      <AdminAssetImage
                         src={selectedApplication.photo_3}
+                        applicationId={selectedApplication.id}
+                        assetType="photo"
+                        assetId={selectedApplication.photo3_id}
                         alt="Photo 3"
                         className="w-full h-48 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer hover:opacity-90"
                         onClick={() =>
                           setPreviewImageModal({
-                            url: selectedApplication.photo_3,
+                            src: selectedApplication.photo_3,
+                            applicationId: selectedApplication.id,
+                            assetType: 'photo',
+                            assetId: selectedApplication.photo3_id,
                             title: `${selectedApplication.legal_name || selectedApplication.full_name} - Photo 3 (Social)`
                           })
                         }
@@ -1178,7 +1513,10 @@ export const AdminDashboard = () => {
                       <button
                         onClick={() =>
                           setPreviewImageModal({
-                            url: selectedApplication.photo_3,
+                            src: selectedApplication.photo_3,
+                            applicationId: selectedApplication.id,
+                            assetType: 'photo',
+                            assetId: selectedApplication.photo3_id,
                             title: `${selectedApplication.legal_name || selectedApplication.full_name} - Photo 3 (Social)`
                           })
                         }
@@ -1227,14 +1565,15 @@ export const AdminDashboard = () => {
             {/* Modal Bottom Actions Bar */}
             <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-slate-500 font-semibold">
-                Logged in as <strong>{currentUser?.display_name || 'Admin'}</strong>
+                Logged in as <strong>{adminUser.fullName}</strong> ({adminUser.roleName})
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Action 4: Claim / Mark Under Review */}
-                {selectedApplication.status === 'PENDING_REVIEW' && (
+                {selectedApplication.status === 'PENDING_REVIEW' && canPerformReviews && (
                   <button
                     onClick={() => handleStartReview(selectedApplication)}
+                    disabled={isSubmittingAction}
                     className="px-3.5 py-2 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-blue-700 dark:text-blue-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
                   >
                     <UserCheck className="w-4 h-4" />
@@ -1243,9 +1582,10 @@ export const AdminDashboard = () => {
                 )}
 
                 {/* Action 3: Request Correction */}
-                {['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(selectedApplication.status) && (
+                {['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(selectedApplication.status) && canPerformReviews && (
                   <button
                     onClick={() => handleOpenCorrectionModal(selectedApplication)}
+                    disabled={isSubmittingAction}
                     className="px-3.5 py-2 bg-orange-50 dark:bg-orange-950/50 hover:bg-orange-100 text-orange-700 dark:text-orange-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors border border-orange-200 dark:border-orange-900"
                   >
                     <RefreshCw className="w-4 h-4" />
@@ -1254,9 +1594,10 @@ export const AdminDashboard = () => {
                 )}
 
                 {/* Action 2: Reject Application */}
-                {['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(selectedApplication.status) && (
+                {['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(selectedApplication.status) && canPerformReviews && (
                   <button
                     onClick={() => handleOpenRejectModal(selectedApplication)}
+                    disabled={isSubmittingAction}
                     className="px-3.5 py-2 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 text-rose-700 dark:text-rose-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors border border-rose-200 dark:border-rose-900"
                   >
                     <X className="w-4 h-4" />
@@ -1265,9 +1606,10 @@ export const AdminDashboard = () => {
                 )}
 
                 {/* Action 1: Approve Application */}
-                {['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(selectedApplication.status) && (
+                {['PENDING_REVIEW', 'UNDER_REVIEW', 'RESUBMITTED'].includes(selectedApplication.status) && canPerformReviews && (
                   <button
                     onClick={() => handleOpenApproveModal(selectedApplication)}
+                    disabled={isSubmittingAction}
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-colors"
                   >
                     <Check className="w-4 h-4" />
@@ -1281,13 +1623,10 @@ export const AdminDashboard = () => {
                   </span>
                 )}
 
-                {selectedApplication.status === 'REJECTED' && (
-                  <button
-                    onClick={() => handleOpenApproveModal(selectedApplication)}
-                    className="px-3.5 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-emerald-600 hover:text-white font-bold text-xs rounded-xl transition-colors"
-                  >
-                    Re-evaluate & Approve
-                  </button>
+                {!canPerformReviews && (
+                  <span className="text-xs text-slate-400 italic">
+                    Read-Only View (Requires VERIFICATION_ADMIN role)
+                  </span>
                 )}
               </div>
             </div>
@@ -1386,16 +1725,18 @@ export const AdminDashboard = () => {
                 <button
                   type="button"
                   onClick={() => setApproveModalApp(null)}
+                  disabled={isSubmittingAction}
                   className="px-4 py-2 text-slate-500 hover:text-slate-700 font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={!Object.values(approvalChecklist).every(Boolean)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  disabled={!Object.values(approvalChecklist).every(Boolean) || isSubmittingAction}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
                 >
-                  Confirm & Create Active Account
+                  {isSubmittingAction && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Confirm & Create Active Account</span>
                 </button>
               </div>
 
@@ -1467,15 +1808,18 @@ export const AdminDashboard = () => {
                 <button
                   type="button"
                   onClick={() => setRejectModalApp(null)}
+                  disabled={isSubmittingAction}
                   className="px-4 py-2 text-slate-500 hover:text-slate-700 font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-xs transition-colors"
+                  disabled={isSubmittingAction}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2"
                 >
-                  Confirm Rejection
+                  {isSubmittingAction && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Confirm Rejection</span>
                 </button>
               </div>
             </form>
@@ -1562,15 +1906,18 @@ export const AdminDashboard = () => {
                 <button
                   type="button"
                   onClick={() => setCorrectionModalApp(null)}
+                  disabled={isSubmittingAction}
                   className="px-4 py-2 text-slate-500 hover:text-slate-700 font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-xs transition-colors"
+                  disabled={isSubmittingAction}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2"
                 >
-                  Send Correction Request
+                  {isSubmittingAction && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Send Correction Request</span>
                 </button>
               </div>
 
@@ -1592,8 +1939,11 @@ export const AdminDashboard = () => {
               <span>{previewImageModal.title}</span>
               <X className="w-5 h-5 cursor-pointer text-slate-400 hover:text-white" />
             </div>
-            <img
-              src={previewImageModal.url}
+            <AdminAssetImage
+              src={previewImageModal.src}
+              applicationId={previewImageModal.applicationId}
+              assetType={previewImageModal.assetType}
+              assetId={previewImageModal.assetId}
               alt="High-Res Inspection"
               className="max-h-[78vh] w-auto mx-auto object-contain rounded-2xl shadow-2xl"
             />

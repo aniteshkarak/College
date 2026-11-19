@@ -28,8 +28,17 @@ export const AppProvider = ({ children }) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status'
 
-  // Restore authenticated session from backend token if stored
+  // Restore authenticated session from backend token if stored & support direct #admin routing
   useEffect(() => {
+    try {
+      const hash = window.location.hash.replace('#', '');
+      const searchParam = new URLSearchParams(window.location.search).get('view');
+      const target = hash || searchParam;
+      if (target === 'admin') {
+        setCurrentView('admin');
+      }
+    } catch (e) {}
+
     const token = getStoredToken();
     if (token) {
       api.auth.getMe()
@@ -1010,9 +1019,9 @@ export const AppProvider = ({ children }) => {
   };
 
   const navigateTo = (view) => {
-    const publicViews = ['landing', 'about', 'how-it-works', 'safety', 'community', 'privacy', 'terms', 'contact'];
+    const publicViews = ['landing', 'about', 'how-it-works', 'safety', 'community', 'privacy', 'terms', 'contact', 'admin'];
     
-    // Gatekeeping: Without login or approved account, user cannot enter website
+    // Gatekeeping: Without login or approved account, user cannot enter website (except public views and admin portal)
     if (!isAuthenticated && !publicViews.includes(view)) {
       setIsAuthModalOpen(true);
       setAuthModalMode('login');

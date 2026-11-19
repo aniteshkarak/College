@@ -6,7 +6,7 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
-// Token Management
+// Token Management (Student)
 export const getStoredToken = () => {
   try {
     return localStorage.getItem('college_access_token');
@@ -31,6 +31,51 @@ export const clearStoredToken = () => {
   } catch (e) {}
 };
 
+// Token & Session Management (Administrator)
+export const getStoredAdminToken = () => {
+  try {
+    return localStorage.getItem('college_admin_token');
+  } catch (e) {
+    return null;
+  }
+};
+
+export const setStoredAdminToken = (token) => {
+  try {
+    if (token) {
+      localStorage.setItem('college_admin_token', token);
+    } else {
+      localStorage.removeItem('college_admin_token');
+    }
+  } catch (e) {}
+};
+
+export const clearStoredAdminToken = () => {
+  try {
+    localStorage.removeItem('college_admin_token');
+    localStorage.removeItem('college_admin_user');
+  } catch (e) {}
+};
+
+export const getStoredAdminUser = () => {
+  try {
+    const raw = localStorage.getItem('college_admin_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const setStoredAdminUser = (admin) => {
+  try {
+    if (admin) {
+      localStorage.setItem('college_admin_user', JSON.stringify(admin));
+    } else {
+      localStorage.removeItem('college_admin_user');
+    }
+  } catch (e) {}
+};
+
 /**
  * Standard fetch wrapper with automatic token injection and error handling
  */
@@ -38,10 +83,13 @@ async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = options.headers ? { ...options.headers } : {};
 
-  // Inject Authorization Bearer token if available
-  const token = getStoredToken();
-  if (token && !headers['Authorization']) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // Inject Authorization Bearer token (separating student vs admin tokens)
+  if (!headers['Authorization']) {
+    const isAdminEndpoint = endpoint.startsWith('/admin');
+    const token = isAdminEndpoint ? getStoredAdminToken() : getStoredToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
   }
 
   // Set Content-Type only if body is NOT FormData
@@ -156,12 +204,35 @@ export const api = {
 
   // Admin Verification & Audit Operations
   admin: {
+    login: async (email, password) => {
+      const res = await request('/admin/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      if (res?.success && res?.data?.token) {
+        setStoredAdminToken(res.data.token);
+        if (res.data.admin) setStoredAdminUser(res.data.admin);
+      }
+      return res;
+    },
+
+    logout: () => {
+      clearStoredAdminToken();
+      return Promise.resolve({ success: true });
+    },
+
+    getMe: () => {
+      return getStoredAdminUser();
+    },
+
     getMetrics: () => request('/admin/metrics'),
 
     listApplications: (params = {}) => {
       const searchParams = new URLSearchParams();
       if (params.status) searchParams.set('status', params.status);
+      if (params.college) searchParams.set('college', params.college);
       if (params.search) searchParams.set('search', params.search);
+      if (params.overdue) searchParams.set('overdue', params.overdue);
       if (params.page) searchParams.set('page', params.page);
       if (params.limit) searchParams.set('limit', params.limit);
       const query = searchParams.toString();
@@ -170,31 +241,56 @@ export const api = {
 
     getApplication: (id) => request(`/admin/applications/${encodeURIComponent(id)}`),
 
-    claim: (id) =>
-      request(`/admin/applications/${encodeURIComponent(id)}/start-review`, {
-        method: 'POST'
+    assign: (id) =>
+      request(`/admin/applications/${encodeURIComponent(id)}/assign`, {
+        method: 'POST',
       }),
 
-    approve: (id, adminNotes = '') =>
+    claim: (id) =>
+      request(`/admin/applications/${encodeURIComponent(id)}/start-review`, {
+        method: 'POST',
+      }),
+
+    startReview: (id) =>
+      request(`/admin/applications/${encodeURIComponent(id)}/start-review`, {
+        method: 'POST',
+      }),
+
+    approve: (id) =>
       request(`/admin/applications/${encodeURIComponent(id)}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ adminNotes })
       }),
 
     reject: (id, reason) =>
       request(`/admin/applications/${encodeURIComponent(id)}/reject`, {
         method: 'POST',
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ reason }),
       }),
 
     requestCorrection: (id, fields, message) =>
       request(`/admin/applications/${encodeURIComponent(id)}/request-correction`, {
         method: 'POST',
-        body: JSON.stringify({ fields, message })
+        body: JSON.stringify({ fields, message }),
       }),
 
-    getDocumentUrl: (subfolder, filename) =>
-      `${API_BASE_URL}/admin/documents/${encodeURIComponent(subfolder)}/${encodeURIComponent(filename)}`
+    getHistory: (id) =>
+      request(`/admin/applications/${encodeURIComponent(id)}/history`),
+
+    getDocumentUrl: (applicationId, documentId) =>
+      `${API_BASE_URL}/admin/applications/${encodeURIComponent(applicationId)}/documents/${encodeURIComponent(documentId)}`,
+
+    getPhotoUrl: (applicationId, photoId) =>
+      `${API_BASE_URL}/admin/applications/${encodeURIComponent(applicationId)}/photos/${encodeURIComponent(photoId)}`,
+
+    fetchPrivateAssetBlob: async (url) => {
+      const token = getStoredAdminToken();
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Failed to load asset (${res.status})`);
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
   }
 };
 
