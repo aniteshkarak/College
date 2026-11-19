@@ -194,13 +194,15 @@ export const getApplicationDetails = async (req, res) => {
 /**
  * POST /api/v1/admin/applications/:id/assign
  */
+  
 export const assignApplication = async (req, res) => {
   try {
     const { id } = req.params;
-    const { adminId, adminName } = req.body;
 
     const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
+      where: {
+        OR: [{ id }, { applicationId: id }],
+      },
     });
 
     if (!application) {
@@ -211,18 +213,30 @@ export const assignApplication = async (req, res) => {
       const app = await tx.pendingRegistration.update({
         where: { id: application.id },
         data: {
-          assignedAdminId: adminId || req.user?.id || 'ADMIN_SUPER',
+          assignedAdminId: req.admin.id,
         },
       });
 
       await tx.verificationHistory.create({
         data: {
           registrationId: app.id,
-          adminId: adminId || req.user?.id || 'ADMIN_SUPER',
-          adminName: adminName || req.user?.fullName || 'Administrator',
+          adminId: req.admin.id,
+          adminName: req.admin.fullName,
           action: 'ASSIGNED',
-          notes: `Assigned to ${adminName || 'Admin'}.`,
+          notes: `Assigned to ${req.admin.fullName}.`,
           correctionFields: [],
+        },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: req.admin.id,
+          action: 'ASSIGN_APPLICATION',
+          targetType: 'APPLICATION',
+          targetId: application.id,
+          details: `Application ${application.applicationId} assigned to administrator ${req.admin.fullName}.`,
+          ipAddress: req.ip || req.socket?.remoteAddress || null,
+          userAgent: req.get('user-agent') || null,
         },
       });
 
@@ -231,9 +245,10 @@ export const assignApplication = async (req, res) => {
 
     return success(res, updated, 'Application successfully assigned');
   } catch (err) {
-    return error(res, err.message, 500);
+    return error(res, 'Unable to assign application.', 500);
   }
 };
+
 
 /**
  * POST /api/v1/admin/applications/:id/start-review
@@ -256,18 +271,30 @@ export const startReview = async (req, res) => {
         data: {
           status: 'UNDER_REVIEW',
           reviewStartedAt: new Date(),
-          assignedAdminId: req.user?.id || 'ADMIN_SUPER',
+          assignedAdminId: req.admin.id,
         },
       });
 
       await tx.verificationHistory.create({
         data: {
           registrationId: app.id,
-          adminId: req.user?.id || 'ADMIN_SUPER',
-          adminName: req.user?.fullName || 'Administrator',
+          adminId: req.admin.id,
+	  adminName: req.admin.fullName,
           action: 'STARTED_REVIEW',
           notes: 'Admin opened and started inspecting applicant documents & photographs.',
           correctionFields: [],
+        },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId: req.admin.id,
+          action: 'START_REVIEW',
+          targetType: 'APPLICATION',
+          targetId: application.id,
+          details: `Review started for application ${application.applicationId} by ${req.admin.fullName}.`,
+          ipAddress: req.ip || req.socket?.remoteAddress || null,
+          userAgent: req.get('user-agent') || null,
         },
       });
 
@@ -279,7 +306,7 @@ export const startReview = async (req, res) => {
       email: application.email,
       legalName: application.legalName,
       applicationId: application.applicationId,
-      adminName: req.user?.fullName || 'Super Administrator',
+      adminName: req.admin.fullName,
     }).catch(() => {});
 
     return success(res, updated, 'Application marked as UNDER_REVIEW');
@@ -312,8 +339,8 @@ export const approveApplication = async (req, res) => {
       return error(res, 'Application has already been approved and account is active', 400);
     }
 
-    const adminId = req.user?.id || 'ADMIN_SUPER';
-    const adminName = req.user?.fullName || 'Super Administrator';
+    const adminId = req.admin.id;
+    const adminName = req.admin.fullName;
 
     // Transactional Activation:
     // 1. Create User
@@ -421,6 +448,19 @@ export const approveApplication = async (req, res) => {
         },
       });
 
+      // 8. Admin Audit Log
+      await tx.adminAuditLog.create({
+        data: {
+          adminId,
+          action: 'APPROVE_APPLICATION',
+          targetType: 'APPLICATION',
+          targetId: application.id,
+          details: `Application ${application.applicationId} approved. Active User account ${newUser.id} created.`,
+          ipAddress: req.ip || req.socket?.remoteAddress || null,
+          userAgent: req.get('user-agent') || null,
+        },
+      });
+
       return { user: newUser, application: updatedApp };
     });
 
@@ -471,8 +511,12 @@ export const rejectApplication = async (req, res) => {
       return error(res, 'Application not found', 404);
     }
 
-    const adminId = req.user?.id || 'ADMIN_SUPER';
-    const adminName = req.user?.fullName || 'Super Administrator';
+    if (application.status === 'APPROVED') {
+      return error(res, 'Cannot reject an application that has already been approved.', 400);
+    }
+
+    const adminId = req.admin.id;
+    const adminName = req.admin.fullName;
     const reason = parseResult.data.reason;
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -493,6 +537,18 @@ export const rejectApplication = async (req, res) => {
           action: 'REJECTED',
           notes: reason,
           correctionFields: [],
+        },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId,
+          action: 'REJECT_APPLICATION',
+          targetType: 'APPLICATION',
+          targetId: application.id,
+          details: `Application ${application.applicationId} rejected. Reason: ${reason}`,
+          ipAddress: req.ip || req.socket?.remoteAddress || null,
+          userAgent: req.get('user-agent') || null,
         },
       });
 
@@ -542,8 +598,12 @@ export const requestCorrection = async (req, res) => {
       return error(res, 'Application not found', 404);
     }
 
-    const adminId = req.user?.id || 'ADMIN_SUPER';
-    const adminName = req.user?.fullName || 'Super Administrator';
+    if (application.status === 'APPROVED') {
+      return error(res, 'Cannot request corrections for an already approved application.', 400);
+    }
+
+    const adminId = req.admin.id;
+    const adminName = req.admin.fullName;
     const targetFields = parseResult.data.correctionFields || parseResult.data.fields || [];
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -564,6 +624,18 @@ export const requestCorrection = async (req, res) => {
           action: 'REQUESTED_CORRECTION',
           notes: parseResult.data.message,
           correctionFields: targetFields,
+        },
+      });
+
+      await tx.adminAuditLog.create({
+        data: {
+          adminId,
+          action: 'REQUEST_CORRECTION',
+          targetType: 'APPLICATION',
+          targetId: application.id,
+          details: `Correction requested for application ${application.applicationId}. Fields: ${targetFields.join(', ')}. Instructions: ${parseResult.data.message}`,
+          ipAddress: req.ip || req.socket?.remoteAddress || null,
+          userAgent: req.get('user-agent') || null,
         },
       });
 
@@ -616,48 +688,117 @@ export const getReviewHistory = async (req, res) => {
 /**
  * GET /api/v1/admin/applications/:id/documents/:documentId
  * Streams private identity document securely to authorized admin
+ * Strictly verifies document ownership against the specific application to prevent cross-application leakage
  */
 export const getPrivateDocument = async (req, res) => {
   try {
     const { id, documentId } = req.params;
 
-    const doc = await prisma.identityDocument.findUnique({
-      where: { id: documentId },
+    // 1. Verify application exists
+    const application = await prisma.pendingRegistration.findFirst({
+      where: { OR: [{ id }, { applicationId: id }] },
+    });
+
+    if (!application) {
+      return error(res, 'Application not found', 404);
+    }
+
+    // 2. Strictly verify document belongs to this specific application
+    const doc = await prisma.identityDocument.findFirst({
+      where: {
+        id: documentId,
+        registrationId: application.id,
+      },
     });
 
     if (!doc) {
-      return error(res, 'Identity document not found', 404);
+      return error(res, 'Identity document not found for this application', 404);
     }
 
-    // If it's a relative private storage file:
-    if (!doc.filePath.startsWith('http')) {
-      const { stream, mimeType, filename: safeName } = storageService.getPrivateFileStream('documents', doc.filePath);
-      res.setHeader('Content-Type', mimeType);
-      res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
-      return stream.pipe(res);
-    }
+    // 3. Securely stream from private storage (safe against path traversal)
+    const { stream, mimeType, filename: safeName } = storageService.getPrivateFileStream('documents', doc.filePath);
 
-    // Or redirect if external private signed URL
-    return res.redirect(doc.filePath);
-  } catch (err) {
-    return error(res, err.message, 500);
-  }
-};
+    // 4. Record administrator document access in audit log
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: req.admin.id,
+        action: 'VIEW_DOCUMENT',
+        targetType: 'DOCUMENT',
+        targetId: doc.id,
+        details: `Administrator ${req.admin.fullName} viewed identity document for application ${application.applicationId}.`,
+        ipAddress: req.ip || req.socket?.remoteAddress || null,
+        userAgent: req.get('user-agent') || null,
+      },
+    }).catch(() => {});
 
-/**
- * Stream private document or photograph securely to authorized admin
- * GET /api/v1/admin/documents/:subfolder/:filename
- */
-export const streamPrivateFile = async (req, res) => {
-  try {
-    const { subfolder = 'documents', filename } = req.params;
-    const { stream, mimeType, filename: safeName } = storageService.getPrivateFileStream(subfolder, filename);
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
     return stream.pipe(res);
   } catch (err) {
     return error(res, err.message, err.statusCode || 500);
   }
+};
+
+/**
+ * GET /api/v1/admin/applications/:id/photos/:photoId
+ * Streams private applicant photograph securely to authorized admin
+ * Strictly verifies photograph ownership against the specific application to prevent cross-application leakage
+ */
+export const getPrivatePhoto = async (req, res) => {
+  try {
+    const { id, photoId } = req.params;
+
+    // 1. Verify application exists
+    const application = await prisma.pendingRegistration.findFirst({
+      where: { OR: [{ id }, { applicationId: id }] },
+    });
+
+    if (!application) {
+      return error(res, 'Application not found', 404);
+    }
+
+    // 2. Strictly verify photo belongs to this specific application
+    const photo = await prisma.userPhoto.findFirst({
+      where: {
+        id: photoId,
+        registrationId: application.id,
+      },
+    });
+
+    if (!photo) {
+      return error(res, 'Photograph not found for this application', 404);
+    }
+
+    // 3. Securely stream from private storage
+    const { stream, mimeType, filename: safeName } = storageService.getPrivateFileStream('photos', photo.photoUrl);
+
+    // 4. Record administrator photograph access in audit log
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId: req.admin.id,
+        action: 'VIEW_PHOTO',
+        targetType: 'PHOTO',
+        targetId: photo.id,
+        details: `Administrator ${req.admin.fullName} viewed photograph #${photo.photoOrder} for application ${application.applicationId}.`,
+        ipAddress: req.ip || req.socket?.remoteAddress || null,
+        userAgent: req.get('user-agent') || null,
+      },
+    }).catch(() => {});
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    return stream.pipe(res);
+  } catch (err) {
+    return error(res, err.message, err.statusCode || 500);
+  }
+};
+
+/**
+ * Unverified direct file streaming is disabled for security.
+ * File retrieval must specify verified application ownership.
+ */
+export const streamPrivateFile = async (req, res) => {
+  return error(res, 'Direct file streaming without verified application context is disabled for security.', 403);
 };
 
 export default {
@@ -670,5 +811,6 @@ export default {
   requestCorrection,
   getReviewHistory,
   getPrivateDocument,
+  getPrivatePhoto,
   streamPrivateFile,
 };
