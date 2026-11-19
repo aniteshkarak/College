@@ -21,7 +21,12 @@ import {
   PlusCircle,
   HelpCircle,
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  Upload,
+  Camera,
+  Trash2,
+  Eye,
+  FileText
 } from 'lucide-react';
 
 const PRESET_PHOTOS = [
@@ -57,6 +62,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
   const [applicantStatusView, setApplicantStatusView] = useState(null); // when applicant checks status or logs in while pending
 
   // Registration Multi-Step State (Steps 1 to 6)
+  // Photo & Verification ID fields start EMPTY so user must enter/upload them
   const [formData, setFormData] = useState({
     // STEP 1: Personal Information
     legal_name: '',
@@ -83,15 +89,16 @@ export const AuthModal = ({ isOpen, onClose }) => {
     graduation_year: 2026,
     student_status: 'CURRENTLY_STUDYING',
 
-    // STEP 3: Identity Verification Document
+    // STEP 3: Identity Verification Document (Upload field - starts EMPTY)
     verification_id_type: 'College Student ID',
-    verification_id_url: PRESET_IDS[0],
+    verification_id_url: '',
+    verification_id_filename: '',
     document_consent: true,
 
-    // STEP 4: Profile Photographs (Exactly THREE required)
-    photo_1: PRESET_PHOTOS[0], // Main Profile Picture
-    photo_2: PRESET_PHOTOS[1], // Additional Personal Photo 1
-    photo_3: PRESET_PHOTOS[2], // Additional Personal Photo 2
+    // STEP 4: Three Personal Pictures (Upload fields - start EMPTY)
+    photo_1: '', // Personal Pic 1 (Avatar)
+    photo_2: '', // Personal Pic 2 (Personal Photo 1)
+    photo_3: '', // Personal Pic 3 (Personal Photo 2)
 
     // STEP 5: About Me & Connection Preferences
     bio: '',
@@ -115,6 +122,14 @@ export const AuthModal = ({ isOpen, onClose }) => {
   const [showRequestCollegeModal, setShowRequestCollegeModal] = useState(false);
   const [customCollegeName, setCustomCollegeName] = useState('');
 
+  // Toggle URL input visibility if user prefers manual URL over file upload
+  const [showIdUrlInput, setShowIdUrlInput] = useState(false);
+  const [showPicUrlInputs, setShowPicUrlInputs] = useState({
+    photo_1: false,
+    photo_2: false,
+    photo_3: false
+  });
+
   // Correction Resubmission State
   const [correctionTarget, setCorrectionTarget] = useState(null);
 
@@ -137,6 +152,65 @@ export const AuthModal = ({ isOpen, onClose }) => {
     }
 
     setFormData({ ...formData, date_of_birth: dob, age: calculatedAge });
+  };
+
+  // Handle Identity Verification Document File Upload
+  const handleIdDocUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      addToast('Please upload an image (JPG, PNG, WebP) or PDF document.', 'warning');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      addToast('File size must be under 10MB.', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setFormData((prev) => ({
+        ...prev,
+        verification_id_url: event.target.result,
+        verification_id_filename: file.name
+      }));
+      addToast('Verification ID document uploaded successfully! ✓', 'success');
+    };
+    reader.onerror = () => {
+      addToast('Failed to read file. Please try another image.', 'error');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Personal Pic File Upload
+  const handlePersonalPicUpload = (e, fieldKey, picLabel) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      addToast('Please select a valid image file (JPG, PNG, WebP).', 'warning');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      addToast('Image size must be under 10MB.', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setFormData((prev) => ({
+        ...prev,
+        [fieldKey]: event.target.result
+      }));
+      addToast(`${picLabel} uploaded successfully! ✓`, 'success');
+    };
+    reader.onerror = () => {
+      addToast('Failed to read image file.', 'error');
+    };
+    reader.readAsDataURL(file);
   };
 
   // Login submission
@@ -167,12 +241,12 @@ export const AuthModal = ({ isOpen, onClose }) => {
       addToast('College / University name is mandatory.', 'warning');
       return;
     }
-    if (!formData.photo_1 || !formData.photo_2 || !formData.photo_3) {
-      addToast('Exactly THREE photographs are required (Photo 1, Photo 2, Photo 3).', 'warning');
+    if (!formData.verification_id_url) {
+      addToast('Verification ID document is mandatory before submission.', 'warning');
       return;
     }
-    if (!formData.verification_id_url) {
-      addToast('Identity verification document is mandatory.', 'warning');
+    if (!formData.photo_1 || !formData.photo_2 || !formData.photo_3) {
+      addToast('All THREE personal photographs must be uploaded.', 'warning');
       return;
     }
     if (!formData.termsAccepted || !formData.privacyAccepted || !formData.ageConfirmed18Plus || !formData.verificationConsent) {
@@ -198,6 +272,15 @@ export const AuthModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     if (!correctionTarget) return;
 
+    if (!formData.verification_id_url) {
+      addToast('Please upload your verification ID.', 'warning');
+      return;
+    }
+    if (!formData.photo_1 || !formData.photo_2 || !formData.photo_3) {
+      addToast('All 3 personal pictures are required.', 'warning');
+      return;
+    }
+
     resubmitVerification(correctionTarget.id, {
       college_name: formData.college_name,
       verification_id_url: formData.verification_id_url,
@@ -221,6 +304,10 @@ export const AuthModal = ({ isOpen, onClose }) => {
     c.name.toLowerCase().includes(collegeSearchQuery.toLowerCase()) ||
     c.city.toLowerCase().includes(collegeSearchQuery.toLowerCase())
   );
+
+  // Check if all 3 personal pics are entered
+  const allThreePicsEntered = Boolean(formData.photo_1 && formData.photo_2 && formData.photo_3);
+  const uploadedPicsCount = [formData.photo_1, formData.photo_2, formData.photo_3].filter(Boolean).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/70 backdrop-blur-md animate-fade-in">
@@ -536,8 +623,8 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 <h3 className="font-display font-bold text-base sm:text-lg text-slate-900 dark:text-white">
                   {step === 1 && 'Step 1: Personal Info & 18+ Verification'}
                   {step === 2 && 'Step 2: College & Education Details'}
-                  {step === 3 && 'Step 3: Identity Verification Document'}
-                  {step === 4 && 'Step 4: Exactly THREE Profile Photographs'}
+                  {step === 3 && 'Step 3: Verification ID Upload'}
+                  {step === 4 && 'Step 4: Three Personal Photos Upload'}
                   {step === 5 && 'Step 5: About Me & Connection Preferences'}
                   {step === 6 && 'Step 6: Consent & Final 72-Hour Submission'}
                 </h3>
@@ -813,63 +900,177 @@ export const AuthModal = ({ isOpen, onClose }) => {
               </div>
             )}
 
-            {/* STEP 3: Identity Verification Document */}
+            {/* STEP 3: Identity Verification Document Upload Field */}
             {step === 3 && (
-              <div className="space-y-3.5 text-xs">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="space-y-4 text-xs animate-fade-in">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3.5">
+                  
+                  {/* Document Type Selector */}
                   <div>
-                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                      <FileCheck2 className="w-4 h-4 text-rose-500" />
-                      Select Identity Document Type
+                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <FileCheck2 className="w-4 h-4 text-rose-500" />
+                        Select Verification ID Type
+                      </span>
+                      <span className="text-[10px] text-rose-600 font-extrabold uppercase bg-rose-50 dark:bg-rose-950 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-900">
+                        Required *
+                      </span>
                     </label>
                     <select
                       value={formData.verification_id_type}
                       onChange={(e) => setFormData({ ...formData, verification_id_type: e.target.value })}
-                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
+                      className="w-full p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium"
                     >
-                      <option value="College Student ID">College Student ID Card (Preferred)</option>
+                      <option value="College Student ID">College Student ID Card (Preferred for Students)</option>
                       <option value="Govt Voter ID">Govt Voter ID Card</option>
                       <option value="Aadhaar Document (Masked)">Aadhaar Document (Masked first 8 digits)</option>
                     </select>
                   </div>
 
+                  {/* Verification ID Upload Field */}
                   <div>
-                    <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">
-                      Document Image URL / Scan
+                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Upload className="w-4 h-4 text-purple-600" />
+                        Upload Verification ID Document
+                      </span>
+                      {formData.verification_id_url ? (
+                        <span className="text-[10px] text-emerald-600 font-extrabold flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Document Uploaded
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-600 font-bold">
+                          Upload Required to Proceed
+                        </span>
+                      )}
                     </label>
-                    <input
-                      type="text"
-                      value={formData.verification_id_url}
-                      onChange={(e) => setFormData({ ...formData, verification_id_url: e.target.value })}
-                      placeholder="Paste private image URL"
-                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
-                    />
+
+                    {/* Drag-and-drop / Click-to-upload area */}
+                    {!formData.verification_id_url ? (
+                      <label
+                        htmlFor="verification_id_file"
+                        className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-purple-300 dark:border-purple-800 rounded-2xl cursor-pointer hover:bg-purple-50/40 dark:hover:bg-purple-950/20 transition-all text-center bg-white dark:bg-slate-900"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center mb-2 shadow-xs">
+                          <Upload className="w-6 h-6 animate-bounce" />
+                        </div>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                          Click or Tap to Upload ID Card
+                        </span>
+                        <span className="text-[11px] text-slate-400 mt-0.5">
+                          Supports JPG, PNG, WebP or PDF (Max 10MB)
+                        </span>
+                        <input
+                          id="verification_id_file"
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={handleIdDocUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    ) : (
+                      /* Preview of Uploaded Document */
+                      <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border-2 border-emerald-400 dark:border-emerald-700 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                          <img
+                            src={formData.verification_id_url}
+                            alt="Uploaded Verification ID"
+                            className="w-20 h-16 sm:w-24 sm:h-18 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-white block text-xs">
+                              {formData.verification_id_type}
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> File attached & ready
+                            </span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                              Encrypted in private admin vault
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                          <label
+                            htmlFor="verification_id_file_change"
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs cursor-pointer transition-colors"
+                          >
+                            Change
+                            <input
+                              id="verification_id_file_change"
+                              type="file"
+                              accept="image/*,application/pdf"
+                              onChange={handleIdDocUpload}
+                              className="hidden"
+                            />
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, verification_id_url: '', verification_id_filename: '' })}
+                            className="px-2.5 py-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors"
+                            title="Remove file"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {formData.verification_id_url && (
-                    <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
-                      <img
-                        src={formData.verification_id_url}
-                        alt="ID Preview"
-                        className="w-20 h-14 object-cover rounded-lg border shadow-xs"
+                  {/* Option to enter URL or use Demo ID for rapid testing */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setShowIdUrlInput(!showIdUrlInput)}
+                      className="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+                    >
+                      {showIdUrlInput ? 'Hide URL input' : 'Or paste image link'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          verification_id_url: PRESET_IDS[0],
+                          verification_id_filename: 'sample_student_id.jpg'
+                        });
+                        addToast('Sample Student ID card loaded for demo testing! ✓', 'info');
+                      }}
+                      className="text-purple-600 dark:text-purple-400 font-bold hover:underline"
+                    >
+                      Use Sample Demo ID
+                    </button>
+                  </div>
+
+                  {showIdUrlInput && (
+                    <div className="pt-1">
+                      <input
+                        type="url"
+                        value={formData.verification_id_url}
+                        onChange={(e) => setFormData({ ...formData, verification_id_url: e.target.value })}
+                        placeholder="https://example.com/student-id-card.jpg"
+                        className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
                       />
-                      <div className="text-[11px]">
-                        <span className="font-bold text-slate-900 dark:text-white block">
-                          ✓ {formData.verification_id_type} Attached
-                        </span>
-                        <span className="text-slate-400 text-[10px]">
-                          Private encrypted storage. Inspected strictly by authorized human admins.
-                        </span>
-                      </div>
                     </div>
                   )}
 
-                  <div className="p-2 bg-rose-50 dark:bg-rose-950/40 rounded-xl text-[11px] text-rose-700 dark:text-rose-300 leading-snug">
-                    * Never store unmasked identity numbers. Only college/educational credentials and masked identity documents are accepted.
+                  <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl text-[11px] text-rose-700 dark:text-rose-300 leading-snug">
+                    * <strong>Privacy Guarantee:</strong> Identity documents are strictly kept in private encrypted storage. They are never shown to other users or search engines, and are viewed only by authorized admins during the 72-hour review.
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                {/* Validation message if ID is not uploaded */}
+                {!formData.verification_id_url && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Upload or attach your verification ID above to unlock the Next step.</span>
+                  </div>
+                )}
+
+                {/* Navigation Buttons: Disabled if ID is not uploaded */}
+                <div className="flex gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setStep(2)}
@@ -880,85 +1081,350 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   <button
                     type="button"
                     disabled={!formData.verification_id_url}
-                    onClick={() => setStep(4)}
-                    className="flex-1 py-2.5 gradient-brand-bg text-white rounded-xl font-bold disabled:opacity-50"
+                    onClick={() => {
+                      if (!formData.verification_id_url) {
+                        addToast('Please upload your verification ID before proceeding.', 'warning');
+                        return;
+                      }
+                      setStep(4);
+                    }}
+                    className="flex-1 py-2.5 gradient-brand-bg text-white rounded-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-md"
                   >
-                    Next: Exactly 3 Photographs
+                    <span>Next: Three Personal Photos</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             )}
 
-            {/* STEP 4: Exactly THREE Profile Photographs */}
+            {/* STEP 4: Three Personal Pic Upload Fields */}
             {step === 4 && (
-              <div className="space-y-3 text-xs">
-                <div className="p-3 bg-rose-50/50 dark:bg-rose-950/20 rounded-2xl border border-rose-200 dark:border-rose-900/50 space-y-3">
+              <div className="space-y-4 text-xs animate-fade-in">
+                <div className="p-4 bg-rose-50/40 dark:bg-rose-950/20 rounded-2xl border border-rose-200 dark:border-rose-900/50 space-y-3.5">
+                  
+                  {/* Step Header with count badge */}
                   <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-rose-500" />
-                      Mandatory Profile Photographs (Exactly THREE Required)
-                    </label>
-                    <span className="text-[10px] bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200 font-extrabold px-2 py-0.5 rounded-full">
-                      3 Required
+                    <div>
+                      <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-sm">
+                        <Camera className="w-4 h-4 text-rose-500" />
+                        Three Personal Photos (Mandatory)
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Upload 3 genuine personal photos. All 3 fields are required before proceeding.
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                        allThreePicsEntered
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300'
+                      }`}
+                    >
+                      {uploadedPicsCount} / 3 Uploaded
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Photo 1 */}
-                    <div className="space-y-1 text-center">
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">Photo 1 (Avatar)</span>
-                      <img
-                        src={formData.photo_1}
-                        alt="Photo 1"
-                        className="w-full h-24 object-cover rounded-xl border-2 border-rose-400 shadow-xs"
-                      />
-                      <input
-                        type="text"
-                        value={formData.photo_1}
-                        onChange={(e) => setFormData({ ...formData, photo_1: e.target.value })}
-                        className="w-full p-1 text-[9px] bg-white dark:bg-slate-900 border rounded-lg"
-                      />
+                  {/* The THREE Personal Pic Upload Fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    
+                    {/* 1. PERSONAL PIC 1 (Profile Avatar / Face) */}
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                          Personal Pic 1
+                        </span>
+                        {formData.photo_1 ? (
+                          <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.2 rounded-md">
+                            Ready ✓
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 dark:bg-rose-950 px-1.5 py-0.2 rounded-md">
+                            Required *
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[10px] text-slate-400 block -mt-1">
+                        Main Profile Avatar
+                      </span>
+
+                      {/* Upload / Preview Box */}
+                      {formData.photo_1 ? (
+                        <div className="relative group">
+                          <img
+                            src={formData.photo_1}
+                            alt="Personal Pic 1"
+                            className="w-full h-28 object-cover rounded-xl border-2 border-emerald-400 shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, photo_1: '' })}
+                            className="absolute top-1.5 right-1.5 p-1 bg-red-600/80 hover:bg-red-700 text-white rounded-lg shadow-sm transition-all"
+                            title="Remove Photo 1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          htmlFor="personal_pic_1_file"
+                          className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-rose-300 dark:border-rose-900 rounded-xl cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all text-center p-2"
+                        >
+                          <Camera className="w-6 h-6 text-rose-400 mb-1" />
+                          <span className="font-bold text-[11px] text-slate-700 dark:text-slate-300">
+                            Upload Pic 1
+                          </span>
+                          <span className="text-[9px] text-slate-400">Clear frontal face</span>
+                          <input
+                            id="personal_pic_1_file"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handlePersonalPicUpload(e, 'photo_1', 'Personal Pic 1 (Avatar)')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+
+                      {/* Paste URL Option for Pic 1 */}
+                      <div className="pt-1">
+                        {!formData.photo_1 ? (
+                          <input
+                            type="url"
+                            value={formData.photo_1}
+                            onChange={(e) => setFormData({ ...formData, photo_1: e.target.value })}
+                            placeholder="Or paste photo URL..."
+                            className="w-full p-1 text-[9px] bg-slate-50 dark:bg-slate-800 border rounded-lg"
+                          />
+                        ) : (
+                          <label
+                            htmlFor="personal_pic_1_reupload"
+                            className="block text-center text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                          >
+                            Change Photo 1
+                            <input
+                              id="personal_pic_1_reupload"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handlePersonalPicUpload(e, 'photo_1', 'Personal Pic 1 (Avatar)')}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Photo 2 */}
-                    <div className="space-y-1 text-center">
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">Photo 2 (Personal 1)</span>
-                      <img
-                        src={formData.photo_2}
-                        alt="Photo 2"
-                        className="w-full h-24 object-cover rounded-xl border-2 border-rose-400 shadow-xs"
-                      />
-                      <input
-                        type="text"
-                        value={formData.photo_2}
-                        onChange={(e) => setFormData({ ...formData, photo_2: e.target.value })}
-                        className="w-full p-1 text-[9px] bg-white dark:bg-slate-900 border rounded-lg"
-                      />
+                    {/* 2. PERSONAL PIC 2 (Campus / Casual) */}
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                          Personal Pic 2
+                        </span>
+                        {formData.photo_2 ? (
+                          <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.2 rounded-md">
+                            Ready ✓
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 dark:bg-rose-950 px-1.5 py-0.2 rounded-md">
+                            Required *
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[10px] text-slate-400 block -mt-1">
+                        Campus or Daily Life
+                      </span>
+
+                      {/* Upload / Preview Box */}
+                      {formData.photo_2 ? (
+                        <div className="relative group">
+                          <img
+                            src={formData.photo_2}
+                            alt="Personal Pic 2"
+                            className="w-full h-28 object-cover rounded-xl border-2 border-emerald-400 shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, photo_2: '' })}
+                            className="absolute top-1.5 right-1.5 p-1 bg-red-600/80 hover:bg-red-700 text-white rounded-lg shadow-sm transition-all"
+                            title="Remove Photo 2"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          htmlFor="personal_pic_2_file"
+                          className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-rose-300 dark:border-rose-900 rounded-xl cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all text-center p-2"
+                        >
+                          <Camera className="w-6 h-6 text-rose-400 mb-1" />
+                          <span className="font-bold text-[11px] text-slate-700 dark:text-slate-300">
+                            Upload Pic 2
+                          </span>
+                          <span className="text-[9px] text-slate-400">Campus / Lifestyle</span>
+                          <input
+                            id="personal_pic_2_file"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handlePersonalPicUpload(e, 'photo_2', 'Personal Pic 2 (Campus)')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+
+                      {/* Paste URL Option for Pic 2 */}
+                      <div className="pt-1">
+                        {!formData.photo_2 ? (
+                          <input
+                            type="url"
+                            value={formData.photo_2}
+                            onChange={(e) => setFormData({ ...formData, photo_2: e.target.value })}
+                            placeholder="Or paste photo URL..."
+                            className="w-full p-1 text-[9px] bg-slate-50 dark:bg-slate-800 border rounded-lg"
+                          />
+                        ) : (
+                          <label
+                            htmlFor="personal_pic_2_reupload"
+                            className="block text-center text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                          >
+                            Change Photo 2
+                            <input
+                              id="personal_pic_2_reupload"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handlePersonalPicUpload(e, 'photo_2', 'Personal Pic 2 (Campus)')}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Photo 3 */}
-                    <div className="space-y-1 text-center">
-                      <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">Photo 3 (Personal 2)</span>
-                      <img
-                        src={formData.photo_3}
-                        alt="Photo 3"
-                        className="w-full h-24 object-cover rounded-xl border-2 border-rose-400 shadow-xs"
-                      />
-                      <input
-                        type="text"
-                        value={formData.photo_3}
-                        onChange={(e) => setFormData({ ...formData, photo_3: e.target.value })}
-                        className="w-full p-1 text-[9px] bg-white dark:bg-slate-900 border rounded-lg"
-                      />
+                    {/* 3. PERSONAL PIC 3 (Social / Activities) */}
+                    <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                          Personal Pic 3
+                        </span>
+                        {formData.photo_3 ? (
+                          <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.2 rounded-md">
+                            Ready ✓
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-extrabold text-rose-600 bg-rose-50 dark:bg-rose-950 px-1.5 py-0.2 rounded-md">
+                            Required *
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[10px] text-slate-400 block -mt-1">
+                        Social / Hobbies Photo
+                      </span>
+
+                      {/* Upload / Preview Box */}
+                      {formData.photo_3 ? (
+                        <div className="relative group">
+                          <img
+                            src={formData.photo_3}
+                            alt="Personal Pic 3"
+                            className="w-full h-28 object-cover rounded-xl border-2 border-emerald-400 shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, photo_3: '' })}
+                            className="absolute top-1.5 right-1.5 p-1 bg-red-600/80 hover:bg-red-700 text-white rounded-lg shadow-sm transition-all"
+                            title="Remove Photo 3"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          htmlFor="personal_pic_3_file"
+                          className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-rose-300 dark:border-rose-900 rounded-xl cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all text-center p-2"
+                        >
+                          <Camera className="w-6 h-6 text-rose-400 mb-1" />
+                          <span className="font-bold text-[11px] text-slate-700 dark:text-slate-300">
+                            Upload Pic 3
+                          </span>
+                          <span className="text-[9px] text-slate-400">Activity or Candid</span>
+                          <input
+                            id="personal_pic_3_file"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handlePersonalPicUpload(e, 'photo_3', 'Personal Pic 3 (Social)')}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+
+                      {/* Paste URL Option for Pic 3 */}
+                      <div className="pt-1">
+                        {!formData.photo_3 ? (
+                          <input
+                            type="url"
+                            value={formData.photo_3}
+                            onChange={(e) => setFormData({ ...formData, photo_3: e.target.value })}
+                            placeholder="Or paste photo URL..."
+                            className="w-full p-1 text-[9px] bg-slate-50 dark:bg-slate-800 border rounded-lg"
+                          />
+                        ) : (
+                          <label
+                            htmlFor="personal_pic_3_reupload"
+                            className="block text-center text-[10px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
+                          >
+                            Change Photo 3
+                            <input
+                              id="personal_pic_3_reupload"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handlePersonalPicUpload(e, 'photo_3', 'Personal Pic 3 (Social)')}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
                     </div>
+
                   </div>
 
-                  <p className="text-[10px] text-slate-500">
-                    * All three images are stored privately and verified by human administrators before public profile creation.
+                  {/* Quick helper for developers / testers */}
+                  <div className="flex items-center justify-between pt-2 border-t border-rose-100 dark:border-rose-900/60 text-[11px]">
+                    <span className="text-slate-500">Need quick testing photos?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          photo_1: PRESET_PHOTOS[0],
+                          photo_2: PRESET_PHOTOS[1],
+                          photo_3: PRESET_PHOTOS[2]
+                        });
+                        addToast('Sample demo photos loaded for all 3 fields! ✓', 'info');
+                      }}
+                      className="text-rose-600 dark:text-rose-400 font-bold hover:underline"
+                    >
+                      Fill 3 Demo Photos
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 leading-snug">
+                    * All three images are stored privately and inspected by human administrators for face consistency before public profile creation.
                   </p>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                {/* Validation Warning when not all 3 pictures are uploaded */}
+                {!allThreePicsEntered && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      You must upload all 3 personal pictures before going to the next step ({uploadedPicsCount}/3 uploaded).
+                    </span>
+                  </div>
+                )}
+
+                {/* Navigation Buttons: Strictly disabled until all 3 pics are entered */}
+                <div className="flex gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setStep(3)}
@@ -968,11 +1434,18 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </button>
                   <button
                     type="button"
-                    disabled={!formData.photo_1 || !formData.photo_2 || !formData.photo_3}
-                    onClick={() => setStep(5)}
-                    className="flex-1 py-2.5 gradient-brand-bg text-white rounded-xl font-bold disabled:opacity-50"
+                    disabled={!allThreePicsEntered}
+                    onClick={() => {
+                      if (!allThreePicsEntered) {
+                        addToast('Please upload all three personal photos before proceeding.', 'warning');
+                        return;
+                      }
+                      setStep(5);
+                    }}
+                    className="flex-1 py-2.5 gradient-brand-bg text-white rounded-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-md"
                   >
-                    Next: Preferences & Bio
+                    <span>Next: Preferences & Bio</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1075,8 +1548,8 @@ export const AuthModal = ({ isOpen, onClose }) => {
             {step === 6 && (
               <form onSubmit={correctionTarget ? handleResubmitCorrection : handleFinalSubmit} className="space-y-3.5 text-xs">
                 
-                {/* Summary Card */}
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1.5 text-[11px]">
+                {/* Summary Card with Thumbnails */}
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2 text-[11px]">
                   <span className="font-bold text-slate-900 dark:text-white block">
                     Application Review Summary:
                   </span>
@@ -1094,11 +1567,47 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Verification ID:</span>
-                    <span className="font-semibold text-rose-500">{formData.verification_id_type} attached</span>
+                    <span className="font-semibold text-rose-500">{formData.verification_id_type} attached ✓</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Photographs:</span>
-                    <span className="font-semibold text-emerald-600">3 Photos Attached ✓</span>
+                    <span className="text-slate-500">Personal Photos:</span>
+                    <span className="font-semibold text-emerald-600">3 Personal Pics Attached ✓</span>
+                  </div>
+
+                  {/* Thumbnail Row of Verification ID + 3 Personal Pics */}
+                  <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="text-center">
+                      <span className="text-[9px] text-purple-600 font-bold block mb-0.5 truncate">ID Doc</span>
+                      <img
+                        src={formData.verification_id_url}
+                        alt="ID Card"
+                        className="w-full h-14 object-cover rounded-lg border-2 border-purple-400"
+                      />
+                    </div>
+                    <div className="text-center">
+                      <span className="text-[9px] text-slate-500 font-bold block mb-0.5 truncate">Pic 1</span>
+                      <img
+                        src={formData.photo_1}
+                        alt="Pic 1"
+                        className="w-full h-14 object-cover rounded-lg border border-slate-300 dark:border-slate-600"
+                      />
+                    </div>
+                    <div className="text-center">
+                      <span className="text-[9px] text-slate-500 font-bold block mb-0.5 truncate">Pic 2</span>
+                      <img
+                        src={formData.photo_2}
+                        alt="Pic 2"
+                        className="w-full h-14 object-cover rounded-lg border border-slate-300 dark:border-slate-600"
+                      />
+                    </div>
+                    <div className="text-center">
+                      <span className="text-[9px] text-slate-500 font-bold block mb-0.5 truncate">Pic 3</span>
+                      <img
+                        src={formData.photo_3}
+                        alt="Pic 3"
+                        className="w-full h-14 object-cover rounded-lg border border-slate-300 dark:border-slate-600"
+                      />
+                    </div>
                   </div>
                 </div>
 
