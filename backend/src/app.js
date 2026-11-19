@@ -7,8 +7,10 @@ import passport from './config/passport.js';
 import { getHealthStatus } from './services/healthService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { error } from './utils/response.js';
+import { requireActiveAccount } from './middleware/activeAccountGuard.js';
 
 // Import Modular Routes
+import registrationRoutes from './modules/registration/registration.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import profilesRoutes from './modules/profiles/profiles.routes.js';
@@ -48,23 +50,35 @@ app.get('/', (_req, res) => {
     name: 'Collégé Backend API',
     tagline: 'Meet. Chat. Connect.',
     version: '1.0.0',
+    verificationPolicy: '100% Manual Human Verification (Up to 72 Hours)',
     documentation: '/api/v1/health',
     status: 'Running',
   });
 });
 
-// Mount Module APIs under /api/v1
+// Registration Workflow Endpoints (Public applicant submission & status check)
+app.use('/api/v1/registration', registrationRoutes);
+
+// Authentication Endpoints (Login only for approved active accounts)
 app.use('/api/v1/auth', authRoutes);
+
+// User Profile Endpoints
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/profiles', profilesRoutes);
-app.use('/api/v1/discovery', discoveryRoutes);
-app.use('/api/v1/matching', matchingRoutes);
-app.use('/api/v1/chat', chatRoutes);
-app.use('/api/v1/campus', campusRoutes);
-app.use('/api/v1/games', gamesRoutes);
-app.use('/api/v1/relationships', relationshipsRoutes);
+
+// Protected Community Features (Strictly requires ACTIVE approved account!)
+app.use('/api/v1/discovery', requireActiveAccount, discoveryRoutes);
+app.use('/api/v1/matching', requireActiveAccount, matchingRoutes);
+app.use('/api/v1/chat', requireActiveAccount, chatRoutes);
+app.use('/api/v1/campus', requireActiveAccount, campusRoutes);
+app.use('/api/v1/games', requireActiveAccount, gamesRoutes);
+app.use('/api/v1/relationships', requireActiveAccount, relationshipsRoutes);
+
+// Notifications & Moderation Reports
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/reports', reportsRoutes);
+
+// Admin Application Verification & Moderation Portal
 app.use('/api/v1/admin', adminRoutes);
 
 // 404 Route Not Found

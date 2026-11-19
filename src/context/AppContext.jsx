@@ -12,7 +12,8 @@ import {
   ADMIN_METRICS,
   ADMIN_REPORTS,
   ADMIN_AUDIT_LOGS,
-  INITIAL_PENDING_VERIFICATIONS
+  INITIAL_PENDING_VERIFICATIONS,
+  PREMIER_COLLEGES
 } from '../services/mockData';
 
 const AppContext = createContext();
@@ -24,7 +25,10 @@ export const AppProvider = ({ children }) => {
   const [currentView, setCurrentView] = useState('landing'); // Start on landing page
   const [previousView, setPreviousView] = useState('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register'
+  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status'
+
+  // Colleges Registry
+  const [collegesList, setCollegesList] = useState(PREMIER_COLLEGES);
 
   // Registered accounts database (Simulated)
   const [registeredUsers, setRegisteredUsers] = useState([
@@ -34,11 +38,12 @@ export const AppProvider = ({ children }) => {
       mobile: '9876543210',
       password: 'password123',
       verification_status: 'APPROVED',
+      accountStatus: 'ACTIVE',
       role: 'ADMIN' // Super Admin
     }
   ]);
 
-  // Pending Verifications Queue for Admin (PRD: Student ID / Govt ID + at least 2 photos)
+  // Pending Verifications Queue for Admin (72-Hour Manual Verification System)
   const [pendingVerifications, setPendingVerifications] = useState(INITIAL_PENDING_VERIFICATIONS);
 
   // Discovery
@@ -501,69 +506,102 @@ export const AppProvider = ({ children }) => {
     addToast('Message deleted', 'info');
   };
 
-  // --- AUTHENTICATION & ADMIN VERIFICATION PIPELINE ---
+  // --- COMPLETE MANUAL VERIFICATION & 72-HOUR LIFECYCLE ---
 
   // 1. Log In using Gmail/Email OR Mobile + Password
   const loginWithCredentials = (identifier, password) => {
     const cleanId = (identifier || '').trim().toLowerCase();
 
-    // Check in pending/reviewed verifications queue
-    const pendingMatch = pendingVerifications.find(
-      (v) => (v.email && v.email.toLowerCase() === cleanId) || (v.mobile && v.mobile === cleanId)
+    // Check in pending/reviewed applications queue
+    const appMatch = pendingVerifications.find(
+      (v) =>
+        (v.email && v.email.toLowerCase() === cleanId) ||
+        (v.mobile && v.mobile === cleanId) ||
+        (v.application_id && v.application_id.toLowerCase() === cleanId)
     );
 
-    if (pendingMatch) {
-      if (pendingMatch.status === 'PENDING_APPROVAL') {
+    if (appMatch) {
+      if (appMatch.status === 'PENDING_REVIEW') {
         return {
           success: false,
-          status: 'PENDING_APPROVAL',
-          student: pendingMatch,
-          message: 'Your account is under admin review. Campus administrators are currently verifying your College/Govt ID and 2 photos. Please wait for approval.'
+          status: 'PENDING_REVIEW',
+          student: appMatch,
+          message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
         };
       }
 
-      if (pendingMatch.status === 'REJECTED') {
+      if (appMatch.status === 'UNDER_REVIEW') {
+        return {
+          success: false,
+          status: 'UNDER_REVIEW',
+          student: appMatch,
+          message: 'Your application is currently being inspected by an authorized campus administrator.'
+        };
+      }
+
+      if (appMatch.status === 'NEEDS_CORRECTION') {
+        return {
+          success: false,
+          status: 'NEEDS_CORRECTION',
+          student: appMatch,
+          reason: appMatch.correction_message || 'The administrator requested corrections on your submitted information.',
+          fields: appMatch.correction_fields || [],
+          message: `Correction Requested by Admin: "${appMatch.correction_message}". Please update your details and resubmit.`
+        };
+      }
+
+      if (appMatch.status === 'RESUBMITTED') {
+        return {
+          success: false,
+          status: 'RESUBMITTED',
+          student: appMatch,
+          message: 'Your corrected application was resubmitted and is currently in the admin verification queue.'
+        };
+      }
+
+      if (appMatch.status === 'REJECTED') {
         return {
           success: false,
           status: 'REJECTED',
-          student: pendingMatch,
-          reason: pendingMatch.rejection_reason || 'Verification ID or photos were declined by admin.',
-          message: `Verification declined by admin: "${pendingMatch.rejection_reason}". Please enter correct details and re-upload valid ID.`
+          student: appMatch,
+          reason: appMatch.rejection_reason || 'Application was declined by the administrator.',
+          message: `Application declined: "${appMatch.rejection_reason}".`
         };
       }
 
-      if (pendingMatch.status === 'APPROVED') {
+      if (appMatch.status === 'APPROVED') {
         // Student was approved! Log in
         const userObj = {
-          id: pendingMatch.id,
-          full_name: pendingMatch.full_name,
-          display_name: pendingMatch.display_name,
-          date_of_birth: pendingMatch.date_of_birth,
-          age: pendingMatch.age,
-          gender: pendingMatch.gender,
+          id: appMatch.id,
+          full_name: appMatch.legal_name || appMatch.full_name,
+          display_name: appMatch.display_name,
+          date_of_birth: appMatch.date_of_birth,
+          age: appMatch.age,
+          gender: appMatch.gender,
           interested_in: ['Everyone'],
-          city: pendingMatch.city || 'Kolkata',
-          state: 'West Bengal',
-          college_name: pendingMatch.college_name,
-          course: pendingMatch.course,
-          relationship_intention: 'Dating Connection',
-          avatar_url: pendingMatch.photo_1,
-          additional_photos: [pendingMatch.photo_2],
-          bio: `Student at ${pendingMatch.college_name}. Verified campus profile!`,
-          interests: ['Music', 'Travelling', 'Coding'],
-          languages: ['English', 'Bengali', 'Hindi'],
+          city: appMatch.city || 'Kolkata',
+          state: appMatch.state || 'West Bengal',
+          college_name: appMatch.college_name,
+          course: appMatch.degree_name || appMatch.course,
+          relationship_intention: appMatch.looking_for === 'Dating' ? 'Dating Connection' : 'Casual Connection',
+          avatar_url: appMatch.photo_1,
+          additional_photos: [appMatch.photo_2, appMatch.photo_3].filter(Boolean),
+          bio: appMatch.bio || `Student at ${appMatch.college_name}. Verified campus profile!`,
+          interests: appMatch.interests || ['Music', 'Travelling', 'Coding'],
+          languages: appMatch.languages_spoken || ['English', 'Bengali', 'Hindi'],
           is_active: true,
-          verification_status: 'ID Verified',
+          verification_status: 'APPROVED',
+          accountStatus: 'ACTIVE',
           mood: 'Looking for a conversation',
           subscription_plan: 'free',
           sent_requests_count: 0,
-          created_at: pendingMatch.submitted_at
+          created_at: appMatch.submitted_at
         };
 
         setCurrentUser(userObj);
         setIsAuthenticated(true);
         setCurrentView('matches');
-        addToast(`Welcome to Collégé, ${userObj.display_name}! 🎓✨`, 'success');
+        addToast(`Welcome to Collégé, ${userObj.display_name}! 🎓✨ Account activated.`, 'success');
         return { success: true, user: userObj };
       }
     }
@@ -586,51 +624,86 @@ export const AppProvider = ({ children }) => {
 
     return {
       success: false,
-      message: 'No account found with this email or mobile number. Please check credentials or create a new account.'
+      message: 'No account or application found with this email, mobile number, or Application ID.'
     };
   };
 
-  // 2. Register New Student (Enforces 18+, 2 photos, College/Govt ID verification proof)
+  // 2. Register New Student Application (6 Steps, 18+ strict, 3 photos, ID document, 72h deadline)
   const registerStudent = (studentData) => {
-    // Check duplicates
+    // Duplicate check
     const duplicate = pendingVerifications.find(
       (v) =>
         (v.email && v.email.toLowerCase() === studentData.email.toLowerCase()) ||
         (v.mobile && v.mobile === studentData.mobile)
     );
 
-    if (duplicate && duplicate.status === 'PENDING_APPROVAL') {
+    if (duplicate && ['PENDING_REVIEW', 'UNDER_REVIEW', 'NEEDS_CORRECTION', 'RESUBMITTED'].includes(duplicate.status)) {
       return {
         success: false,
-        status: 'PENDING_APPROVAL',
-        message: 'An application with this email or mobile number is already in the admin verification queue.'
+        status: duplicate.status,
+        message: `An application (${duplicate.application_id}) with this email or mobile is already in review.`
       };
     }
 
-    const newReg = {
-      id: 'reg_verify_' + Date.now(),
-      full_name: studentData.full_name,
+    const year = new Date().getFullYear();
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const appId = `COL-${year}-${randomSuffix}`;
+    const submittedAt = new Date().toISOString();
+    const reviewDeadline = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+
+    const newApp = {
+      id: 'app_' + Date.now(),
+      application_id: appId,
+      status: 'PENDING_REVIEW',
+      // Section A
+      legal_name: studentData.legal_name || studentData.full_name,
       display_name: studentData.display_name,
       date_of_birth: studentData.date_of_birth,
       age: studentData.age,
       gender: studentData.gender,
       email: studentData.email,
       mobile: studentData.mobile,
+      city: studentData.city,
+      state: studentData.state,
+      languages_spoken: studentData.languages_spoken || ['English'],
+      // Section B
       college_name: studentData.college_name,
-      course: studentData.course,
-      city: studentData.city || 'Kharagpur',
-      // Photos (Must be at least 2!)
-      photo_1: studentData.photo_1,
-      photo_2: studentData.photo_2,
-      // Verification ID
+      university_name: studentData.university_name || '',
+      college_location: studentData.college_location || studentData.city,
+      college_state: studentData.college_state || studentData.state,
+      degree_name: studentData.degree_name || studentData.course,
+      department_stream: studentData.department_stream || 'General',
+      academic_year: studentData.academic_year || '1st Year',
+      current_semester: studentData.current_semester || 'Semester 1',
+      graduation_year: studentData.graduation_year || 2026,
+      student_status: studentData.student_status || 'CURRENTLY_STUDYING',
+      // Section C
       verification_id_type: studentData.verification_id_type || 'College Student ID',
       verification_id_url: studentData.verification_id_url,
-      submitted_at: new Date().toISOString(),
-      status: 'PENDING_APPROVAL',
+      verification_notes: studentData.verification_notes || 'Student uploaded verification document.',
+      // Section D (Exactly 3 Photos)
+      photo_1: studentData.photo_1,
+      photo_2: studentData.photo_2,
+      photo_3: studentData.photo_3,
+      // Section E
+      bio: studentData.bio || 'College student ready to connect!',
+      interests: studentData.interests || ['Music', 'Travelling'],
+      hobbies: studentData.hobbies || ['Reading'],
+      personality: studentData.personality || '',
+      looking_for: studentData.looking_for || 'Friendship',
+      age_range_min: studentData.age_range_min || 18,
+      age_range_max: studentData.age_range_max || 26,
+      preferred_distance: studentData.preferred_distance || 'ANYWHERE_INDIA',
+      // Section F
+      submitted_at: submittedAt,
+      review_deadline: reviewDeadline,
+      assigned_admin: null,
+      correction_fields: [],
+      correction_message: null,
       rejection_reason: null
     };
 
-    setPendingVerifications((prev) => [newReg, ...prev]);
+    setPendingVerifications((prev) => [newApp, ...prev]);
     setAdminMetrics((prev) => ({
       ...prev,
       pending_verifications: prev.pending_verifications + 1
@@ -638,46 +711,96 @@ export const AppProvider = ({ children }) => {
 
     return {
       success: true,
-      status: 'PENDING_APPROVAL',
-      student: newReg,
-      message: 'Account details submitted! Your College/Govt ID and 2 photos are now in the Admin Verification Queue. Once accepted, you can log in.'
+      status: 'PENDING_REVIEW',
+      student: newApp,
+      applicationId: appId,
+      message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
     };
   };
 
-  // 3. Resubmit Corrected Details if Admin Declined
-  const resubmitVerification = (regId, updatedData) => {
+  // 3. Resubmit Corrected Details when in NEEDS_CORRECTION
+  const resubmitVerification = (appId, updatedData) => {
+    const submittedAt = new Date().toISOString();
+    const reviewDeadline = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+
     setPendingVerifications((prev) =>
-      prev.map((reg) => {
-        if (reg.id === regId) {
+      prev.map((app) => {
+        if (app.id === appId || app.application_id === appId) {
           return {
-            ...reg,
+            ...app,
             ...updatedData,
-            status: 'PENDING_APPROVAL',
-            rejection_reason: null,
-            submitted_at: new Date().toISOString()
+            status: 'RESUBMITTED',
+            correction_fields: [],
+            correction_message: null,
+            submitted_at: submittedAt,
+            review_deadline: reviewDeadline
           };
         }
-        return reg;
+        return app;
       })
     );
 
-    addToast('Updated details and ID re-submitted for Admin verification!', 'info');
+    addToast('Corrected application resubmitted! Our team will continue verification.', 'info');
     return { success: true };
   };
 
-  // 4. Admin Accepts Student Registration -> Creates Active Verified Account
-  const approveStudentVerification = (regId) => {
-    const student = pendingVerifications.find((v) => v.id === regId);
+  // 4. Admin Action: Claim / Mark Under Review
+  const startApplicationReview = (appId, adminName = 'Admin') => {
+    setPendingVerifications((prev) =>
+      prev.map((a) =>
+        (a.id === appId || a.application_id === appId)
+          ? { ...a, status: 'UNDER_REVIEW', assigned_admin: adminName }
+          : a
+      )
+    );
+    addToast(`Application claimed and marked UNDER_REVIEW by ${adminName}.`, 'info');
+  };
+
+  // 5. Admin Action: Request Correction
+  const requestCorrectionOnApplication = (appId, fields, message) => {
+    setPendingVerifications((prev) =>
+      prev.map((a) =>
+        (a.id === appId || a.application_id === appId)
+          ? {
+              ...a,
+              status: 'NEEDS_CORRECTION',
+              correction_fields: fields,
+              correction_message: message
+            }
+          : a
+      )
+    );
+
+    const newLog = {
+      id: 'log_' + Date.now(),
+      admin: `Admin (${currentUser?.display_name || 'Admin'})`,
+      action: `REQUESTED_CORRECTION on Application ${appId}`,
+      reason: message,
+      timestamp: new Date().toISOString()
+    };
+    setAdminAuditLogs((prev) => [newLog, ...prev]);
+
+    addToast(`Correction request sent for fields: ${fields.join(', ')}`, 'warning');
+  };
+
+  // 6. Admin Action: Approve Application -> Transactional Active User Creation
+  const approveStudentVerification = (appId) => {
+    const student = pendingVerifications.find((v) => v.id === appId || v.application_id === appId);
     if (!student) return;
 
     setPendingVerifications((prev) =>
-      prev.map((v) => (v.id === regId ? { ...v, status: 'APPROVED', rejection_reason: null } : v))
+      prev.map((v) =>
+        (v.id === appId || v.application_id === appId)
+          ? { ...v, status: 'APPROVED', rejection_reason: null }
+          : v
+      )
     );
 
     // Create user profile in registered users
     const newUser = {
       id: student.id,
-      full_name: student.full_name,
+      applicationId: student.application_id,
+      full_name: student.legal_name || student.full_name,
       display_name: student.display_name,
       date_of_birth: student.date_of_birth,
       age: student.age,
@@ -685,14 +808,15 @@ export const AppProvider = ({ children }) => {
       email: student.email,
       mobile: student.mobile,
       college_name: student.college_name,
-      course: student.course,
+      course: student.degree_name || student.course,
       avatar_url: student.photo_1,
-      additional_photos: [student.photo_2],
-      bio: `Student at ${student.college_name}. Verified campus profile!`,
-      interests: ['Music', 'Travelling', 'Coding'],
-      languages: ['English', 'Bengali', 'Hindi'],
+      additional_photos: [student.photo_2, student.photo_3].filter(Boolean),
+      bio: student.bio,
+      interests: student.interests,
+      languages: student.languages_spoken,
       is_active: true,
-      verification_status: 'ID Verified',
+      accountStatus: 'ACTIVE',
+      verification_status: 'APPROVED',
       mood: 'Looking for a conversation',
       subscription_plan: 'free',
       sent_requests_count: 0,
@@ -701,12 +825,12 @@ export const AppProvider = ({ children }) => {
 
     setRegisteredUsers((prev) => [...prev, newUser]);
 
-    // Admin audit log & metrics update
+    // Admin audit log
     const newLog = {
       id: 'log_' + Date.now(),
       admin: `SuperAdmin (${currentUser?.display_name || 'Admin'})`,
-      action: `APPROVED Student ID Verification for ${student.full_name} (${student.college_name})`,
-      reason: 'ID Document & photos verified authentic under DPDP guidelines',
+      action: `APPROVED Application ${student.application_id} for ${newUser.full_name}`,
+      reason: '18+ age, college enrollment, identity document, and all 3 photographs manually verified.',
       timestamp: new Date().toISOString()
     };
     setAdminAuditLogs((prev) => [newLog, ...prev]);
@@ -716,26 +840,27 @@ export const AppProvider = ({ children }) => {
       total_users: prev.total_users + 1
     }));
 
-    addToast(`Accepted registration for ${student.display_name}! Student account is now active. 🎓`, 'success');
+    addToast(`Approved ${student.display_name}! Active account created. 🎓`, 'success');
   };
 
-  // 5. Admin Declines Student Registration with Reason
-  const rejectStudentVerification = (regId, reason) => {
-    const student = pendingVerifications.find((v) => v.id === regId);
+  // 7. Admin Action: Reject Application
+  const rejectStudentVerification = (appId, reason) => {
+    const student = pendingVerifications.find((v) => v.id === appId || v.application_id === appId);
     if (!student) return;
 
     setPendingVerifications((prev) =>
       prev.map((v) =>
-        v.id === regId ? { ...v, status: 'REJECTED', rejection_reason: reason } : v
+        (v.id === appId || v.application_id === appId)
+          ? { ...v, status: 'REJECTED', rejection_reason: reason }
+          : v
       )
     );
 
-    // Admin audit log & metrics update
     const newLog = {
       id: 'log_' + Date.now(),
       admin: `SuperAdmin (${currentUser?.display_name || 'Admin'})`,
-      action: `DECLINED Student Verification for ${student.full_name}`,
-      reason: reason || 'ID card unreadable or missing required details',
+      action: `REJECTED Application ${student.application_id} for ${student.legal_name || student.full_name}`,
+      reason: reason || 'Application does not meet platform safety or document guidelines.',
       timestamp: new Date().toISOString()
     };
     setAdminAuditLogs((prev) => [newLog, ...prev]);
@@ -744,7 +869,7 @@ export const AppProvider = ({ children }) => {
       pending_verifications: Math.max(0, prev.pending_verifications - 1)
     }));
 
-    addToast(`Declined verification for ${student.display_name}. Reason: "${reason}"`, 'warning');
+    addToast(`Application ${student.application_id} rejected. Reason: "${reason}"`, 'warning');
   };
 
   // 6. Sign Out
@@ -832,9 +957,12 @@ export const AppProvider = ({ children }) => {
         setAuthModalMode,
         pendingVerifications,
         setPendingVerifications,
+        collegesList,
         loginWithCredentials,
         registerStudent,
         resubmitVerification,
+        startApplicationReview,
+        requestCorrectionOnApplication,
         approveStudentVerification,
         rejectStudentVerification,
         logout

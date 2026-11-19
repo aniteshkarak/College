@@ -7,36 +7,112 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// User Account & Profile Model
+// -------------------------------------------------------------
+// 1. PENDING REGISTRATION (Pre-approval Application)
+// No active user account exists while in this model!
+// -------------------------------------------------------------
+model PendingRegistration {
+  id                    String    @id @default(uuid())
+  applicationId         String    @unique // e.g. COL-2026-001234
+  status                String    @default("PENDING_REVIEW") // DRAFT | PENDING_REVIEW | UNDER_REVIEW | NEEDS_CORRECTION | RESUBMITTED | APPROVED | REJECTED
+  
+  // Step 1: Personal Information
+  legalName             String
+  displayName           String
+  dateOfBirth           DateTime
+  age                   Int
+  gender                String?
+  city                  String
+  state                 String
+  languagesSpoken       String[]
+  email                 String    @unique
+  isEmailVerified       Boolean   @default(false)
+  emailVerifiedAt       DateTime?
+  mobileNumber          String    @unique
+  isMobileVerified      Boolean   @default(false)
+  mobileVerifiedAt      DateTime?
+  passwordHash          String    // Stored securely, activated only upon approval
+
+  // Step 2: College & Education Information
+  collegeId             String?
+  collegeName           String
+  universityName        String?
+  collegeLocation       String?
+  collegeState          String?
+  degreeName            String
+  departmentStream      String
+  academicYear          String    // 1st Year, 2nd Year, etc.
+  currentSemester       String?
+  graduationYear        Int
+  studentStatus         String    // CURRENTLY_STUDYING | RECENTLY_GRADUATED | OTHER
+
+  // Step 5: About & Connection Preferences
+  bio                   String
+  interests             String[]
+  hobbies               String[]
+  personality           String?
+  lookingFor            String    // Friendship | Casual chatting | Dating | Serious relationship
+  ageRangeMin           Int       @default(18)
+  ageRangeMax           Int       @default(26)
+  preferredDistance     String    // SAME_COLLEGE | SAME_CITY | ANYWHERE_INDIA
+
+  // Step 6: Consents & DPDP Compliance
+  termsAccepted         Boolean   @default(false)
+  privacyAccepted       Boolean   @default(false)
+  ageConfirmed18Plus    Boolean   @default(false)
+  verificationConsent   Boolean   @default(false)
+  consentedAt           DateTime  @default(now())
+
+  // 72-Hour Verification Metrics
+  submittedAt           DateTime  @default(now())
+  reviewDeadline        DateTime  // submittedAt + 72 hours
+  isOverdue             Boolean   @default(false)
+
+  // Review & Correction State
+  assignedAdminId       String?
+  reviewStartedAt       DateTime?
+  correctionFields      String[]  // List of field keys requiring correction
+  correctionMessage     String?   // Admin message explaining what needs to be fixed
+  rejectionReason       String?   // Admin reason if rejected
+  reviewedAt            DateTime?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relationships
+  identityDocument      IdentityDocument?
+  photographs           UserPhoto[]
+  reviewHistory         VerificationHistory[]
+  createdUser           User?     @relation("ApplicationUser")
+
+  @@index([status])
+  @@index([submittedAt])
+  @@index([reviewDeadline])
+  @@index([collegeName])
+}
+
+// -------------------------------------------------------------
+// 2. ACTIVE USER (Created ONLY upon Administrator Approval!)
+// -------------------------------------------------------------
 model User {
   id                    String    @id @default(uuid())
+  applicationId         String?   @unique // Link to original approved application
   email                 String    @unique
   passwordHash          String
-  mobileNumber          String?   @unique
+  mobileNumber          String    @unique
   fullName              String
   displayName           String
   dateOfBirth           DateTime
   age                   Int
-  gender                String
-  interestedIn          String[]
-  city                  String
-  state                 String
-  collegeName           String?
-  course                String?
-  avatarUrl             String?   // Photo 1 (Required)
-  additionalPhotos      String[]  // Photo 2+ (At least 1 required in additionalPhotos)
-  bio                   String?
-  interests             String[]
-  relationshipIntention String    @default("Casual Connection") // Casual Connection | Dating Connection | Serious Relationship
-  currentMood           String?   @default("Want to make friends")
+  gender                String?
+  accountStatus         String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  role                  String    @default("STUDENT") // STUDENT | ADMIN | SUPER_ADMIN
   
-  // Role & Admin Verification Pipeline
-  role                  String    @default("STUDENT") // STUDENT | ADMIN
-  verificationStatus    String    @default("PENDING_APPROVAL") // PENDING_APPROVAL | APPROVED | REJECTED
-  verificationIdUrl     String?   // Uploaded College ID or Govt ID document URL
-  verificationIdType    String?   @default("COLLEGE_ID") // COLLEGE_ID | GOVT_ID
-  rejectionReason       String?   // Reason provided by Admin if declined
-  
+  // Verification Audit
+  verificationStatus    String    @default("APPROVED") // APPROVED
+  approvedAt            DateTime?
+  approvedByAdminId     String?
+
   // Subscription Plan (PRD: Free, ₹49, ₹99 per 28 days)
   subscriptionPlan      String    @default("free") // free | pro_49 | unlimited_99
   planExpiresAt         DateTime?
@@ -46,6 +122,15 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   // Relationships
+  application           PendingRegistration? @relation("ApplicationUser", fields: [applicationId], references: [id])
+  profile               UserProfile?
+  education             Education?
+  identityDocuments     IdentityDocument[]
+  photos                UserPhoto[]
+  consents              UserConsent[]
+  sessions              UserSession[]
+
+  // Platform features (Strictly accessible only when accountStatus == ACTIVE)
   sentRequests          MatchRequest[]       @relation("SentRequests")
   receivedRequests      MatchRequest[]       @relation("ReceivedRequests")
   matchesAsUser1        Match[]              @relation("User1Matches")
@@ -56,7 +141,199 @@ model User {
   reportsReceived       Report[]             @relation("ReportedUser")
 }
 
-// Match Request: Sent by one user to another (Like)
+// -------------------------------------------------------------
+// 3. USER PROFILE (Created after manual approval)
+// -------------------------------------------------------------
+model UserProfile {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  bio                   String
+  interests             String[]
+  hobbies               String[]
+  personality           String?
+  relationshipIntention String    @default("Casual Connection")
+  lookingFor            String    @default("Friendship")
+  ageRangeMin           Int       @default(18)
+  ageRangeMax           Int       @default(26)
+  preferredDistance     String    @default("ANYWHERE_INDIA")
+  city                  String
+  state                 String
+  languages             String[]
+  currentMood           String?   @default("Want to make friends")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// 4. EDUCATION (Verified student record)
+// -------------------------------------------------------------
+model Education {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  collegeId             String?
+  collegeName           String
+  universityName        String?
+  degreeName            String
+  departmentStream      String
+  academicYear          String
+  currentSemester       String?
+  graduationYear        Int
+  studentStatus         String
+  isVerified            Boolean   @default(true)
+  verifiedAt            DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  college               College?  @relation(fields: [collegeId], references: [id])
+}
+
+// -------------------------------------------------------------
+// 5. COLLEGE REGISTRY (Searchable institution list + requests)
+// -------------------------------------------------------------
+model College {
+  id                    String    @id @default(uuid())
+  name                  String    @unique
+  universityName        String?
+  city                  String
+  state                 String
+  isVerified            Boolean   @default(true)
+  isUserRequested       Boolean   @default(false)
+  requestedByEmail      String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  educations            Education[]
+}
+
+// -------------------------------------------------------------
+// 6. IDENTITY VERIFICATION DOCUMENT (Stored privately)
+// -------------------------------------------------------------
+model IdentityDocument {
+  id                    String    @id @default(uuid())
+  registrationId        String?   @unique
+  userId                String?
+  documentType          String    // COLLEGE_ID | VOTER_ID | AADHAAR_MASKED
+  documentNumberMasked  String?
+  filePath              String    // Private storage path (never public!)
+  fileName              String
+  fileSize              Int
+  mimeType              String
+  fileHashSha256        String?
+  isVerified            Boolean   @default(false)
+  verifiedAt            DateTime?
+  rejectionReason       String?
+  submittedAt           DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  registration          PendingRegistration? @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  user                  User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// 7. USER PHOTOGRAPHS (Exactly 3 photographs required)
+// -------------------------------------------------------------
+model UserPhoto {
+  id                    String    @id @default(uuid())
+  registrationId        String?
+  userId                String?
+  photoUrl              String    // Private or public-after-approval URL
+  photoOrder            Int       // 1 = Main Avatar, 2 = Personal Photo 1, 3 = Personal Photo 2
+  isMain                Boolean   @default(false)
+  isApproved            Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  registration          PendingRegistration? @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  user                  User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId, photoOrder])
+}
+
+// -------------------------------------------------------------
+// 8. VERIFICATION HISTORY & AUDIT TRAIL
+// -------------------------------------------------------------
+model VerificationHistory {
+  id                    String    @id @default(uuid())
+  registrationId        String
+  adminId               String
+  adminName             String
+  action                String    // ASSIGNED | STARTED_REVIEW | REQUESTED_CORRECTION | RESUBMITTED | APPROVED | REJECTED
+  notes                 String?
+  correctionFields      String[]
+  timestamp             DateTime  @default(now())
+
+  registration          PendingRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@index([registrationId])
+}
+
+// -------------------------------------------------------------
+// 9. ADMIN USERS & ROLES
+// -------------------------------------------------------------
+model Admin {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  fullName              String
+  passwordHash          String
+  roleName              String    @default("VERIFICATION_ADMIN") // SUPER_ADMIN | VERIFICATION_ADMIN | SUPPORT_ADMIN
+  isActive              Boolean   @default(true)
+  lastLoginAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  auditLogs             AdminAuditLog[]
+}
+
+model AdminAuditLog {
+  id                    String    @id @default(uuid())
+  adminId               String
+  action                String
+  targetType            String    // APPLICATION | USER | DOCUMENT
+  targetId              String
+  details               String
+  ipAddress             String?
+  userAgent             String?
+  createdAt             DateTime  @default(now())
+
+  admin                 Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([targetId])
+}
+
+// -------------------------------------------------------------
+// 10. USER CONSENT & SESSION (DPDP Act Compliance)
+// -------------------------------------------------------------
+model UserConsent {
+  id                    String    @id @default(uuid())
+  userId                String
+  consentType           String    // TERMS_OF_SERVICE | PRIVACY_POLICY | MANUAL_VERIFICATION | ID_PROCESSING
+  isGranted             Boolean   @default(true)
+  ipAddress             String?
+  grantedAt             DateTime  @default(now())
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSession {
+  id                    String    @id @default(uuid())
+  userId                String
+  tokenHash             String
+  ipAddress             String?
+  userAgent             String?
+  expiresAt             DateTime
+  createdAt             DateTime  @default(now())
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// 11. SOCIAL CORE: Match, Conversations, Messages, Campus Board
+// -------------------------------------------------------------
 model MatchRequest {
   id          String   @id @default(uuid())
   senderId    String
@@ -71,13 +348,12 @@ model MatchRequest {
   @@unique([senderId, receiverId])
 }
 
-// Mutual Match: Created ONLY when a user accepts an incoming match request
 model Match {
   id             String           @id @default(uuid())
   user1Id        String
   user2Id        String
-  status         String           @default("ACTIVE") // ACTIVE | UNMATCHED | BLOCKED
-  stage          String           @default("Friend")  // Friend -> Dating -> Relationship
+  status         String           @default("ACTIVE")
+  stage          String           @default("Friend") // Friend -> Dating -> Relationship
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -89,21 +365,19 @@ model Match {
   @@unique([user1Id, user2Id])
 }
 
-// "GO" Button Stage Transition Request (Friend -> Dating -> Relationship)
 model GoStageRequest {
   id            String   @id @default(uuid())
   matchId       String
   initiatorId   String
   targetStage   String   // Dating | Relationship
   status        String   @default("PENDING") // PENDING | ACCEPTED | REFUSED
-  refusalReason String?  // Explanation sent via chat if refused
+  refusalReason String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
 }
 
-// Private 1-on-1 Chat Conversation between Mutual Friends
 model Conversation {
   id        String    @id @default(uuid())
   matchId   String    @unique
@@ -114,7 +388,6 @@ model Conversation {
   messages  Message[]
 }
 
-// Message in a Conversation (Text or 60s Voice Note - Strictly No Video Calling)
 model Message {
   id             String       @id @default(uuid())
   conversationId String
@@ -130,7 +403,6 @@ model Message {
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }
 
-// Campus Board: Public College-Exclusive Announcements
 model CampusAnnouncement {
   id          String   @id @default(uuid())
   collegeName String
@@ -147,14 +419,13 @@ model CampusAnnouncement {
   @@index([collegeName])
 }
 
-// Safety, Moderation and Abuse Reports
 model Report {
   id             String   @id @default(uuid())
   reporterId     String
   reportedUserId String
   category       String
   reason         String
-  status         String   @default("PENDING") // PENDING | REVIEWED | ACTION_TAKEN | DISMISSED
+  status         String   @default("PENDING")
   createdAt      DateTime @default(now())
 
   reporter       User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
