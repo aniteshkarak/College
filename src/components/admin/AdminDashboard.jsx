@@ -149,9 +149,9 @@ export const AdminDashboard = () => {
   });
 
   // Action Handlers
-  const handleStartReview = (app) => {
+  const handleStartReview = async (app) => {
     const adminName = currentUser?.display_name || 'Admin';
-    startApplicationReview(app.id, adminName);
+    await startApplicationReview(app.id, adminName);
     if (selectedApplication && selectedApplication.id === app.id) {
       setSelectedApplication({ ...selectedApplication, status: 'UNDER_REVIEW', assigned_admin: adminName });
     }
@@ -168,7 +168,7 @@ export const AdminDashboard = () => {
     });
   };
 
-  const handleConfirmApproval = (e) => {
+  const handleConfirmApproval = async (e) => {
     e.preventDefault();
     if (!approveModalApp) return;
     const allChecked = Object.values(approvalChecklist).every(Boolean);
@@ -177,7 +177,7 @@ export const AdminDashboard = () => {
       return;
     }
 
-    approveStudentVerification(approveModalApp.id);
+    await approveStudentVerification(approveModalApp.id);
     if (selectedApplication && selectedApplication.id === approveModalApp.id) {
       setSelectedApplication({ ...selectedApplication, status: 'APPROVED', rejection_reason: null });
     }
@@ -190,7 +190,7 @@ export const AdminDashboard = () => {
     setRejectReasonText('');
   };
 
-  const handleConfirmReject = (e) => {
+  const handleConfirmReject = async (e) => {
     e.preventDefault();
     if (!rejectModalApp) return;
     if (!rejectReasonText.trim()) {
@@ -199,7 +199,7 @@ export const AdminDashboard = () => {
     }
 
     const fullReason = `[${rejectCategory}] ${rejectReasonText.trim()}`;
-    rejectStudentVerification(rejectModalApp.id, fullReason);
+    await rejectStudentVerification(rejectModalApp.id, fullReason);
     if (selectedApplication && selectedApplication.id === rejectModalApp.id) {
       setSelectedApplication({ ...selectedApplication, status: 'REJECTED', rejection_reason: fullReason });
     }
@@ -219,7 +219,7 @@ export const AdminDashboard = () => {
     );
   };
 
-  const handleConfirmCorrection = (e) => {
+  const handleConfirmCorrection = async (e) => {
     e.preventDefault();
     if (!correctionModalApp) return;
     if (selectedCorrectionFields.length === 0) {
@@ -231,7 +231,7 @@ export const AdminDashboard = () => {
       return;
     }
 
-    requestCorrectionOnApplication(correctionModalApp.id, selectedCorrectionFields, correctionNoteText.trim());
+    await requestCorrectionOnApplication(correctionModalApp.id, selectedCorrectionFields, correctionNoteText.trim());
     if (selectedApplication && selectedApplication.id === correctionModalApp.id) {
       setSelectedApplication({
         ...selectedApplication,

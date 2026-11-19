@@ -208,23 +208,23 @@ export const AuthModal = ({ isOpen, onClose }) => {
   };
 
   // Login submission
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setApplicantStatusView(null);
 
-    const result = loginWithCredentials(loginIdentifier, loginPassword);
+    const result = await loginWithCredentials(loginIdentifier, loginPassword);
 
-    if (result.success) {
+    if (result && result.success) {
       onClose();
-    } else if (['PENDING_REVIEW', 'UNDER_REVIEW', 'NEEDS_CORRECTION', 'RESUBMITTED', 'REJECTED'].includes(result.status)) {
+    } else if (result && ['PENDING_REVIEW', 'UNDER_REVIEW', 'NEEDS_CORRECTION', 'RESUBMITTED', 'REJECTED'].includes(result.status)) {
       setApplicantStatusView(result);
     } else {
-      addToast(result.message, 'error');
+      addToast(result?.message || 'Login failed', 'error');
     }
   };
 
   // Full 6-Step Registration submission
-  const handleFinalSubmit = (e) => {
+  const handleFinalSubmit = async (e) => {
     e.preventDefault();
 
     if (formData.age < 18) {
@@ -248,8 +248,8 @@ export const AuthModal = ({ isOpen, onClose }) => {
       return;
     }
 
-    const result = registerStudent(formData);
-    if (result.success) {
+    const result = await registerStudent(formData);
+    if (result && result.success) {
       setApplicantStatusView({
         status: 'PENDING_REVIEW',
         student: result.student,
@@ -257,12 +257,12 @@ export const AuthModal = ({ isOpen, onClose }) => {
       });
       addToast(`Application ${result.applicationId} submitted for manual human review! 📋`, 'success');
     } else {
-      addToast(result.message, 'warning');
+      addToast(result?.message || 'Submission failed', 'warning');
     }
   };
 
   // Resubmit corrections requested by Admin
-  const handleResubmitCorrection = (e) => {
+  const handleResubmitCorrection = async (e) => {
     e.preventDefault();
     if (!correctionTarget) return;
 
@@ -275,7 +275,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
       return;
     }
 
-    resubmitVerification(correctionTarget.id, {
+    await resubmitVerification(correctionTarget.id, {
       college_name: formData.college_name,
       verification_id_url: formData.verification_id_url,
       verification_id_type: formData.verification_id_type,
@@ -463,8 +463,8 @@ export const AuthModal = ({ isOpen, onClose }) => {
             {applicantStatusView.status === 'APPROVED' && (
               <button
                 type="button"
-                onClick={() => {
-                  loginWithCredentials(applicantStatusView.student.email, 'Password@2026');
+                onClick={async () => {
+                  await loginWithCredentials(applicantStatusView.student.email, 'Password@2026');
                   onClose();
                 }}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md"

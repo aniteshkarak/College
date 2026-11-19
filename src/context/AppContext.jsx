@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
+import { api, setStoredToken, clearStoredToken, getStoredToken } from '../services/api';
 import {
   INITIAL_USER,
   DISCOVER_PROFILES,
@@ -26,6 +27,26 @@ export const AppProvider = ({ children }) => {
   const [previousView, setPreviousView] = useState('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status'
+
+  // Restore authenticated session from backend token if stored
+  useEffect(() => {
+    const token = getStoredToken();
+    if (token) {
+      api.auth.getMe()
+        .then((res) => {
+          if (res?.data) {
+            setCurrentUser(res.data);
+            setIsAuthenticated(true);
+            if (res.data.role === 'SUPER_ADMIN' || res.data.role === 'VERIFICATION_ADMIN') {
+              setCurrentView('admin');
+            }
+          }
+        })
+        .catch(() => {
+          clearStoredToken();
+        });
+    }
+  }, []);
 
   // Colleges Registry
   const [collegesList, setCollegesList] = useState(PREMIER_COLLEGES);
@@ -508,10 +529,8 @@ export const AppProvider = ({ children }) => {
 
   // --- COMPLETE MANUAL VERIFICATION & 72-HOUR LIFECYCLE ---
 
-  // 1. Log In using Gmail/Email OR Mobile + Password
-  const loginWithCredentials = (identifier, password) => {
-    const cleanId = (identifier || '').trim().toLowerCase();
-
+  // Helper: Check local registered accounts & applications (offline simulation / demo fallback)
+  const checkLocalCredentials = (cleanId, password) => {
     // Check in pending/reviewed applications queue
     const appMatch = pendingVerifications.find(
       (v) =>
@@ -617,7 +636,7 @@ export const AppProvider = ({ children }) => {
     if (userMatch) {
       setCurrentUser(userMatch);
       setIsAuthenticated(true);
-      setCurrentView('matches');
+      setCurrentView(userMatch.role === 'ADMIN' ? 'admin' : 'matches');
       addToast(`Welcome back, ${userMatch.display_name}! ✨`, 'success');
       return { success: true, user: userMatch };
     }
@@ -628,8 +647,92 @@ export const AppProvider = ({ children }) => {
     };
   };
 
-  // 2. Register New Student Application (6 Steps, 18+ strict, 3 photos, ID document, 72h deadline)
-  const registerStudent = (studentData) => {
+  // 1. Log In using Gmail/Email OR Mobile + Password (with Backend API + Local fallback)
+  const loginWithCredentials = async (identifier, password) => {
+    const cleanId = (identifier || '').trim().toLowerCase();
+
+    try {
+      const res = await api.auth.login(identifier, password);
+      if (res && res.success && res.data) {
+        const { user, accessToken } = res.data;
+        if (accessToken) setStoredToken(accessToken);
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        setCurrentView(user.role === 'SUPER_ADMIN' || user.role === 'VERIFICATION_ADMIN' ? 'admin' : 'matches');
+        addToast(`Welcome back, ${user.display_name}! ✨`, 'success');
+        return { success: true, user };
+      }
+    } catch (err) {
+      // If backend reports an application in review or requiring correction or rejected
+      if (err.code === 'ACCOUNT_NOT_ACTIVE' && err.details) {
+        return {
+          success: false,
+          status: err.details.status,
+          student: {
+            id: err.details.applicationId,
+            application_id: err.details.applicationId,
+            status: err.details.status,
+            submitted_at: err.details.submittedAt,
+            review_deadline: err.details.reviewDeadline,
+            isOverdue: err.details.isOverdue,
+            correction_fields: err.details.correctionFields || [],
+            correction_message: err.details.correctionMessage || null,
+            rejection_reason: err.details.rejectionReason || null,
+            email: identifier
+          },
+          reason: err.details.rejectionReason || err.details.correctionMessage,
+          fields: err.details.correctionFields || [],
+          message: err.message
+        };
+      }
+
+      // If backend explicitly rejected password or user not found, check local mock registry
+      if (err.code === 'INVALID_CREDENTIALS' || err.code === 'USER_NOT_FOUND') {
+        const localResult = checkLocalCredentials(cleanId, password);
+        if (localResult && localResult.success) return localResult;
+        return {
+          success: false,
+          message: err.message || 'Invalid credentials. Password does not match.'
+        };
+      }
+
+      // If backend is offline or network error, fallback to local credentials
+      console.warn('Backend unavailable, using local simulated login:', err.message);
+    }
+
+    return checkLocalCredentials(cleanId, password);
+  };
+
+  // 2. Register New Student Application (Backend API + Local fallback)
+  const registerStudent = async (studentData) => {
+    try {
+      const res = await api.registration.submit(studentData);
+      if (res && res.success && res.data) {
+        const app = res.data;
+        setPendingVerifications((prev) => [app, ...prev]);
+        setAdminMetrics((prev) => ({
+          ...prev,
+          pending_verifications: prev.pending_verifications + 1
+        }));
+        return {
+          success: true,
+          status: app.status || 'PENDING_REVIEW',
+          student: app,
+          applicationId: app.application_id,
+          message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
+        };
+      }
+    } catch (err) {
+      if (err.code !== 'SERVER_OFFLINE') {
+        console.warn('Backend registration failed with validation error:', err.message);
+        return {
+          success: false,
+          message: err.message || 'Registration failed.'
+        };
+      }
+      console.warn('Backend server offline, falling back to local registration simulation.');
+    }
+
     // Duplicate check
     const duplicate = pendingVerifications.find(
       (v) =>
@@ -655,7 +758,6 @@ export const AppProvider = ({ children }) => {
       id: 'app_' + Date.now(),
       application_id: appId,
       status: 'PENDING_REVIEW',
-      // Section A
       legal_name: studentData.legal_name || studentData.full_name,
       display_name: studentData.display_name,
       date_of_birth: studentData.date_of_birth,
@@ -666,7 +768,6 @@ export const AppProvider = ({ children }) => {
       city: studentData.city,
       state: studentData.state,
       languages_spoken: studentData.languages_spoken || ['English'],
-      // Section B
       college_name: studentData.college_name,
       university_name: studentData.university_name || '',
       college_location: studentData.college_location || studentData.city,
@@ -677,15 +778,12 @@ export const AppProvider = ({ children }) => {
       current_semester: studentData.current_semester || 'Semester 1',
       graduation_year: studentData.graduation_year || 2026,
       student_status: studentData.student_status || 'CURRENTLY_STUDYING',
-      // Section C
       verification_id_type: studentData.verification_id_type || 'College Student ID',
       verification_id_url: studentData.verification_id_url,
       verification_notes: studentData.verification_notes || 'Student uploaded verification document.',
-      // Section D (Exactly 3 Photos)
       photo_1: studentData.photo_1,
       photo_2: studentData.photo_2,
       photo_3: studentData.photo_3,
-      // Section E
       bio: studentData.bio || 'College student ready to connect!',
       interests: studentData.interests || ['Music', 'Travelling'],
       hobbies: studentData.hobbies || ['Reading'],
@@ -694,7 +792,6 @@ export const AppProvider = ({ children }) => {
       age_range_min: studentData.age_range_min || 18,
       age_range_max: studentData.age_range_max || 26,
       preferred_distance: studentData.preferred_distance || 'ANYWHERE_INDIA',
-      // Section F
       submitted_at: submittedAt,
       review_deadline: reviewDeadline,
       assigned_admin: null,
@@ -719,7 +816,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // 3. Resubmit Corrected Details when in NEEDS_CORRECTION
-  const resubmitVerification = (appId, updatedData) => {
+  const resubmitVerification = async (appId, updatedData) => {
+    try {
+      await api.registration.resubmit(appId, updatedData);
+    } catch (err) {
+      console.warn('Backend resubmit sync error, continuing with local state:', err.message);
+    }
+
     const submittedAt = new Date().toISOString();
     const reviewDeadline = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
 
@@ -745,7 +848,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // 4. Admin Action: Claim / Mark Under Review
-  const startApplicationReview = (appId, adminName = 'Admin') => {
+  const startApplicationReview = async (appId, adminName = 'Admin') => {
+    try {
+      await api.admin.claim(appId);
+    } catch (err) {
+      console.warn('Backend claim sync:', err.message);
+    }
+
     setPendingVerifications((prev) =>
       prev.map((a) =>
         (a.id === appId || a.application_id === appId)
@@ -757,7 +866,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // 5. Admin Action: Request Correction
-  const requestCorrectionOnApplication = (appId, fields, message) => {
+  const requestCorrectionOnApplication = async (appId, fields, message) => {
+    try {
+      await api.admin.requestCorrection(appId, fields, message);
+    } catch (err) {
+      console.warn('Backend correction request sync:', err.message);
+    }
+
     setPendingVerifications((prev) =>
       prev.map((a) =>
         (a.id === appId || a.application_id === appId)
@@ -784,7 +899,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // 6. Admin Action: Approve Application -> Transactional Active User Creation
-  const approveStudentVerification = (appId) => {
+  const approveStudentVerification = async (appId) => {
+    try {
+      await api.admin.approve(appId, 'Approved via Admin verification checklist');
+    } catch (err) {
+      console.warn('Backend approve sync:', err.message);
+    }
+
     const student = pendingVerifications.find((v) => v.id === appId || v.application_id === appId);
     if (!student) return;
 
@@ -844,7 +965,13 @@ export const AppProvider = ({ children }) => {
   };
 
   // 7. Admin Action: Reject Application
-  const rejectStudentVerification = (appId, reason) => {
+  const rejectStudentVerification = async (appId, reason) => {
+    try {
+      await api.admin.reject(appId, reason);
+    } catch (err) {
+      console.warn('Backend reject sync:', err.message);
+    }
+
     const student = pendingVerifications.find((v) => v.id === appId || v.application_id === appId);
     if (!student) return;
 
@@ -872,8 +999,10 @@ export const AppProvider = ({ children }) => {
     addToast(`Application ${student.application_id} rejected. Reason: "${reason}"`, 'warning');
   };
 
-  // 6. Sign Out
+  // 8. Sign Out
   const logout = () => {
+    api.auth.logout();
+    clearStoredToken();
     setIsAuthenticated(false);
     setCurrentUser(null);
     setCurrentView('landing');
