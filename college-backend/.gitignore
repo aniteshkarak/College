@@ -1,6 +1,0 @@
-node_modules/
-storage/private/
-logs/
-.env
-.DS_Store
-*.tmp.*

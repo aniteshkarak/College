@@ -1,95 +1,87 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import { STORAGE_PATHS } from '../config/storage.js';
+import imageService from './imageService.js';
 import logger from '../utils/logger.js';
 
-const PRIVATE_STORAGE_ROOT = path.resolve('storage', 'private');
-const DOCS_DIR = path.join(PRIVATE_STORAGE_ROOT, 'documents');
-const PHOTOS_DIR = path.join(PRIVATE_STORAGE_ROOT, 'photos');
+export const storageService = {
+  /**
+   * Save identity document (using imageService for optimization & validation)
+   */
+  storePrivateDocument: async (fileData, originalName = 'document.jpg', mimeType = 'image/jpeg') => {
+    return imageService.processAndSaveDocument(fileData, originalName, mimeType);
+  },
 
-// Ensure isolation directories exist
-[DOCS_DIR, PHOTOS_DIR].forEach((dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+  /**
+   * Save user photo (using imageService for Sharp processing, WebP conversion, thumbnails)
+   */
+  storePrivatePhoto: async (fileData, photoOrder = 1) => {
+    return imageService.processAndSavePhoto(fileData, photoOrder);
+  },
 
-const ALLOWED_DOC_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const ALLOWED_PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+  /**
+   * Securely retrieve stream for private documents or photos
+   * Strictly prevents directory traversal attacks via path.basename
+   */
+  getPrivateFileStream: (subfolder, rawFilename) => {
+    const filename = path.basename(rawFilename); // strips any ../ or directory components
+    let baseDir = STORAGE_PATHS.DOCUMENTS_DIR;
 
-/**
- * Validates and stores identity document in private storage
- */
-export const storePrivateDocument = async (fileData, originalName, mimeType) => {
-  if (!ALLOWED_DOC_MIMES.includes(mimeType)) {
-    throw new Error('Unsupported document format. Allowed: JPEG, PNG, WebP, PDF.');
-  }
+    if (subfolder === 'photos') {
+      baseDir = STORAGE_PATHS.PHOTOS_DIR;
+    } else if (subfolder === 'thumbnails') {
+      baseDir = STORAGE_PATHS.THUMBNAILS_DIR;
+    } else if (subfolder === 'discovery') {
+      baseDir = STORAGE_PATHS.DISCOVERY_DIR;
+    }
 
-  const buffer = Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData, 'base64');
-  if (buffer.length > MAX_FILE_SIZE_BYTES) {
-    throw new Error('Document exceeds maximum permitted file size of 5MB.');
-  }
+    const fullPath = path.join(baseDir, filename);
 
-  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-  const ext = path.extname(originalName) || (mimeType === 'application/pdf' ? '.pdf' : '.jpg');
-  const safeFileName = `doc_${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
-  const filePath = path.join(DOCS_DIR, safeFileName);
+    // Verify resolved path stays strictly within allowed directory
+    if (!fullPath.startsWith(baseDir)) {
+      throw new Error('Access denied: Invalid file path traversal attempt.');
+    }
 
-  fs.writeFileSync(filePath, buffer);
-  logger.info(`Stored private verification document: ${safeFileName} (${buffer.length} bytes)`);
+    if (!fs.existsSync(fullPath)) {
+      const err = new Error('Requested file not found in storage.');
+      err.statusCode = 404;
+      throw err;
+    }
 
-  return {
-    filePath: safeFileName, // relative identifier
-    fileName: originalName,
-    fileSize: buffer.length,
-    mimeType,
-    fileHashSha256: hash
-  };
+    // Determine MIME type
+    const ext = path.extname(filename).toLowerCase();
+    let mimeType = 'image/webp';
+    if (ext === '.pdf') mimeType = 'application/pdf';
+    else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+    else if (ext === '.png') mimeType = 'image/png';
+
+    return {
+      stream: fs.createReadStream(fullPath),
+      mimeType,
+      fileSize: fs.statSync(fullPath).size,
+      filename,
+    };
+  },
+
+  /**
+   * Secure deletion of uploaded files
+   */
+  deletePrivateFile: async (subfolder, rawFilename) => {
+    try {
+      const filename = path.basename(rawFilename);
+      let baseDir = STORAGE_PATHS.DOCUMENTS_DIR;
+      if (subfolder === 'photos') baseDir = STORAGE_PATHS.PHOTOS_DIR;
+      else if (subfolder === 'thumbnails') baseDir = STORAGE_PATHS.THUMBNAILS_DIR;
+
+      const fullPath = path.join(baseDir, filename);
+      if (fs.existsSync(fullPath)) {
+        await fs.promises.unlink(fullPath);
+        logger.info(`Deleted file: ${fullPath}`);
+      }
+    } catch (err) {
+      logger.warn(`File deletion error: ${err.message}`);
+    }
+  },
 };
 
-/**
- * Validates and stores user photograph in private storage (before approval)
- */
-export const storePrivatePhoto = async (fileData, originalName, mimeType, photoOrder) => {
-  if (!ALLOWED_PHOTO_MIMES.includes(mimeType)) {
-    throw new Error('Unsupported photo format. Allowed: JPEG, PNG, WebP.');
-  }
-
-  const buffer = Buffer.isBuffer(fileData) ? fileData : Buffer.from(fileData, 'base64');
-  if (buffer.length > MAX_FILE_SIZE_BYTES) {
-    throw new Error('Photo exceeds maximum permitted file size of 5MB.');
-  }
-
-  const ext = path.extname(originalName) || '.jpg';
-  const safeFileName = `photo_p${photoOrder}_${Date.now()}_${crypto.randomBytes(6).toString('hex')}${ext}`;
-  const filePath = path.join(PHOTOS_DIR, safeFileName);
-
-  fs.writeFileSync(filePath, buffer);
-  logger.info(`Stored private applicant photograph: ${safeFileName}`);
-
-  return {
-    filePath: safeFileName,
-    fileSize: buffer.length,
-    mimeType,
-    photoOrder
-  };
-};
-
-/**
- * Reads a private document safely for authorized admin streaming
- */
-export const getPrivateDocumentStream = (safeFileName) => {
-  const normalized = path.basename(safeFileName);
-  const fullPath = path.join(DOCS_DIR, normalized);
-  if (!fs.existsSync(fullPath)) {
-    throw new Error('Requested document not found in private storage');
-  }
-  return fs.createReadStream(fullPath);
-};
-
-export default {
-  storePrivateDocument,
-  storePrivatePhoto,
-  getPrivateDocumentStream,
-};
+export default storageService;

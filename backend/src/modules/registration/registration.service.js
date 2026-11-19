@@ -1,23 +1,29 @@
 import * as argon2 from 'argon2';
 import prisma from '../../config/prisma.js';
+import imageService from '../../services/imageService.js';
+import emailService from '../../services/emailService.js';
 import { generateApplicationId, calculateReviewDeadline, getReviewTimelineMetrics } from '../../utils/applicationUtils.js';
+import logger from '../../utils/logger.js';
 
-export const submitRegistrationApplication = async (data) => {
+export const submitRegistrationApplication = async (data, files = {}) => {
+  const emailClean = (data.email || '').toLowerCase().trim();
+  const mobileClean = (data.mobileNumber || data.mobile || '').trim();
+
   // 1. Prevent duplicate email / mobile in active users OR pending applications
   const [existingUser, existingPending] = await Promise.all([
     prisma.user.findFirst({
       where: {
         OR: [
-          { email: data.email.toLowerCase() },
-          { mobileNumber: data.mobileNumber },
+          { email: emailClean },
+          { mobileNumber: mobileClean },
         ],
       },
     }),
     prisma.pendingRegistration.findFirst({
       where: {
         OR: [
-          { email: data.email.toLowerCase() },
-          { mobileNumber: data.mobileNumber },
+          { email: emailClean },
+          { mobileNumber: mobileClean },
         ],
         status: { in: ['PENDING_REVIEW', 'UNDER_REVIEW', 'NEEDS_CORRECTION', 'RESUBMITTED'] },
       },
@@ -25,7 +31,7 @@ export const submitRegistrationApplication = async (data) => {
   ]);
 
   if (existingUser) {
-    if (existingUser.email.toLowerCase() === data.email.toLowerCase()) {
+    if (existingUser.email.toLowerCase() === emailClean) {
       throw new Error('An account with this email address already exists.');
     }
     throw new Error('An account with this mobile number already exists.');
@@ -48,19 +54,45 @@ export const submitRegistrationApplication = async (data) => {
     throw new Error('Applicant does not satisfy the 18+ eligibility requirement.');
   }
 
-  // 3. Password Hashing using Argon2id
+  // 3. Extract and Validate Exactly 3 Photographs
+  const rawPhoto1 = files?.photo_1?.[0]?.buffer || files?.photo1?.[0]?.buffer || data.photo1 || data.photo_1;
+  const rawPhoto2 = files?.photo_2?.[0]?.buffer || files?.photo2?.[0]?.buffer || data.photo2 || data.photo_2;
+  const rawPhoto3 = files?.photo_3?.[0]?.buffer || files?.photo3?.[0]?.buffer || data.photo3 || data.photo_3;
+
+  if (!rawPhoto1 || !rawPhoto2 || !rawPhoto3) {
+    throw new Error('Exactly THREE photographs (Photo 1, Photo 2, Photo 3) are mandatory for campus safety verification.');
+  }
+
+  // 4. Extract and Validate Identity Verification Document
+  const rawDoc = files?.identity_document?.[0]?.buffer || files?.document?.[0]?.buffer || data.documentUrl || data.verification_id_url;
+  const docOriginalName = files?.identity_document?.[0]?.originalname || files?.document?.[0]?.originalname || 'college_id.jpg';
+  const docMime = files?.identity_document?.[0]?.mimetype || files?.document?.[0]?.mimetype || 'image/jpeg';
+
+  if (!rawDoc) {
+    throw new Error('College identity verification document (College ID or Govt ID) is required.');
+  }
+
+  // 5. Process Images with Sharp (strip EXIF/GPS, WebP conversion, thumbnails)
+  const [photo1Result, photo2Result, photo3Result, docResult] = await Promise.all([
+    imageService.processAndSavePhoto(rawPhoto1, 1),
+    imageService.processAndSavePhoto(rawPhoto2, 2),
+    imageService.processAndSavePhoto(rawPhoto3, 3),
+    imageService.processAndSaveDocument(rawDoc, docOriginalName, docMime),
+  ]);
+
+  // 6. Password Hashing using Argon2id
   const passwordHash = await argon2.hash(data.password, {
     type: argon2.argon2id,
     memoryCost: 65536,
     timeCost: 3,
   });
 
-  // 4. Generate Application ID and 72-Hour Review Deadline
+  // 7. Generate Application ID and 72-Hour Review Deadline
   const applicationId = generateApplicationId();
   const submittedAt = new Date();
   const reviewDeadline = calculateReviewDeadline(submittedAt);
 
-  // 5. Transaction: Create PendingRegistration + IdentityDocument + 3 Photos
+  // 8. Transaction: Create PendingRegistration + IdentityDocument + 3 Photos + VerificationHistory
   const result = await prisma.$transaction(async (tx) => {
     const app = await tx.pendingRegistration.create({
       data: {
@@ -70,35 +102,35 @@ export const submitRegistrationApplication = async (data) => {
         displayName: data.displayName.trim(),
         dateOfBirth: birthDate,
         age: calculatedAge,
-        gender: data.gender || null,
+        gender: data.gender || 'Not specified',
         city: data.city.trim(),
         state: data.state.trim(),
-        languagesSpoken: data.languagesSpoken,
-        email: data.email.toLowerCase().trim(),
-        mobileNumber: data.mobileNumber.trim(),
+        languagesSpoken: data.languagesSpoken || ['English', 'Hindi'],
+        email: emailClean,
+        mobileNumber: mobileClean,
         passwordHash,
 
         // Step 2 Education
         collegeName: data.collegeName.trim(),
-        universityName: data.universityName?.trim() || null,
-        collegeLocation: data.collegeLocation?.trim() || null,
-        collegeState: data.collegeState?.trim() || null,
+        universityName: data.universityName?.trim() || 'Affiliated / Autonomous',
+        collegeLocation: data.collegeLocation?.trim() || data.city.trim(),
+        collegeState: data.collegeState?.trim() || data.state.trim(),
         degreeName: data.degreeName.trim(),
-        departmentStream: data.departmentStream.trim(),
-        academicYear: data.academicYear,
-        currentSemester: data.currentSemester || null,
-        graduationYear: data.graduationYear,
-        studentStatus: data.studentStatus,
+        departmentStream: data.departmentStream?.trim() || 'General Stream',
+        academicYear: data.academicYear || '1st Year',
+        currentSemester: data.currentSemester || 'Semester 1',
+        graduationYear: parseInt(data.graduationYear, 10) || 2026,
+        studentStatus: data.studentStatus || 'CURRENTLY_STUDYING',
 
         // Step 5 About & Preferences
-        bio: data.bio.trim(),
-        interests: data.interests,
-        hobbies: data.hobbies,
+        bio: data.bio?.trim() || `Student at ${data.collegeName}. Verified campus profile!`,
+        interests: data.interests || ['Music', 'Travelling'],
+        hobbies: data.hobbies || ['Reading'],
         personality: data.personality || null,
-        lookingFor: data.lookingFor,
-        ageRangeMin: data.ageRangeMin || 18,
-        ageRangeMax: data.ageRangeMax || 26,
-        preferredDistance: data.preferredDistance,
+        lookingFor: data.lookingFor || 'Friendship',
+        ageRangeMin: parseInt(data.ageRangeMin, 10) || 18,
+        ageRangeMax: parseInt(data.ageRangeMax, 10) || 26,
+        preferredDistance: data.preferredDistance || 'ANYWHERE_INDIA',
 
         // Step 6 Consents
         termsAccepted: true,
@@ -117,12 +149,13 @@ export const submitRegistrationApplication = async (data) => {
     await tx.identityDocument.create({
       data: {
         registrationId: app.id,
-        documentType: data.documentType,
+        documentType: data.documentType || 'COLLEGE_ID',
         documentNumberMasked: data.documentNumberMasked || null,
-        filePath: data.documentUrl,
-        fileName: `${data.documentType}_${applicationId}.jpg`,
-        fileSize: 1024 * 500, // estimated or provided
-        mimeType: 'image/jpeg',
+        filePath: docResult.filePath,
+        fileName: docResult.fileName,
+        fileSize: docResult.fileSize,
+        mimeType: docResult.mimeType,
+        fileHashSha256: docResult.fileHashSha256,
         isVerified: false,
       },
     });
@@ -132,21 +165,21 @@ export const submitRegistrationApplication = async (data) => {
       data: [
         {
           registrationId: app.id,
-          photoUrl: data.photo1,
+          photoUrl: photo1Result.filePath,
           photoOrder: 1,
           isMain: true,
           isApproved: false,
         },
         {
           registrationId: app.id,
-          photoUrl: data.photo2,
+          photoUrl: photo2Result.filePath,
           photoOrder: 2,
           isMain: false,
           isApproved: false,
         },
         {
           registrationId: app.id,
-          photoUrl: data.photo3,
+          photoUrl: photo3Result.filePath,
           photoOrder: 3,
           isMain: false,
           isApproved: false,
@@ -161,7 +194,7 @@ export const submitRegistrationApplication = async (data) => {
         adminId: 'SYSTEM',
         adminName: 'Registration Gateway',
         action: 'SUBMITTED',
-        notes: 'Application successfully created and queued for manual human review.',
+        notes: 'Applicant completed all 6 steps, uploaded College ID and 3 photos. Placed in 72-hour review queue.',
         correctionFields: [],
       },
     });
@@ -169,143 +202,204 @@ export const submitRegistrationApplication = async (data) => {
     return app;
   });
 
+  // 9. Dispatch Nodemailer Application Confirmation
+  emailService.sendApplicationSubmitted({
+    email: emailClean,
+    legalName: data.legalName.trim(),
+    applicationId,
+    reviewDeadline,
+  }).catch((err) => logger.warn(`Email notice dispatch skipped: ${err.message}`));
+
   return {
-    applicationId: result.applicationId,
-    status: result.status,
-    submittedAt: result.submittedAt,
-    reviewDeadline: result.reviewDeadline,
-    targetReviewHours: 72,
+    success: true,
+    applicationId,
+    status: 'PENDING_REVIEW',
+    submittedAt,
+    reviewDeadline,
+    targetHours: 72,
     message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.',
   };
 };
 
-export const getApplicationStatus = async (applicationId, emailOrMobile) => {
-  const application = await prisma.pendingRegistration.findFirst({
-    where: applicationId
-      ? { applicationId }
-      : {
-          OR: [
-            { email: emailOrMobile?.toLowerCase() },
-            { mobileNumber: emailOrMobile },
-          ],
-        },
+export const getApplicationStatus = async (applicationId, identifier) => {
+  const whereClause = {};
+
+  if (applicationId) {
+    whereClause.OR = [
+      { id: applicationId },
+      { applicationId: applicationId.toUpperCase() },
+    ];
+  } else if (identifier) {
+    const clean = identifier.trim();
+    whereClause.OR = [
+      { email: clean.toLowerCase() },
+      { mobileNumber: clean },
+      { applicationId: clean.toUpperCase() },
+    ];
+  }
+
+  const app = await prisma.pendingRegistration.findFirst({
+    where: whereClause,
     include: {
       photographs: { orderBy: { photoOrder: 'asc' } },
       identityDocument: true,
-      reviewHistory: { orderBy: { timestamp: 'desc' } },
+      reviewHistory: { orderBy: { createdAt: 'desc' } },
     },
   });
 
-  if (!application) {
-    throw new Error('No pending or reviewed registration found for provided identifier.');
+  if (!app) {
+    throw new Error('No application found with the provided identifier.');
   }
 
-  const timeline = getReviewTimelineMetrics(
-    application.submittedAt,
-    application.reviewDeadline,
-    application.status
-  );
+  const timeline = getReviewTimelineMetrics(app.submittedAt, app.reviewDeadline, app.status);
 
   return {
-    applicationId: application.applicationId,
-    status: application.status,
-    applicantName: application.displayName,
-    legalName: application.legalName,
-    collegeName: application.collegeName,
-    degreeName: application.degreeName,
-    email: application.email,
-    mobile: application.mobileNumber,
+    applicationId: app.applicationId,
+    status: app.status,
+    submittedAt: app.submittedAt,
+    reviewDeadline: app.reviewDeadline,
     timeline,
-    correctionFields: application.correctionFields,
-    correctionMessage: application.correctionMessage,
-    rejectionReason: application.rejectionReason,
-    reviewHistory: application.reviewHistory,
+    applicant: {
+      legalName: app.legalName,
+      displayName: app.displayName,
+      email: app.email,
+      mobileNumber: app.mobileNumber,
+      collegeName: app.collegeName,
+      degreeName: app.degreeName,
+    },
+    correctionFields: app.correctionFields,
+    correctionMessage: app.correctionMessage,
+    rejectionReason: app.rejectionReason,
+    photos: app.photographs.map((p) => ({
+      order: p.photoOrder,
+      isMain: p.isMain,
+      url: `/api/v1/admin/documents/photos/${p.photoUrl}`,
+    })),
+    identityDocument: app.identityDocument
+      ? {
+          type: app.identityDocument.documentType,
+          url: `/api/v1/admin/documents/documents/${app.identityDocument.filePath}`,
+          verified: app.identityDocument.isVerified,
+        }
+      : null,
   };
 };
 
-export const resubmitCorrection = async (data) => {
-  const application = await prisma.pendingRegistration.findUnique({
-    where: { applicationId: data.applicationId },
+export const resubmitCorrection = async (data, files = {}) => {
+  const { applicationId } = data;
+
+  const app = await prisma.pendingRegistration.findFirst({
+    where: {
+      OR: [{ id: applicationId }, { applicationId: applicationId.toUpperCase() }],
+    },
+    include: { photographs: true, identityDocument: true },
   });
 
-  if (!application) {
-    throw new Error('Application not found');
+  if (!app) {
+    throw new Error('Application not found.');
   }
 
-  if (application.status !== 'NEEDS_CORRECTION') {
-    throw new Error(`Application cannot be resubmitted. Current status is ${application.status}.`);
+  if (app.status !== 'NEEDS_CORRECTION') {
+    throw new Error(`Application is in ${app.status} status and does not require corrections.`);
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const updatedApp = await tx.pendingRegistration.update({
-      where: { applicationId: data.applicationId },
-      data: {
-        legalName: data.legalName ? data.legalName.trim() : undefined,
-        collegeName: data.collegeName ? data.collegeName.trim() : undefined,
-        degreeName: data.degreeName ? data.degreeName.trim() : undefined,
-        departmentStream: data.departmentStream ? data.departmentStream.trim() : undefined,
-        academicYear: data.academicYear || undefined,
-        bio: data.bio ? data.bio.trim() : undefined,
-        status: 'RESUBMITTED',
-        correctionFields: [],
-        correctionMessage: null,
-        submittedAt: new Date(),
-        reviewDeadline: calculateReviewDeadline(new Date()),
-      },
-    });
+  const updateData = {
+    status: 'RESUBMITTED',
+    correctionFields: [],
+    correctionMessage: null,
+    submittedAt: new Date(),
+    reviewDeadline: calculateReviewDeadline(new Date()),
+  };
 
-    // Update document if provided
-    if (data.documentUrl) {
-      await tx.identityDocument.updateMany({
-        where: { registrationId: application.id },
+  if (data.legalName) updateData.legalName = data.legalName.trim();
+  if (data.collegeName) updateData.collegeName = data.collegeName.trim();
+  if (data.degreeName) updateData.degreeName = data.degreeName.trim();
+  if (data.departmentStream) updateData.departmentStream = data.departmentStream.trim();
+  if (data.bio) updateData.bio = data.bio.trim();
+
+  // If new identity document provided
+  const rawDoc = files?.identity_document?.[0]?.buffer || files?.document?.[0]?.buffer || data.documentUrl;
+  if (rawDoc) {
+    const docResult = await imageService.processAndSaveDocument(
+      rawDoc,
+      files?.identity_document?.[0]?.originalname || 'college_id.jpg',
+      files?.identity_document?.[0]?.mimetype || 'image/jpeg'
+    );
+    if (app.identityDocument) {
+      await prisma.identityDocument.update({
+        where: { id: app.identityDocument.id },
         data: {
-          filePath: data.documentUrl,
-          documentType: data.documentType || 'COLLEGE_ID',
+          filePath: docResult.filePath,
+          fileName: docResult.fileName,
+          fileSize: docResult.fileSize,
+          mimeType: docResult.mimeType,
+          fileHashSha256: docResult.fileHashSha256,
         },
       });
     }
+  }
 
-    // Update photos if provided
-    if (data.photo1) {
-      await tx.userPhoto.updateMany({
-        where: { registrationId: application.id, photoOrder: 1 },
-        data: { photoUrl: data.photo1 },
-      });
-    }
-    if (data.photo2) {
-      await tx.userPhoto.updateMany({
-        where: { registrationId: application.id, photoOrder: 2 },
-        data: { photoUrl: data.photo2 },
-      });
-    }
-    if (data.photo3) {
-      await tx.userPhoto.updateMany({
-        where: { registrationId: application.id, photoOrder: 3 },
-        data: { photoUrl: data.photo3 },
-      });
-    }
+  // If new photos provided
+  const rawPhoto1 = files?.photo_1?.[0]?.buffer || data.photo1;
+  const rawPhoto2 = files?.photo_2?.[0]?.buffer || data.photo2;
+  const rawPhoto3 = files?.photo_3?.[0]?.buffer || data.photo3;
 
-    // Record review history
+  if (rawPhoto1) {
+    const p1 = await imageService.processAndSavePhoto(rawPhoto1, 1);
+    await prisma.userPhoto.updateMany({
+      where: { registrationId: app.id, photoOrder: 1 },
+      data: { photoUrl: p1.filePath },
+    });
+  }
+  if (rawPhoto2) {
+    const p2 = await imageService.processAndSavePhoto(rawPhoto2, 2);
+    await prisma.userPhoto.updateMany({
+      where: { registrationId: app.id, photoOrder: 2 },
+      data: { photoUrl: p2.filePath },
+    });
+  }
+  if (rawPhoto3) {
+    const p3 = await imageService.processAndSavePhoto(rawPhoto3, 3);
+    await prisma.userPhoto.updateMany({
+      where: { registrationId: app.id, photoOrder: 3 },
+      data: { photoUrl: p3.filePath },
+    });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const res = await tx.pendingRegistration.update({
+      where: { id: app.id },
+      data: updateData,
+    });
+
     await tx.verificationHistory.create({
       data: {
-        registrationId: application.id,
+        registrationId: app.id,
         adminId: 'APPLICANT',
-        adminName: application.displayName,
+        adminName: app.displayName,
         action: 'RESUBMITTED',
-        notes: data.correctionNote || 'Applicant updated requested correction fields and resubmitted.',
+        notes: data.correctionNote || 'Applicant updated requested fields and resubmitted for admin review.',
         correctionFields: [],
       },
     });
 
-    return updatedApp;
+    return res;
   });
 
+  // Dispatch resubmission email
+  emailService.sendResubmissionConfirmation({
+    email: app.email,
+    legalName: app.legalName,
+    applicationId: app.applicationId,
+    reviewDeadline: updateData.reviewDeadline,
+  }).catch((err) => logger.warn(`Resubmission email skipped: ${err.message}`));
+
   return {
+    success: true,
     applicationId: updated.applicationId,
-    status: updated.status,
-    submittedAt: updated.submittedAt,
+    status: 'RESUBMITTED',
     reviewDeadline: updated.reviewDeadline,
-    message: 'Your corrected application has been resubmitted successfully. It is now back with the verification team.',
+    message: 'Corrected application resubmitted! Our team will continue verification.',
   };
 };
 

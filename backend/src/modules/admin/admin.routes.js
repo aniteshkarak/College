@@ -28,6 +28,8 @@ router.post('/applications/:id/reject', requireAuth, requireAdmin, applicationsC
 router.post('/applications/:id/request-correction', requireAuth, requireAdmin, applicationsController.requestCorrection);
 router.get('/applications/:id/history', requireAuth, requireAdmin, applicationsController.getReviewHistory);
 router.get('/applications/:id/documents/:documentId', requireAuth, requireAdmin, applicationsController.getPrivateDocument);
+router.get('/documents/:subfolder/:filename', requireAuth, requireAdmin, applicationsController.streamPrivateFile);
+router.get('/documents/:filename', requireAuth, requireAdmin, applicationsController.streamPrivateFile);
 
 // Backward-compatible alias for verifications
 router.get('/verifications/pending', requireAuth, requireAdmin, (req, res) => {

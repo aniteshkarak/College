@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import storageService from '../../services/storageService.js';
+import emailService from '../../services/emailService.js';
 import { getReviewTimelineMetrics } from '../../utils/applicationUtils.js';
 import { success, error } from '../../utils/response.js';
 import { z } from 'zod';
@@ -273,6 +274,14 @@ export const startReview = async (req, res) => {
       return app;
     });
 
+    // Notify applicant that their application is actively being checked
+    emailService.sendUnderReviewNotification({
+      email: application.email,
+      legalName: application.legalName,
+      applicationId: application.applicationId,
+      adminName: req.user?.fullName || 'Super Administrator',
+    }).catch(() => {});
+
     return success(res, updated, 'Application marked as UNDER_REVIEW');
   } catch (err) {
     return error(res, err.message, 500);
@@ -415,6 +424,14 @@ export const approveApplication = async (req, res) => {
       return { user: newUser, application: updatedApp };
     });
 
+    // Dispatch approval notice email with activation confirmation
+    emailService.sendApprovalEmail({
+      email: application.email,
+      legalName: application.legalName,
+      displayName: application.displayName,
+      applicationId: application.applicationId,
+    }).catch(() => {});
+
     return success(
       res,
       {
@@ -482,6 +499,14 @@ export const rejectApplication = async (req, res) => {
       return app;
     });
 
+    // Dispatch rejection email with clear explanation
+    emailService.sendRejectionEmail({
+      email: application.email,
+      legalName: application.legalName,
+      applicationId: application.applicationId,
+      reason,
+    }).catch(() => {});
+
     return success(
       res,
       { applicationId: updated.applicationId, status: updated.status, rejectionReason: reason },
@@ -496,7 +521,8 @@ export const rejectApplication = async (req, res) => {
  * POST /api/v1/admin/applications/:id/request-correction
  */
 const correctionSchema = z.object({
-  correctionFields: z.array(z.string()).min(1, 'Please specify at least one field requiring correction'),
+  correctionFields: z.array(z.string()).optional(),
+  fields: z.array(z.string()).optional(),
   message: z.string().min(5, 'Correction instructions for the applicant are required'),
 });
 
@@ -518,13 +544,14 @@ export const requestCorrection = async (req, res) => {
 
     const adminId = req.user?.id || 'ADMIN_SUPER';
     const adminName = req.user?.fullName || 'Super Administrator';
+    const targetFields = parseResult.data.correctionFields || parseResult.data.fields || [];
 
     const updated = await prisma.$transaction(async (tx) => {
       const app = await tx.pendingRegistration.update({
         where: { id: application.id },
         data: {
           status: 'NEEDS_CORRECTION',
-          correctionFields: parseResult.data.correctionFields,
+          correctionFields: targetFields,
           correctionMessage: parseResult.data.message,
         },
       });
@@ -536,12 +563,21 @@ export const requestCorrection = async (req, res) => {
           adminName,
           action: 'REQUESTED_CORRECTION',
           notes: parseResult.data.message,
-          correctionFields: parseResult.data.correctionFields,
+          correctionFields: targetFields,
         },
       });
 
       return app;
     });
+
+    // Dispatch correction request email with instructions
+    emailService.sendCorrectionRequestEmail({
+      email: application.email,
+      legalName: application.legalName,
+      applicationId: application.applicationId,
+      fields: targetFields,
+      message: parseResult.data.message,
+    }).catch(() => {});
 
     return success(
       res,
@@ -595,9 +631,9 @@ export const getPrivateDocument = async (req, res) => {
 
     // If it's a relative private storage file:
     if (!doc.filePath.startsWith('http')) {
-      const stream = storageService.getPrivateDocumentStream(doc.filePath);
-      res.setHeader('Content-Type', doc.mimeType);
-      res.setHeader('Content-Disposition', `inline; filename="${doc.fileName}"`);
+      const { stream, mimeType, filename: safeName } = storageService.getPrivateFileStream('documents', doc.filePath);
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
       return stream.pipe(res);
     }
 
@@ -605,6 +641,22 @@ export const getPrivateDocument = async (req, res) => {
     return res.redirect(doc.filePath);
   } catch (err) {
     return error(res, err.message, 500);
+  }
+};
+
+/**
+ * Stream private document or photograph securely to authorized admin
+ * GET /api/v1/admin/documents/:subfolder/:filename
+ */
+export const streamPrivateFile = async (req, res) => {
+  try {
+    const { subfolder = 'documents', filename } = req.params;
+    const { stream, mimeType, filename: safeName } = storageService.getPrivateFileStream(subfolder, filename);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    return stream.pipe(res);
+  } catch (err) {
+    return error(res, err.message, err.statusCode || 500);
   }
 };
 
@@ -618,4 +670,5 @@ export default {
   requestCorrection,
   getReviewHistory,
   getPrivateDocument,
+  streamPrivateFile,
 };

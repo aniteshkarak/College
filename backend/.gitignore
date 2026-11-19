@@ -1,0 +1,11 @@
+node_modules/
+.env
+storage/private/*
+!storage/private/.gitkeep
+!storage/private/documents/.gitkeep
+!storage/private/photos/.gitkeep
+!storage/private/thumbnails/.gitkeep
+!storage/private/discovery/.gitkeep
+logs/
+*.tmp.*
+.DS_Store
