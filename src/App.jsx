@@ -32,9 +32,17 @@ import SettingsView from './components/profile/SettingsView';
 import AdminDashboard from './components/admin/AdminDashboard';
 
 const MainLayout = () => {
-  const { currentView, activeChatMatch, setActiveChatMatch, isAuthenticated, navigateTo } = useApp();
+  const {
+    currentView,
+    activeChatMatch,
+    setActiveChatMatch,
+    isAuthenticated,
+    navigateTo,
+    isAuthModalOpen,
+    setIsAuthModalOpen,
+    setAuthModalMode
+  } = useApp();
   const [isMoodModalOpen, setIsMoodModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">

@@ -530,3 +530,45 @@ export const ADMIN_AUDIT_LOGS = [
     timestamp: '2026-11-17T12:00:00.000Z'
   }
 ];
+
+// PENDING STUDENT REGISTRATIONS AWAITING ADMIN ID VERIFICATION
+export const INITIAL_PENDING_VERIFICATIONS = [
+  {
+    id: 'reg_verify_001',
+    full_name: 'Sourav Ganguly',
+    display_name: 'Sourav',
+    date_of_birth: '2004-03-12',
+    age: 22,
+    gender: 'Male',
+    email: 'sourav.ganguly@gmail.com',
+    mobile: '9830123456',
+    college_name: 'St. Xavier\'s College, Kolkata',
+    course: 'B.Com Honours',
+    photo_1: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80',
+    photo_2: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=600&q=80',
+    verification_id_type: 'College Student ID',
+    verification_id_url: 'https://images.unsplash.com/photo-1578357078586-491adf1aa5ba?auto=format&fit=crop&w=800&q=80',
+    submitted_at: '2026-11-19T06:15:00.000Z',
+    status: 'PENDING_APPROVAL',
+    rejection_reason: null
+  },
+  {
+    id: 'reg_verify_002',
+    full_name: 'Debolina Bose',
+    display_name: 'Debolina',
+    date_of_birth: '2003-08-25',
+    age: 23,
+    gender: 'Female',
+    email: 'debolina.bose@gmail.com',
+    mobile: '9831987654',
+    college_name: 'Jadavpur University',
+    course: 'MA English Literature',
+    photo_1: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+    photo_2: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80',
+    verification_id_type: 'Govt Voter ID',
+    verification_id_url: 'https://images.unsplash.com/photo-1589330694653-dad6d3240a2b?auto=format&fit=crop&w=800&q=80',
+    submitted_at: '2026-11-19T07:30:00.000Z',
+    status: 'PENDING_APPROVAL',
+    rejection_reason: null
+  }
+];

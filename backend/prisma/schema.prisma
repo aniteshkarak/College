@@ -1,0 +1,162 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// User Account & Profile Model
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String
+  mobileNumber          String?   @unique
+  fullName              String
+  displayName           String
+  dateOfBirth           DateTime
+  age                   Int
+  gender                String
+  interestedIn          String[]
+  city                  String
+  state                 String
+  collegeName           String?
+  course                String?
+  avatarUrl             String?   // Photo 1 (Required)
+  additionalPhotos      String[]  // Photo 2+ (At least 1 required in additionalPhotos)
+  bio                   String?
+  interests             String[]
+  relationshipIntention String    @default("Casual Connection") // Casual Connection | Dating Connection | Serious Relationship
+  currentMood           String?   @default("Want to make friends")
+  
+  // Role & Admin Verification Pipeline
+  role                  String    @default("STUDENT") // STUDENT | ADMIN
+  verificationStatus    String    @default("PENDING_APPROVAL") // PENDING_APPROVAL | APPROVED | REJECTED
+  verificationIdUrl     String?   // Uploaded College ID or Govt ID document URL
+  verificationIdType    String?   @default("COLLEGE_ID") // COLLEGE_ID | GOVT_ID
+  rejectionReason       String?   // Reason provided by Admin if declined
+  
+  // Subscription Plan (PRD: Free, ₹49, ₹99 per 28 days)
+  subscriptionPlan      String    @default("free") // free | pro_49 | unlimited_99
+  planExpiresAt         DateTime?
+  sentRequestsCount     Int       @default(0)
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relationships
+  sentRequests          MatchRequest[]       @relation("SentRequests")
+  receivedRequests      MatchRequest[]       @relation("ReceivedRequests")
+  matchesAsUser1        Match[]              @relation("User1Matches")
+  matchesAsUser2        Match[]              @relation("User2Matches")
+  sentMessages          Message[]
+  announcements         CampusAnnouncement[]
+  reportsFiled          Report[]             @relation("Reporter")
+  reportsReceived       Report[]             @relation("ReportedUser")
+}
+
+// Match Request: Sent by one user to another (Like)
+model MatchRequest {
+  id          String   @id @default(uuid())
+  senderId    String
+  receiverId  String
+  status      String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sender      User     @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+}
+
+// Mutual Match: Created ONLY when a user accepts an incoming match request
+model Match {
+  id             String           @id @default(uuid())
+  user1Id        String
+  user2Id        String
+  status         String           @default("ACTIVE") // ACTIVE | UNMATCHED | BLOCKED
+  stage          String           @default("Friend")  // Friend -> Dating -> Relationship
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user1          User             @relation("User1Matches", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2          User             @relation("User2Matches", fields: [user2Id], references: [id], onDelete: Cascade)
+  conversation   Conversation?
+  goRequests     GoStageRequest[]
+
+  @@unique([user1Id, user2Id])
+}
+
+// "GO" Button Stage Transition Request (Friend -> Dating -> Relationship)
+model GoStageRequest {
+  id            String   @id @default(uuid())
+  matchId       String
+  initiatorId   String
+  targetStage   String   // Dating | Relationship
+  status        String   @default("PENDING") // PENDING | ACCEPTED | REFUSED
+  refusalReason String?  // Explanation sent via chat if refused
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  match         Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+// Private 1-on-1 Chat Conversation between Mutual Friends
+model Conversation {
+  id        String    @id @default(uuid())
+  matchId   String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+// Message in a Conversation (Text or 60s Voice Note - Strictly No Video Calling)
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  messageType    String       @default("TEXT") // TEXT | VOICE_NOTE | SYSTEM_PROMPT
+  mediaUrl       String?
+  voiceDuration  Int?         // in seconds (max 60s)
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+// Campus Board: Public College-Exclusive Announcements
+model CampusAnnouncement {
+  id          String   @id @default(uuid())
+  collegeName String
+  title       String
+  content     String
+  category    String   @default("General")
+  isUrgent    Boolean  @default(false)
+  upvotes     Int      @default(0)
+  authorId    String
+  createdAt   DateTime @default(now())
+
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([collegeName])
+}
+
+// Safety, Moderation and Abuse Reports
+model Report {
+  id             String   @id @default(uuid())
+  reporterId     String
+  reportedUserId String
+  category       String
+  reason         String
+  status         String   @default("PENDING") // PENDING | REVIEWED | ACTION_TAKEN | DISMISSED
+  createdAt      DateTime @default(now())
+
+  reporter       User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser   User     @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+}

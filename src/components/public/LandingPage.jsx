@@ -18,11 +18,16 @@ import {
 } from 'lucide-react';
 
 export const LandingPage = () => {
-  const { navigateTo, setIsAuthenticated } = useApp();
+  const { navigateTo, setIsAuthModalOpen, setAuthModalMode } = useApp();
 
   const handleJoin = () => {
-    setIsAuthenticated(true);
-    navigateTo('discover');
+    setAuthModalMode('register');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleLogin = () => {
+    setAuthModalMode('login');
+    setIsAuthModalOpen(true);
   };
 
   const connectionPillars = [

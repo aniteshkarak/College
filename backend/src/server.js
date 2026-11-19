@@ -1,0 +1,109 @@
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import app from './app.js';
+import config from './config/env.js';
+import logger from './utils/logger.js';
+import prisma from './config/prisma.js';
+import redis from './config/redis.js';
+
+const httpServer = createServer(app);
+
+// Socket.IO Real-time server
+const io = new Server(httpServer, {
+  cors: {
+    origin: config.corsOrigin,
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+});
+
+io.on('connection', (socket) => {
+  logger.info(`⚡ Socket.IO client connected: ${socket.id}`);
+
+  // Join personal conversation room
+  socket.on('join_conversation', (conversationId) => {
+    socket.join(`conv_${conversationId}`);
+    logger.debug(`Socket ${socket.id} joined conversation: conv_${conversationId}`);
+  });
+
+  // Real-time message exchange
+  socket.on('send_message', (data) => {
+    if (data?.conversationId) {
+      socket.to(`conv_${data.conversationId}`).emit('new_message', data.message);
+    }
+  });
+
+  // Typing indicators
+  socket.on('typing_start', (data) => {
+    if (data?.conversationId) {
+      socket.to(`conv_${data.conversationId}`).emit('partner_typing', {
+        userId: data.userId,
+        displayName: data.displayName,
+      });
+    }
+  });
+
+  socket.on('typing_stop', (data) => {
+    if (data?.conversationId) {
+      socket.to(`conv_${data.conversationId}`).emit('partner_stopped_typing', {
+        userId: data.userId,
+      });
+    }
+  });
+
+  // Real-time "GO" button stage transition events
+  socket.on('go_request_sent', (data) => {
+    if (data?.matchId) {
+      socket.broadcast.emit(`go_update_${data.matchId}`, {
+        type: 'request',
+        targetStage: data.targetStage,
+        fromUser: data.fromUser,
+      });
+    }
+  });
+
+  socket.on('go_request_refused', (data) => {
+    if (data?.matchId) {
+      socket.broadcast.emit(`go_update_${data.matchId}`, {
+        type: 'refusal',
+        reason: data.reason,
+      });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    logger.info(`Client disconnected: ${socket.id}`);
+  });
+});
+
+const PORT = config.port;
+
+httpServer.listen(PORT, '0.0.0.0', () => {
+  logger.info(`===================================================`);
+  logger.info(`🚀 Collégé Backend API Server running on port ${PORT}`);
+  logger.info(`📡 Health Check URL: http://localhost:${PORT}/api/v1/health`);
+  logger.info(`🌐 Environment: ${config.nodeEnv}`);
+  logger.info(`⚡ Real-time Socket.IO: Ready`);
+  logger.info(`===================================================`);
+});
+
+// Graceful Shutdown
+const gracefulShutdown = async (signal) => {
+  logger.info(`${signal} signal received: closing HTTP server...`);
+  httpServer.close(async () => {
+    logger.info('HTTP server closed. Disconnecting database & cache...');
+    try {
+      await prisma.$disconnect();
+      redis.disconnect();
+      logger.info('Prisma & Redis connections closed cleanly.');
+    } catch (err) {
+      logger.error('Error during teardown:', err.message);
+    }
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+export { app, httpServer, io };

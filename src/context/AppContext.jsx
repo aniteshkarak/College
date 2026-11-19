@@ -11,17 +11,35 @@ import {
   MOOD_OPTIONS,
   ADMIN_METRICS,
   ADMIN_REPORTS,
-  ADMIN_AUDIT_LOGS
+  ADMIN_AUDIT_LOGS,
+  INITIAL_PENDING_VERIFICATIONS
 } from '../services/mockData';
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
-  // Auth & View state
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
-  const [currentUser, setCurrentUser] = useState(INITIAL_USER);
-  const [currentView, setCurrentView] = useState('matches'); // Start in matches or discover
-  const [previousView, setPreviousView] = useState('matches');
+  // Auth & View state - By default unauthenticated (user cannot enter without login or creating account)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentView, setCurrentView] = useState('landing'); // Start on landing page
+  const [previousView, setPreviousView] = useState('landing');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register'
+
+  // Registered accounts database (Simulated)
+  const [registeredUsers, setRegisteredUsers] = useState([
+    {
+      ...INITIAL_USER,
+      email: 'anirban@iitkgp.ac.in',
+      mobile: '9876543210',
+      password: 'password123',
+      verification_status: 'APPROVED',
+      role: 'ADMIN' // Super Admin
+    }
+  ]);
+
+  // Pending Verifications Queue for Admin (PRD: Student ID / Govt ID + at least 2 photos)
+  const [pendingVerifications, setPendingVerifications] = useState(INITIAL_PENDING_VERIFICATIONS);
 
   // Discovery
   const [profiles, setProfiles] = useState(DISCOVER_PROFILES);
@@ -99,7 +117,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // Current Plan Limits Helper
-  const currentPlanConfig = SUBSCRIPTION_PLANS[currentUser.subscription_plan] || SUBSCRIPTION_PLANS.free;
+  const currentPlanConfig = SUBSCRIPTION_PLANS[currentUser?.subscription_plan] || SUBSCRIPTION_PLANS.free;
 
   // ACCEPT / REJECT INCOMING LIKE (PRD Update)
   const handleAcceptLike = (likeItem) => {
@@ -483,7 +501,272 @@ export const AppProvider = ({ children }) => {
     addToast('Message deleted', 'info');
   };
 
+  // --- AUTHENTICATION & ADMIN VERIFICATION PIPELINE ---
+
+  // 1. Log In using Gmail/Email OR Mobile + Password
+  const loginWithCredentials = (identifier, password) => {
+    const cleanId = (identifier || '').trim().toLowerCase();
+
+    // Check in pending/reviewed verifications queue
+    const pendingMatch = pendingVerifications.find(
+      (v) => (v.email && v.email.toLowerCase() === cleanId) || (v.mobile && v.mobile === cleanId)
+    );
+
+    if (pendingMatch) {
+      if (pendingMatch.status === 'PENDING_APPROVAL') {
+        return {
+          success: false,
+          status: 'PENDING_APPROVAL',
+          student: pendingMatch,
+          message: 'Your account is under admin review. Campus administrators are currently verifying your College/Govt ID and 2 photos. Please wait for approval.'
+        };
+      }
+
+      if (pendingMatch.status === 'REJECTED') {
+        return {
+          success: false,
+          status: 'REJECTED',
+          student: pendingMatch,
+          reason: pendingMatch.rejection_reason || 'Verification ID or photos were declined by admin.',
+          message: `Verification declined by admin: "${pendingMatch.rejection_reason}". Please enter correct details and re-upload valid ID.`
+        };
+      }
+
+      if (pendingMatch.status === 'APPROVED') {
+        // Student was approved! Log in
+        const userObj = {
+          id: pendingMatch.id,
+          full_name: pendingMatch.full_name,
+          display_name: pendingMatch.display_name,
+          date_of_birth: pendingMatch.date_of_birth,
+          age: pendingMatch.age,
+          gender: pendingMatch.gender,
+          interested_in: ['Everyone'],
+          city: pendingMatch.city || 'Kolkata',
+          state: 'West Bengal',
+          college_name: pendingMatch.college_name,
+          course: pendingMatch.course,
+          relationship_intention: 'Dating Connection',
+          avatar_url: pendingMatch.photo_1,
+          additional_photos: [pendingMatch.photo_2],
+          bio: `Student at ${pendingMatch.college_name}. Verified campus profile!`,
+          interests: ['Music', 'Travelling', 'Coding'],
+          languages: ['English', 'Bengali', 'Hindi'],
+          is_active: true,
+          verification_status: 'ID Verified',
+          mood: 'Looking for a conversation',
+          subscription_plan: 'free',
+          sent_requests_count: 0,
+          created_at: pendingMatch.submitted_at
+        };
+
+        setCurrentUser(userObj);
+        setIsAuthenticated(true);
+        setCurrentView('matches');
+        addToast(`Welcome to Collégé, ${userObj.display_name}! 🎓✨`, 'success');
+        return { success: true, user: userObj };
+      }
+    }
+
+    // Check in registered users (including default Anirban demo account)
+    const userMatch = registeredUsers.find(
+      (u) =>
+        (u.email && u.email.toLowerCase() === cleanId) ||
+        (u.mobile && u.mobile === cleanId) ||
+        (cleanId === 'anirban' || cleanId === 'admin')
+    );
+
+    if (userMatch) {
+      setCurrentUser(userMatch);
+      setIsAuthenticated(true);
+      setCurrentView('matches');
+      addToast(`Welcome back, ${userMatch.display_name}! ✨`, 'success');
+      return { success: true, user: userMatch };
+    }
+
+    return {
+      success: false,
+      message: 'No account found with this email or mobile number. Please check credentials or create a new account.'
+    };
+  };
+
+  // 2. Register New Student (Enforces 18+, 2 photos, College/Govt ID verification proof)
+  const registerStudent = (studentData) => {
+    // Check duplicates
+    const duplicate = pendingVerifications.find(
+      (v) =>
+        (v.email && v.email.toLowerCase() === studentData.email.toLowerCase()) ||
+        (v.mobile && v.mobile === studentData.mobile)
+    );
+
+    if (duplicate && duplicate.status === 'PENDING_APPROVAL') {
+      return {
+        success: false,
+        status: 'PENDING_APPROVAL',
+        message: 'An application with this email or mobile number is already in the admin verification queue.'
+      };
+    }
+
+    const newReg = {
+      id: 'reg_verify_' + Date.now(),
+      full_name: studentData.full_name,
+      display_name: studentData.display_name,
+      date_of_birth: studentData.date_of_birth,
+      age: studentData.age,
+      gender: studentData.gender,
+      email: studentData.email,
+      mobile: studentData.mobile,
+      college_name: studentData.college_name,
+      course: studentData.course,
+      city: studentData.city || 'Kharagpur',
+      // Photos (Must be at least 2!)
+      photo_1: studentData.photo_1,
+      photo_2: studentData.photo_2,
+      // Verification ID
+      verification_id_type: studentData.verification_id_type || 'College Student ID',
+      verification_id_url: studentData.verification_id_url,
+      submitted_at: new Date().toISOString(),
+      status: 'PENDING_APPROVAL',
+      rejection_reason: null
+    };
+
+    setPendingVerifications((prev) => [newReg, ...prev]);
+    setAdminMetrics((prev) => ({
+      ...prev,
+      pending_verifications: prev.pending_verifications + 1
+    }));
+
+    return {
+      success: true,
+      status: 'PENDING_APPROVAL',
+      student: newReg,
+      message: 'Account details submitted! Your College/Govt ID and 2 photos are now in the Admin Verification Queue. Once accepted, you can log in.'
+    };
+  };
+
+  // 3. Resubmit Corrected Details if Admin Declined
+  const resubmitVerification = (regId, updatedData) => {
+    setPendingVerifications((prev) =>
+      prev.map((reg) => {
+        if (reg.id === regId) {
+          return {
+            ...reg,
+            ...updatedData,
+            status: 'PENDING_APPROVAL',
+            rejection_reason: null,
+            submitted_at: new Date().toISOString()
+          };
+        }
+        return reg;
+      })
+    );
+
+    addToast('Updated details and ID re-submitted for Admin verification!', 'info');
+    return { success: true };
+  };
+
+  // 4. Admin Accepts Student Registration -> Creates Active Verified Account
+  const approveStudentVerification = (regId) => {
+    const student = pendingVerifications.find((v) => v.id === regId);
+    if (!student) return;
+
+    setPendingVerifications((prev) =>
+      prev.map((v) => (v.id === regId ? { ...v, status: 'APPROVED', rejection_reason: null } : v))
+    );
+
+    // Create user profile in registered users
+    const newUser = {
+      id: student.id,
+      full_name: student.full_name,
+      display_name: student.display_name,
+      date_of_birth: student.date_of_birth,
+      age: student.age,
+      gender: student.gender,
+      email: student.email,
+      mobile: student.mobile,
+      college_name: student.college_name,
+      course: student.course,
+      avatar_url: student.photo_1,
+      additional_photos: [student.photo_2],
+      bio: `Student at ${student.college_name}. Verified campus profile!`,
+      interests: ['Music', 'Travelling', 'Coding'],
+      languages: ['English', 'Bengali', 'Hindi'],
+      is_active: true,
+      verification_status: 'ID Verified',
+      mood: 'Looking for a conversation',
+      subscription_plan: 'free',
+      sent_requests_count: 0,
+      created_at: new Date().toISOString()
+    };
+
+    setRegisteredUsers((prev) => [...prev, newUser]);
+
+    // Admin audit log & metrics update
+    const newLog = {
+      id: 'log_' + Date.now(),
+      admin: `SuperAdmin (${currentUser?.display_name || 'Admin'})`,
+      action: `APPROVED Student ID Verification for ${student.full_name} (${student.college_name})`,
+      reason: 'ID Document & photos verified authentic under DPDP guidelines',
+      timestamp: new Date().toISOString()
+    };
+    setAdminAuditLogs((prev) => [newLog, ...prev]);
+    setAdminMetrics((prev) => ({
+      ...prev,
+      pending_verifications: Math.max(0, prev.pending_verifications - 1),
+      total_users: prev.total_users + 1
+    }));
+
+    addToast(`Accepted registration for ${student.display_name}! Student account is now active. 🎓`, 'success');
+  };
+
+  // 5. Admin Declines Student Registration with Reason
+  const rejectStudentVerification = (regId, reason) => {
+    const student = pendingVerifications.find((v) => v.id === regId);
+    if (!student) return;
+
+    setPendingVerifications((prev) =>
+      prev.map((v) =>
+        v.id === regId ? { ...v, status: 'REJECTED', rejection_reason: reason } : v
+      )
+    );
+
+    // Admin audit log & metrics update
+    const newLog = {
+      id: 'log_' + Date.now(),
+      admin: `SuperAdmin (${currentUser?.display_name || 'Admin'})`,
+      action: `DECLINED Student Verification for ${student.full_name}`,
+      reason: reason || 'ID card unreadable or missing required details',
+      timestamp: new Date().toISOString()
+    };
+    setAdminAuditLogs((prev) => [newLog, ...prev]);
+    setAdminMetrics((prev) => ({
+      ...prev,
+      pending_verifications: Math.max(0, prev.pending_verifications - 1)
+    }));
+
+    addToast(`Declined verification for ${student.display_name}. Reason: "${reason}"`, 'warning');
+  };
+
+  // 6. Sign Out
+  const logout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setCurrentView('landing');
+    addToast('Logged out of Collégé.', 'info');
+  };
+
   const navigateTo = (view) => {
+    const publicViews = ['landing', 'about', 'how-it-works', 'safety', 'community', 'privacy', 'terms', 'contact'];
+    
+    // Gatekeeping: Without login or approved account, user cannot enter website
+    if (!isAuthenticated && !publicViews.includes(view)) {
+      setIsAuthModalOpen(true);
+      setAuthModalMode('login');
+      addToast('Please log in or create an account to enter Collégé.', 'info');
+      setCurrentView('landing');
+      return;
+    }
+
     setPreviousView(currentView);
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -541,7 +824,20 @@ export const AppProvider = ({ children }) => {
         discoveryFilters,
         setDiscoveryFilters,
         handleBlockUser,
-        handleReportUser
+        handleReportUser,
+        // Auth & Admin Verification Pipeline
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        authModalMode,
+        setAuthModalMode,
+        pendingVerifications,
+        setPendingVerifications,
+        loginWithCredentials,
+        registerStudent,
+        resubmitVerification,
+        approveStudentVerification,
+        rejectStudentVerification,
+        logout
       }}
     >
       {children}

@@ -31,7 +31,10 @@ export const Navbar = ({ onOpenMoodModal }) => {
     currentPlanConfig,
     setIsPremiumModalOpen,
     isAuthenticated,
-    setIsAuthenticated
+    setIsAuthenticated,
+    logout,
+    setIsAuthModalOpen,
+    setAuthModalMode
   } = useApp();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -296,13 +299,12 @@ export const Navbar = ({ onOpenMoodModal }) => {
                   <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
                     <button
                       onClick={() => {
-                        setIsAuthenticated(false);
-                        navigateTo('landing');
+                        logout();
                         setIsProfileOpen(false);
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl"
                     >
-                      <LogOut className="w-4 h-4" /> Guest Mode / Sign Out
+                      <LogOut className="w-4 h-4" /> Sign Out
                     </button>
                   </div>
                 </div>
@@ -312,21 +314,21 @@ export const Navbar = ({ onOpenMoodModal }) => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  setIsAuthenticated(true);
-                  navigateTo('matches');
+                  setAuthModalMode('login');
+                  setIsAuthModalOpen(true);
                 }}
-                className="px-4 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-full"
+                className="px-4 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-full"
               >
                 Log In
               </button>
               <button
                 onClick={() => {
-                  setIsAuthenticated(true);
-                  navigateTo('matches');
+                  setAuthModalMode('register');
+                  setIsAuthModalOpen(true);
                 }}
-                className="px-4 py-1.5 text-xs font-semibold text-white gradient-brand-bg rounded-full shadow-sm hover:shadow-md"
+                className="px-4 py-1.5 text-xs font-semibold text-white gradient-brand-bg rounded-full shadow-sm hover:shadow-md hover:brightness-105"
               >
-                Join Collégé
+                Create Account
               </button>
             </div>
           )}
