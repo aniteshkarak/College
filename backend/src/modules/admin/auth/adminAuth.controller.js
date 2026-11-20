@@ -22,8 +22,8 @@ export const login = async (req, res) => {
       parsed.data.password
     );
 
-    // Record administrator login audit trail
-    await prisma.adminAuditLog.create({
+    // Record administrator login audit trail asynchronously (fire-and-forget so DB delays don't slow down login)
+    prisma.adminAuditLog.create({
       data: {
         adminId: result.admin.id,
         action: 'LOGIN',
@@ -34,7 +34,7 @@ export const login = async (req, res) => {
         userAgent: req.get('user-agent') || null,
       },
     }).catch((auditErr) => {
-      console.error('Failed to record admin login audit log:', auditErr.message);
+      // Non-blocking background log
     });
 
     return success(res, result, result.message);

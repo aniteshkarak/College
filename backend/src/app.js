@@ -9,7 +9,13 @@ import rateLimit from 'express-rate-limit';
 import config from './config/env.js';
 import passport from './config/passport.js';
 import swaggerSpec from './config/swagger.js';
-import { getHealthStatus } from './services/healthService.js';
+import {
+  getHealthStatus,
+  getLivenessStatus,
+  getReadinessStatus,
+  getDatabaseHealth,
+  getRedisHealth,
+} from './services/healthService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { error } from './utils/response.js';
 import { requireActiveAccount } from './middleware/activeAccountGuard.js';
@@ -61,7 +67,58 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use(passport.initialize());
 
-// Rate Limiting (Applied across all API endpoints)
+// Root Welcome Endpoint (Unrestricted)
+app.get('/', (_req, res) => {
+  return res.json({
+    name: 'Collégé Backend API',
+    tagline: 'Meet. Chat. Connect.',
+    version: '1.0.0',
+    verificationPolicy: '100% Manual Human Verification (Up to 72 Hours)',
+    documentation: '/api-docs',
+    health: '/api/v1/health',
+    status: 'Running',
+  });
+});
+
+// Comprehensive Health & Diagnostics Endpoints (Exempt from rate limiting)
+const healthHandler = async (_req, res) => {
+  const status = await getHealthStatus();
+  const httpCode = status.status === 'UP' ? 200 : 503;
+  return res.status(httpCode).json(status);
+};
+
+app.get('/health', healthHandler);
+app.get('/api/v1/health', healthHandler);
+
+// Liveness endpoint (Checks if Node.js server process is responding)
+app.get('/api/v1/health/live', (_req, res) => {
+  return res.status(200).json(getLivenessStatus());
+});
+
+// Readiness endpoint (Checks if DB is ready to serve queries)
+app.get('/api/v1/health/ready', async (_req, res) => {
+  const status = await getReadinessStatus();
+  const httpCode = status.status === 'READY' ? 200 : 503;
+  return res.status(httpCode).json(status);
+});
+
+// Component-specific diagnostic checks
+app.get('/api/v1/health/db', async (_req, res) => {
+  const status = await getDatabaseHealth();
+  const httpCode = status.status === 'HEALTHY' ? 200 : 503;
+  return res.status(httpCode).json(status);
+});
+
+app.get('/api/v1/health/redis', async (_req, res) => {
+  const status = await getRedisHealth();
+  const httpCode = status.status === 'HEALTHY' ? 200 : 503;
+  return res.status(httpCode).json(status);
+});
+
+// Swagger OpenAPI 3.0 Interactive Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Rate Limiting (Applied across student & general API endpoints, not health checks)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 600,
@@ -74,32 +131,6 @@ const apiLimiter = rateLimit({
   },
 });
 app.use('/api/', apiLimiter);
-
-// Swagger OpenAPI 3.0 Interactive Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// Health Check API (Both /health and /api/v1/health per requirements)
-const healthHandler = async (_req, res) => {
-  const status = await getHealthStatus();
-  const httpCode = status.status === 'UP' ? 200 : 503;
-  return res.status(httpCode).json(status);
-};
-
-app.get('/health', healthHandler);
-app.get('/api/v1/health', healthHandler);
-
-// Root Welcome Endpoint
-app.get('/', (_req, res) => {
-  return res.json({
-    name: 'Collégé Backend API',
-    tagline: 'Meet. Chat. Connect.',
-    version: '1.0.0',
-    verificationPolicy: '100% Manual Human Verification (Up to 72 Hours)',
-    documentation: '/api-docs',
-    health: '/api/v1/health',
-    status: 'Running',
-  });
-});
 
 // Registration Workflow Endpoints (Public applicant submission & status check)
 app.use('/api/v1/registration', registrationRoutes);

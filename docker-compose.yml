@@ -11,7 +11,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-college_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-college_dev_pass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CollegeDev_2026_StrongPass}
       POSTGRES_DB: ${POSTGRES_DB:-college_db}
     ports:
       - "127.0.0.1:5432:5432"

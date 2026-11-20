@@ -51,8 +51,12 @@ export const AppProvider = ({ children }) => {
             setCurrentView('matches');
           }
         })
-        .catch(() => {
-          clearStoredToken();
+        .catch((err) => {
+          // Only clear stored token if the server explicitly rejected the authentication (401)
+          // Do not wipe user session on temporary connection or server startup delays
+          if (err?.status === 401) {
+            clearStoredToken();
+          }
         });
     }
   }, []);
@@ -356,9 +360,11 @@ export const AppProvider = ({ children }) => {
 
     refreshSessions();
 
-    const socketUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:5000'
-      : window.location.origin;
+    // When accessed through Vite proxy or same-host deployment, use window.location.origin
+    // to prevent CORS or port mismatch issues; fallback to localhost:5000 if needed.
+    const socketUrl = (typeof window !== 'undefined' && window.location?.origin)
+      ? window.location.origin
+      : 'http://localhost:5000';
 
     const deviceId = localStorage.getItem('college_device_id') || `web_${Date.now()}`;
     localStorage.setItem('college_device_id', deviceId);
@@ -369,8 +375,10 @@ export const AppProvider = ({ children }) => {
         deviceId,
       },
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1500,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
     });
 
     socketRef.current = socket;

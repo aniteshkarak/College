@@ -4,7 +4,27 @@
  * Standard Base URL: http://localhost:5000/api/v1
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const getApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // When running in a browser:
+  if (typeof window !== 'undefined' && window.location) {
+    // If running on Vite dev/preview server, route through Vite proxy /api/v1
+    // This completely eliminates cross-origin port issues, localhost vs 127.0.0.1 mismatch,
+    // and works out of the box when accessed from mobile devices on local Wi-Fi!
+    const port = window.location.port;
+    if (port === '3000' || port === '5173' || port === '4173') {
+      return '/api/v1';
+    }
+    if (port === '5000') {
+      return '/api/v1';
+    }
+  }
+  return 'http://localhost:5000/api/v1';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Token Management (Student)
 export const getStoredToken = () => {
@@ -97,14 +117,25 @@ async function request(endpoint, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
+  // Apply a 15-second request timeout if signal not provided
+  let timeoutId = null;
+  let signal = options.signal;
+  if (!signal && typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 15000);
+    signal = controller.signal;
+  }
+
   const fetchOptions = {
     ...options,
     headers,
-    credentials: 'omit'
+    signal,
+    credentials: 'omit',
   };
 
   try {
     const response = await fetch(url, fetchOptions);
+    if (timeoutId) clearTimeout(timeoutId);
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
@@ -118,9 +149,19 @@ async function request(endpoint, options = {}) {
 
     return data;
   } catch (err) {
-    // If backend is not running or unreachable, preserve a distinguishable network error
+    if (timeoutId) clearTimeout(timeoutId);
+
+    // Timeout handling
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      const timeoutErr = new Error('Request timed out. Please check your network connection.');
+      timeoutErr.code = 'REQUEST_TIMEOUT';
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+
+    // Network / offline handling
     if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      const networkErr = new Error('Connection could not be established. Please try again.');
+      const networkErr = new Error('Connection could not be established. Please check if the server is running.');
       networkErr.code = 'SERVER_OFFLINE';
       networkErr.status = 503;
       throw networkErr;
@@ -133,8 +174,12 @@ export const api = {
   // Base URL
   baseUrl: API_BASE_URL,
 
-  // Health check
+  // Health and Diagnostic checks
   health: () => request('/health'),
+  liveness: () => request('/health/live'),
+  readiness: () => request('/health/ready'),
+  dbHealth: () => request('/health/db'),
+  redisHealth: () => request('/health/redis'),
 
   // Registration & Manual Verification
   registration: {
