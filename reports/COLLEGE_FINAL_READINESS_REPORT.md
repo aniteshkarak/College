@@ -11,247 +11,230 @@
 
 ## 1. Executive Summary
 
-Collégé has reached **Production-Ready** status for its core registration, manual administrator verification, authentication, discovery, mutual matching, real-time messaging, and audio streaming infrastructure.
+Collégé has implemented a complete production-quality **College-First Discovery Engine** and **Zero-Trust Profile Privacy System**, complementing the OTP-free registration and manual human verification workflow.
 
-The registration lifecycle strictly complies with the client's mandatory operational requirements:
-1. **100% OTP-Free Operation:** No SMS or Email OTP is required for registration, administrative approval, or student login.
-2. **Administrative Approval as Sole Activation Gate:** Pending applicants are stored in PostgreSQL under `PendingRegistration`. Active `User`, `UserProfile`, and `Education` records are created **atomically inside a database transaction only after an administrator reviews and approves the application**.
-3. **No Premature Account Activation:** Unapproved applicants attempting to log in receive a secure `403 Forbidden` (`ACCOUNT_NOT_ACTIVE`) status with remaining 72-hour review timeline details.
-4. **Resolution of "Application Not Found" Error:** A unified multi-identifier lookup engine was integrated across all admin actions and public status queries, handling mixed-case application IDs (`COL-2026-XXXXXX` vs `col-2026-xxxxxx`), internal UUIDs, emails, mobile numbers, and storage path references.
-5. **Architectural Stability:** Resolved module initialization circular dependencies (`server.js` and `chat.routes.js`), verified zero build errors in the React 18 + Vite frontend, and validated 69 automated test cases across three test suites.
+### Core Architectural Guarantees:
+1. **Absolute Privacy Enforcement (Backend Serializers):**
+   - Public profile responses strictly omit private contact details: `email`, `mobileNumber`, `passwordHash`, `identityDocument`, and `dateOfBirth` are **never** transmitted to other students.
+   - Separate serializers: `serializePublicProfile` (for peers and discovery) and `serializePrivateAccount` (for account owner and authorized administrators only).
+2. **Strict College-First Discovery with Exhaustion Guarantee:**
+   - **Priority 1 (Same College):** All eligible, unseen peers from the authenticated user's verified college appear first.
+   - **Priority 2 (Other Colleges):** Only after same-college profiles have been completely exhausted does discovery begin streaming profiles from other institutions.
+   - **No Arbitrary Page-Count Cutoff:** If 100 same-college profiles exist, the system does not prematurely show other colleges on page 2; it stays strictly within the same college until all 100 are presented.
+   - **Continuous Pagination:** If a page boundary spans the last 5 same-college profiles, it seamlessly fills the remaining slots with the first profiles from other colleges without gaps or duplicate entries.
+3. **Gender Preference Filtering:**
+   - Authenticated user's saved discovery preference (`FEMALE`, `MALE`, `EVERYONE`) is mapped case-insensitively and filtered directly inside Prisma database queries.
+   - Unauthenticated gender filters are rejected; unapproved or suspended users cannot query discovery.
+4. **Comprehensive Exclusion Rules:**
+   - Requester's own profile is strictly excluded.
+   - Profiles already liked, mutually matched, passed, or blocked (two-way block) are excluded.
+5. **Verified Frontend Integration:**
+   - React 18 + Vite frontend build succeeds cleanly in under 5 seconds with zero bundle errors.
 
 ---
 
-## 2. System Architecture & Component Status
+## 2. Discovery & Profile Privacy Architecture
 
 ```mermaid
 graph TD
-    subgraph Frontend ["React 18 + Vite + Tailwind CSS (Port 3000)"]
-        UI_Reg["6-Step Registration Flow"]
-        UI_Dash["Student Campus Dashboard"]
-        UI_Admin["Admin Verification Console"]
-        UI_Chat["Messenger & Voice Player"]
+    subgraph Client ["Frontend App (React 18 + Vite)"]
+        UI_Disc["Discover Feed (CardDeck)"]
+        UI_Filter["Discovery Filter Modal"]
+        UI_Prof["Profile View & Settings"]
     end
 
-    subgraph BackendGateway ["Express.js API & Socket.IO (Port 5000)"]
-        GW_Routes["API Router (/api/v1)"]
-        GW_Auth["Dual Auth Guard (Admin vs Student)"]
-        GW_Socket["Socket.IO Event Engine"]
-        GW_Upload["Multer & Sharp Pipeline"]
+    subgraph BackendAPI ["API Gateway & Express Router"]
+        Guard["requireActiveAccount Guard"]
+        DiscRouter["/api/v1/discovery"]
+        DiscController["discovery.controller.js"]
+        DiscService["discovery.service.js"]
+        Serializers["serializers.js (Public vs Private)"]
     end
 
-    subgraph StorageEngine ["Persistence & Caching"]
-        DB[(PostgreSQL 16 - Prisma ORM)]
-        Cache[(Redis 7 - Token & Cache)]
-        PrivateFS["Private Secure Storage (/storage/private)"]
+    subgraph DataEngine ["PostgreSQL 16 & Redis 7"]
+        DB_User["User & Education (College Priority)"]
+        DB_Block["UserBlock & MatchRequest Exclusions"]
+        Cache_Pass["Redis (Passed Profiles & Prefs)"]
     end
 
-    UI_Reg -->|Multipart Form Data| GW_Upload
-    GW_Upload --> GW_Routes
-    GW_Routes --> GW_Auth
-    GW_Auth --> DB
-    GW_Routes --> PrivateFS
-    UI_Chat <-->|Realtime Events| GW_Socket
-    UI_Admin -->|RBAC Guarded Endpoints| GW_Routes
+    UI_Disc -->|GET /discovery?gender=...| Guard
+    Guard --> DiscRouter
+    DiscRouter --> DiscController
+    DiscController --> DiscService
+    DiscService -->|Check Exclusions & Blocks| DB_Block
+    DiscService -->|Query Priority 1: Same College| DB_User
+    DiscService -->|Exhaustion Check -> Priority 2: Other Colleges| DB_User
+    DiscService -->|Retrieve Session Passes| Cache_Pass
+    DiscService --> Serializers
+    Serializers -->|Sanitized Public DTO| UI_Disc
 ```
 
 ---
 
-## 3. Section-by-Section Verification
+## 3. Section-by-Section Implementation Details
 
-### Section A: Registration & Manual Administrative Approval Workflow
+### Section 1: Public Profile and Private Information Protection
 
-| Requirement | Implementation Detail | Status |
-| :--- | :--- | :--- |
-| **6-Step Registration** | Personal Info, Education Details, Identity Document, Exactly 3 Photos, Connection Preferences, DPDP Consents. | **PASS** |
-| **Pending Persistence** | Stored in `PendingRegistration` table with status `PENDING_REVIEW` and 72-hour `reviewDeadline`. | **PASS** |
-| **No Premature User** | No record inserted into `User` or `UserProfile` upon student form submission. | **PASS** |
-| **Exactly 3 Photographs** | Validated server-side via `registration.validator.js` and `Multer` fields `photo_1`, `photo_2`, `photo_3`. Submissions with <3 photos rejected with `400 Bad Request`. | **PASS** |
-| **Identity Document** | Uploaded via Multer to private non-public directory `storage/private/documents/`. EXIF and metadata stripped. | **PASS** |
-| **Admin Dashboard Listing** | Searchable by Application ID, Legal Name, Display Name, Email, Mobile, College Name, Status, and Overdue flag. | **PASS** |
-| **Workflow State Transitions** | `PENDING_REVIEW` $\rightarrow$ `UNDER_REVIEW` $\rightarrow$ `APPROVED` / `REJECTED` / `NEEDS_CORRECTION`. Resubmissions transition to `RESUBMITTED`. | **PASS** |
-| **Atomic Approval** | Prisma `$transaction` creates `User`, `UserProfile`, `Education`, associates approved photos and documents, marks application `APPROVED`, and writes to `VerificationHistory` and `AdminAuditLog`. | **PASS** |
-| **Idempotency** | Re-approval or rejection of an already approved application is blocked (`400 Bad Request`). Duplicate user accounts cannot be created. | **PASS** |
-| **Application Lookup Fix** | Unified `findApplicationRecord` checks UUID `id`, exact `applicationId`, uppercase `applicationId`, lowercase `email`, and `mobileNumber`. Document/Photo streaming supports UUID and storage path lookups. | **PASS** |
+| Field | Public Exposure in Discover / Profiles | Private Account Owner View | Admin View |
+| :--- | :---: | :---: | :---: |
+| **Display Name** (`displayName`) | **YES** | **YES** | **YES** |
+| **Age** (`age`) | **YES** | **YES** | **YES** |
+| **Gender** (`gender`) | **YES** | **YES** | **YES** |
+| **Approved Photographs** | **YES** | **YES** | **YES** |
+| **College & University** | **YES** | **YES** | **YES** |
+| **Course & Department** | **YES** | **YES** | **YES** |
+| **Academic Year & Semester** | **YES** | **YES** | **YES** |
+| **Bio & Interests** | **YES** | **YES** | **YES** |
+| **Relationship Intention** | **YES** | **YES** | **YES** |
+| **Legal Full Name** (`fullName`) | **HIDDEN (Undefined)** | **YES** | **YES** |
+| **Date of Birth** (`dateOfBirth`) | **HIDDEN (Undefined)** | **YES** | **YES** |
+| **Email Address** (`email`) | **NEVER EXPOSED** | **YES** | **YES** |
+| **Mobile Number** (`mobileNumber`) | **NEVER EXPOSED** | **YES** | **YES** |
+| **Password Hash** (`passwordHash`) | **NEVER EXPOSED** | **NEVER EXPOSED** | **NEVER EXPOSED** |
+| **College ID Document** | **NEVER EXPOSED** | **Private Storage Only** | **Authenticated Stream Only** |
+| **Internal Admin Notes** | **NEVER EXPOSED** | **NEVER EXPOSED** | **YES** |
 
-### Section B: OTP-Free Authentication Architecture
+#### Serializers Implemented:
+- `serializePublicProfile(user, options)` in `backend/src/utils/serializers.js`: Sanitizes records for peer discovery. Excludes email, mobile, password hash, and documents. Computes `isSameCollege` boolean flag.
+- `serializePrivateAccount(user)` in `backend/src/utils/serializers.js`: Returns private account details for the owner only.
 
-| Feature | Implementation Detail | Status |
-| :--- | :--- | :--- |
-| **OTP Elimination** | Registration completes without SMS or Email OTP verification codes. | **PASS** |
-| **Approval as Key** | Student login endpoint `POST /api/v1/auth/login` checks active `User` record first. | **PASS** |
-| **Pre-Approval Gate** | If user record does not exist but `PendingRegistration` exists with matching credentials, system rejects with `403 ACCOUNT_NOT_ACTIVE` and returns application ID and status timeline. | **PASS** |
-| **Password Hashing** | Uses **Argon2id** (`memoryCost: 65536` [64 MB], `timeCost: 3`, parallelism: 4). Passwords are never stored in plaintext. | **PASS** |
-| **Token Separation** | Admin tokens signed with dedicated `ADMIN_JWT_SECRET` (`issuer: college-admin-api`, `audience: college-admin-portal`). Student tokens signed with `JWT_SECRET` (`issuer: college-api`, `audience: college-mobile-web`). | **PASS** |
-| **Token Cross-Contamination Defense** | Admin routes reject valid student JWTs with `401 Unauthorized` / `Forbidden: Invalid admin token credentials`. Student routes reject admin tokens. | **PASS** |
+### Section 2: Gender Preference Filtering
 
-### Section C: Database & Data Integrity
+- **Mapping Logic:**
+  - `FEMALE`, `female`, `Women`, `women`, `F` $\rightarrow$ `{ gender: { in: ['Female', 'female', 'FEMALE', 'Woman', 'Women'] } }`
+  - `MALE`, `male`, `Men`, `men`, `M` $\rightarrow$ `{ gender: { in: ['Male', 'male', 'MALE', 'Man', 'Men'] } }`
+  - `EVERYONE`, `everyone`, `All`, `all` $\rightarrow$ `{}` (No gender constraint)
+- **Security:**
+  - Applied strictly in the Prisma database query on PostgreSQL.
+  - Discovery route is guarded by `requireActiveAccount` (authentication + approval required).
 
-| Table / Model | Purpose | Relations & Constraints | Status |
-| :--- | :--- | :--- | :--- |
-| `PendingRegistration` | Pre-approval application staging | 1:1 IdentityDocument, 1:N UserPhoto, 1:N VerificationHistory | **PASS** |
-| `User` | Active approved student account | 1:1 UserProfile, 1:N Education, 1:N UserPhoto, 1:N Sessions | **PASS** |
-| `UserProfile` | Campus profile, bio, preferences | 1:1 User (Cascade delete) | **PASS** |
-| `Education` | College enrollment details | N:1 College, 1:1 User | **PASS** |
-| `College` | Verified institutions directory | 1:N Educations | **PASS** |
-| `IdentityDocument` | Private ID card storage record | Private filesystem path, masked number, SHA-256 hash | **PASS** |
-| `UserPhoto` | Profile & personal photos (1 to 3) | Order 1=Main, 2/3=Secondary; approved on activation | **PASS** |
-| `VerificationHistory` | Application review event trail | Action, notes, correction fields, timestamp | **PASS** |
-| `AdminAuditLog` | Security & compliance audit log | Admin ID, action, target, IP address, user-agent | **PASS** |
-| `MatchRequest` | Student connection request | Sender, recipient, status (PENDING / ACCEPTED / REJECTED) | **PASS** |
-| `Match` | Mutual connection record | User 1, User 2, active status, stage | **PASS** |
-| `Conversation` | Direct messaging thread | 1:1 with Match, 1:N Messages | **PASS** |
-| `Message` | Chat messages (Text / Voice note) | Sender, conversation, type, duration, read status | **PASS** |
+### Section 3: College-First Discovery & Exhaustion Algorithm
 
-### Section D: Discovery & Mutual Matching Lifecycle
+The discovery algorithm partitions eligible candidates into two mutually exclusive sets:
+1. **Set $S$ (Same College):** `education.collegeId == requesterCollegeId` OR `education.collegeName == requesterCollegeName`.
+2. **Set $O$ (Other Colleges):** `NOT (Same College condition)`.
 
-1. **Discovery Engine (`/api/v1/discovery`):**
-   - Excludes the current authenticated user.
-   - Excludes existing mutual matches and pending sent requests.
-   - Filters by campus/college name, gender preference, and age range.
-   - Returns sanitized public profile records with approved photos only.
-2. **Connection Requests (`/api/v1/matching/request`):**
-   - Enforces single pending request constraint between two users (prevents spamming).
-   - Generates notifications for the recipient.
-3. **Mutual Acceptance (`/api/v1/matching/accept`):**
-   - Atomically updates `MatchRequest` to `ACCEPTED`.
-   - Creates a mutual `Match` record (`status: ACTIVE`, `relationshipStage: FRIEND`).
-   - Automatically initializes a dedicated `Conversation` record linked to the match.
-   - Emits real-time event through Socket.IO.
-
-### Section E: Chat, Voice Messaging & Audio Streaming
-
-1. **Text Messaging:**
-   - Validated message payload (`min: 1`, `max: 2000` characters).
-   - Stored in PostgreSQL with read status tracking.
-   - Real-time Socket.IO room broadcast: `socket.to("conv_" + conversationId).emit("new_message", message)`.
-2. **Voice Note Upload:**
-   - Accepts audio blobs (`audio/webm`, `audio/ogg`, `audio/mp4`, `audio/wav`).
-   - Maximum file size: 10 MB.
-   - Stored in private audio directory with unique UUID filenames.
-   - Audio metadata (duration in seconds) recorded in message record.
-3. **Secure Participant-Only Audio Streaming:**
-   - Endpoint: `GET /api/v1/chat/conversations/:id/voice/:messageId`.
-   - Strict authorization check: Only the two participants of the mutual match owning the conversation can stream the audio file.
-   - Unauthorized users receive `403 Forbidden: You do not have permission to access audio for this conversation`.
-   - Headers: `Content-Type`, `Accept-Ranges: bytes`, `Cache-Control: private, no-store`.
-   - Protects against Path Traversal by resolving paths strictly within `storage/private/audio/`.
-
-### Section F: Administrative Security & RBAC
-
-1. **Three-Tier Role-Based Access Control:**
-   - `SUPER_ADMIN`: Full system privileges, overview metrics (`/metrics`), administrator management, application approval, rejection, and correction requests.
-   - `VERIFICATION_ADMIN`: Restricted to application review (`/applications`), document verification, and applicant status updates. Strictly forbidden from system metrics and admin management (`403 Forbidden`).
-   - `SUPPORT_ADMIN`: Customer support tier. Strictly forbidden from reviewing applications, approving students, or accessing private verification documents (`403 Forbidden`).
-2. **Private Document Protection:**
-   - Verification documents are stored outside the public web root.
-   - No public static file route exists for documents or pending photos.
-   - Documents are streamed only through authenticated admin routes (`GET /api/v1/admin/applications/:id/documents/:documentId`).
-   - Cross-application document access is blocked: requesting a document belonging to Application B while specifying Application A returns `404 Not Found`.
+#### Continuous Pagination & Exhaustion Mathematics:
+- Given offset $O$ and page limit $L$, and total same-college count $N_{same}$:
+  - If $O < N_{same}$:
+    - $take_{same} = \min(L, N_{same} - O)$
+    - Query same-college with `skip: O, take: takeSame`
+    - If $take_{same} < L$:
+      - Same-college exhausted inside this page!
+      - $take_{other} = L - take_{same}$
+      - Query other colleges with `skip: 0, take: takeOther`
+      - Page result = `[...same, ...other]`
+  - If $O \ge N_{same}$:
+    - Same-college is completely exhausted!
+    - $skip_{other} = O - N_{same}$
+    - Query other colleges with `skip: skipOther, take: L`
+    - Page result = `other`
+- **Result:** Strict Priority 1 ordering, zero duplicates, no gaps, and zero premature fallback.
 
 ---
 
-## 4. Automated Test Results
+## 4. Files Inspected & Modified
 
-The backend contains three dedicated automated test suites covering 69 test cases:
+| File Path | Action | Description |
+| :--- | :---: | :--- |
+| `backend/src/utils/serializers.js` | **CREATED** | Public vs. private account serializers enforcing data confidentiality. |
+| `backend/src/modules/discovery/discovery.service.js` | **CREATED** | Core discovery engine: college-first query, exhaustion check, gender filter, exclusion builder. |
+| `backend/src/modules/discovery/discovery.controller.js` | **CREATED** | Discovery API controller for profiles, preferences, and pass actions. |
+| `backend/src/modules/discovery/discovery.routes.js` | **MODIFIED** | Wired controller methods: `GET /`, `GET /preferences`, `PUT /preferences`, `POST /pass`. |
+| `backend/src/modules/users/users.routes.js` | **MODIFIED** | Updated `GET /:id` to return public serializer for other users and private serializer for self. |
+| `backend/src/modules/profiles/profiles.routes.js` | **MODIFIED** | Added `GET /me` and updated `PUT /me` with serializers. |
+| `backend/src/modules/auth/auth.controller.js` | **MODIFIED** | Updated `getMe` to return `serializePrivateAccount(user)`. |
+| `College/src/services/api.js` | **MODIFIED** | Added `getPreferences`, `updatePreferences`, and `pass` to frontend API client. |
+| `College/src/context/AppContext.jsx` | **MODIFIED** | Connected `handlePass` to `api.discovery.pass`. |
+| `backend/tests/discoveryUnit.test.js` | **CREATED** | 13 automated unit tests for serializers, gender mapping, exhaustion math, and access guard. |
+| `backend/tests/discoveryPrivacy.test.js` | **CREATED** | 17 end-to-end automated test cases covering all user journey requirements. |
+
+---
+
+## 5. API Endpoints Reference
+
+### Discovery API (`/api/v1/discovery`)
+- `GET /api/v1/discovery`: Retrieves college-first, gender-filtered public profiles.
+  - Query parameters: `page`, `limit`, `gender`, `minAge`, `maxAge`, `intention`, `city`, `excludeIds`, `passedIds`.
+  - Response: `{ success: true, data: { profiles: [...], users: [...], pagination: { page, limit, totalSameCollege, totalOtherColleges, totalEligible, isSameCollegeExhausted, hasMore } } }`.
+- `GET /api/v1/discovery/preferences`: Retrieves authenticated student's saved preferences.
+- `PUT /api/v1/discovery/preferences`: Updates saved discovery preferences (gender, age, intention, distance).
+- `POST /api/v1/discovery/pass`: Records a passed profile (`targetUserId`) in Redis and session set to exclude from future discovery.
+
+### User Privacy Profile API (`/api/v1/users/:id`)
+- `GET /api/v1/users/me` or own ID: Returns full private account record.
+- `GET /api/v1/users/:otherId`: Returns strictly sanitized public profile. Rejects if either user has blocked the other or if user is unapproved/suspended.
+
+---
+
+## 6. Automated Test Results
+
+### Suite 1: Discovery & Privacy Unit Tests (`tests/discoveryUnit.test.js`)
+**Result: 13/13 PASSED (100%)**
 
 ```
-Test Suites:
-  1. tests/adminSecurity.test.js      (27 Tests) — PASS
-  2. tests/technologies.test.js       (26 Tests) — PASS
-  3. tests/fullE2EJourney.test.js     (16 Tests) — PASS
-Total Tests: 69 Passed, 0 Failed, 0 Skipped
+▶ Collégé Discovery & Privacy Unit Tests
+  ✔ Public Serializer: Excludes all private contact info, password hash, and documents (8.71ms)
+  ✔ Public Serializer: Identifies when user is from a different college (0.20ms)
+  ✔ Private Account Serializer: Includes contact details for owner but excludes password hash (0.30ms)
+  ✔ Gender Preference: Maps FEMALE and variations to case-insensitive female filter (0.20ms)
+  ✔ Gender Preference: Maps MALE and variations to case-insensitive male filter (0.12ms)
+  ✔ Gender Preference: Maps EVERYONE or All to empty object (no gender constraint) (0.62ms)
+  ✔ Exhaustion Logic: 100 same-college profiles with limit 20 stays strictly in same college for first 5 pages (0.18ms)
+  ✔ Exhaustion Logic: Transition page correctly splits between same and other college without gaps (0.13ms)
+  ✔ Exhaustion Logic: Empty same-college immediately falls back to other colleges (0.13ms)
+  ✔ Access Guard: Approved active account is granted access (calls next) (0.25ms)
+  ✔ Access Guard: Unapproved/Pending account is rejected with 403 (1.38ms)
+  ✔ Access Guard: Suspended account is rejected with 403 (0.14ms)
+  ✔ Access Guard: Rejected account is rejected with 403 (0.13ms)
+✔ Collégé Discovery & Privacy Unit Tests (13.88ms)
+ℹ tests 13, pass 13, fail 0
 ```
 
-### 16-Step End-to-End User Journey Breakdown
+### Suite 2: 17 Integration Test Cases (`tests/discoveryPrivacy.test.js`)
+The 17 test cases are fully authored and mapped to PostgreSQL integration:
 
-| Step | Test Action | Expected Result | Result |
-| :---: | :--- | :--- | :---: |
-| **1** | Student A submits 6-step registration with 3 photos & College ID | PendingRegistration created; status `PENDING_REVIEW` | **PASS** |
-| **2** | Student B submits 6-step registration with 3 photos & College ID | PendingRegistration created; status `PENDING_REVIEW` | **PASS** |
-| **3** | Unapproved Student A attempts login with email & password | Blocked with `403 ACCOUNT_NOT_ACTIVE` & 72h notice | **PASS** |
-| **4** | Super Admin logs in via `/api/v1/admin/auth/login` | Returns admin JWT with `role: SUPER_ADMIN` | **PASS** |
-| **5** | Admin inspects Student A details, documents, and photos | Retrieves Sections A-F, streams private ID document | **PASS** |
-| **6** | Admin approves Student A and Student B applications | Transactional activation: `User`, `Profile`, `Education` | **PASS** |
-| **7** | Approved Student A logs in | Successfully receives student JWT | **PASS** |
-| **8** | Approved Student B logs in | Successfully receives student JWT | **PASS** |
-| **9** | Student A discovers Student B via `/api/v1/discovery` | Student B profile returned with approved photos | **PASS** |
-| **10** | Student A sends connection request to Student B | `MatchRequest` created with status `PENDING` | **PASS** |
-| **11** | Student B fetches incoming requests & notifications | Student A request visible | **PASS** |
-| **12** | Student B accepts Student A request | Mutual `Match` & `Conversation` created atomically | **PASS** |
-| **13** | Both students fetch active conversations | Shared conversation returned with partner info | **PASS** |
-| **14** | Student A sends text message in conversation | Message saved, real-time event dispatched | **PASS** |
-| **15** | Student B uploads voice message (audio blob + duration) | Audio stored privately, duration recorded | **PASS** |
-| **16** | Student A fetches messages & streams private voice audio | Authenticated audio streamed with secure headers | **PASS** |
-
----
-
-## 5. Technology Integration Verification
-
-1. **Multer (File Upload Management):**
-   - Configured memory storage with 5 MB file size limit.
-   - Enforces MIME-type whitelist: `image/jpeg`, `image/jpg`, `image/png`, `image/webp`.
-   - Audio notes capped at 10 MB (`audio/webm`, `audio/ogg`, `audio/mp4`, `audio/wav`).
-   - Rejects unlisted fields, malformed multi-part boundaries, and oversized payloads.
-2. **Sharp (Image Optimization & Privacy Protection):**
-   - Profiles stripped of all EXIF metadata, GPS coordinates, camera serial numbers, and device tags.
-   - Converted to optimized WebP format at 82% quality.
-   - Resized to standard avatar dimensions ($800 \times 1000$ portrait) with smart cropping.
-   - 150px thumbnail generation for high-speed listing queries.
-3. **Nodemailer (Transactional Email Notifications):**
-   - Professional HTML templates configured for:
-     - Application Submission Confirmation (including 72-hour review timeline).
-     - Account Approval & Activation Welcome Notice.
-     - Application Rejection with Specific Feedback.
-     - Request for Document Correction with resubmission instructions.
-     - Correction Resubmission Receipt.
-4. **Swagger UI (`/api-docs`):**
-   - Complete OpenAPI 3.0 specification covering all student, discovery, matching, chat, and admin endpoints.
-   - Direct interactive testing available at `http://localhost:5000/api-docs`.
+| # | Test Name | Target Behavior | Execution Status |
+| :-: | :--- | :--- | :---: |
+| **1** | Approved user can access discovery | Status 200 with profiles & pagination | Implemented (Requires Docker daemon) |
+| **2** | Pending user cannot access discovery | Status 401 or 403 rejected | Implemented (Requires Docker daemon) |
+| **3** | Rejected user cannot access discovery | Status 403 rejected | Implemented (Requires Docker daemon) |
+| **4** | Suspended user cannot access discovery | Status 403 rejected | Implemented (Requires Docker daemon) |
+| **5** | Female preference returns female only | Every profile matches female gender | Implemented (Requires Docker daemon) |
+| **6** | Male preference returns male only | Every profile matches male gender | Implemented (Requires Docker daemon) |
+| **7** | Everyone preference returns all genders | Returns both male and female profiles | Implemented (Requires Docker daemon) |
+| **8** | Same-college profiles appear first | Index 0 is from requester's college | Implemented (Requires Docker daemon) |
+| **9** | Other-college profiles appear only after same-college exhaustion | No same-college profiles after other-college starts | Implemented (Requires Docker daemon) |
+| **10** | More same-college profiles than one page handled correctly | Multi-page same-college pagination verified | Implemented (Requires Docker daemon) |
+| **11** | Pagination does not create duplicates | Set intersection between page 1 & 2 is empty | Implemented (Requires Docker daemon) |
+| **12** | Preference changes recalculate results | Updated preference immediately filters feed | Implemented (Requires Docker daemon) |
+| **13** | Empty same-college falls back to other colleges | Solo user feed immediately shows other colleges | Implemented (Requires Docker daemon) |
+| **14** | Own profile is never returned | Requester ID strictly absent from feed | Implemented (Requires Docker daemon) |
+| **15** | Blocked profiles are excluded | Two-way block exclusion verified | Implemented (Requires Docker daemon) |
+| **16** | Public responses omit private contact info | `email`, `mobile`, `passwordHash`, `identityDocument` undefined | Implemented (Requires Docker daemon) |
+| **17** | Unauthorized document access rejected | Student token blocked from admin document routes | Implemented (Requires Docker daemon) |
 
 ---
 
-## 6. Frontend Build Verification
+## 7. Frontend Build Verification
 
-The React 18 + Vite frontend was verified with a complete production build:
+The React 18 + Vite frontend build was re-verified after integrating discovery passes and API endpoints:
 - **Build Command:** `npm run build --prefix College`
-- **Output:** Built in 4.83 seconds with 0 errors.
-- **Bundle Size:**
+- **Build Time:** 4.56 seconds
+- **Result:** **0 errors, 0 warnings (clean build)**
+- **Output:**
   - `dist/index.html`: 1.22 kB
-  - `dist/assets/index-MNVwheUC.css`: 74.69 kB (gzip: 11.65 kB)
-  - `dist/assets/index-DMhSBQTD.js`: 551.10 kB (gzip: 133.21 kB)
+  - `dist/assets/index-MNVwheUC.css`: 74.69 kB
+  - `dist/assets/index-k-z3yfbR.js`: 551.54 kB
 
 ---
 
-## 7. Operational & Deployment Checklist
+## 8. Operational Status & Remaining Items
 
-Before starting production traffic, ensure the following host environment settings:
-
-| Component | Port | Configuration Parameter | Value |
-| :--- | :---: | :--- | :--- |
-| **Node.js API Server** | 5000 | `PORT` | `5000` |
-| **PostgreSQL 16** | 5432 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/college_db?schema=public` |
-| **Redis 7** | 6379 | `REDIS_URL` | `redis://localhost:6379` |
-| **Frontend Web App** | 3000 | `VITE_API_URL` | `http://localhost:5000/api/v1` |
-| **Admin JWT Secret** | N/A | `ADMIN_JWT_SECRET` | 64+ char random hex string |
-| **Student JWT Secret** | N/A | `JWT_SECRET` | 64+ char random hex string |
-| **Storage Directory** | N/A | Private directory permissions | Restricted to Node process user |
-
----
-
-## 8. Final Status Matrix
-
-| System Module | Readiness Rating | Production Launch Status |
-| :--- | :---: | :---: |
-| 6-Step Registration Pipeline | 100% | **READY** |
-| Manual Admin Approval Gateway | 100% | **READY** |
-| OTP-Free Authentication Engine | 100% | **READY** |
-| PostgreSQL Schema & Transactions | 100% | **READY** |
-| Admin Security, RBAC & Audit Trails | 100% | **READY** |
-| Multer & Sharp Processing Pipeline | 100% | **READY** |
-| Discovery & Mutual Matching Engine | 100% | **READY** |
-| Real-time Socket.IO Messenger | 100% | **READY** |
-| Private Voice Audio Streaming | 100% | **READY** |
-| React 18 Frontend Production Build | 100% | **READY** |
-
-**Conclusion:** All client requirements, security guidelines, and architectural constraints have been fully satisfied. The application is ready for production staging and live user registration.
+1. **Docker Desktop Daemon on Windows Host:**
+   - PostgreSQL 16 and Redis 7 containers run via Docker Desktop.
+   - When the developer launches Docker Desktop on their Windows computer, the local database on port 5432 and Redis on port 6379 become accessible, and all integration tests (`discoveryPrivacy.test.js`, `fullE2EJourney.test.js`, `adminSecurity.test.js`) will execute live against the database.
+2. **Database Integrity:**
+   - Zero destructive migrations executed.
+   - All existing user records, applications, and documents preserved.
+   - JavaScript ES modules preserved throughout.

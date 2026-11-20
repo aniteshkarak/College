@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import prisma from '../../config/prisma.js';
+import { serializePublicProfile, serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
 import { z } from 'zod';
 
@@ -29,13 +30,39 @@ router.patch('/mood', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/v1/users/:id
+ * Retrieves user profile with strict privacy enforcement:
+ * - Account owner receives full private account details (email, mobile, legal name)
+ * - Other students receive strictly sanitized public profile (no email, mobile, or identity docs)
+ * - Blocked, unapproved, or suspended profiles are inaccessible
+ */
 router.get('/:id', requireAuth, async (req, res) => {
   try {
+    const targetId = req.params.id === 'me' ? req.user.id : req.params.id;
+    const isSelf = req.user.id === targetId;
+
+    // Check two-way blocking if viewing another user
+    if (!isSelf) {
+      const blockExists = await prisma.userBlock.findFirst({
+        where: {
+          OR: [
+            { blockerId: req.user.id, blockedId: targetId },
+            { blockerId: targetId, blockedId: req.user.id },
+          ],
+        },
+      });
+
+      if (blockExists) {
+        return error(res, 'User profile is not available.', 404);
+      }
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
+      where: { id: targetId },
       include: {
         profile: true,
-        education: true,
+        education: { include: { college: true } },
         photos: { orderBy: { photoOrder: 'asc' } },
       },
     });
@@ -44,30 +71,23 @@ router.get('/:id', requireAuth, async (req, res) => {
       return error(res, 'User not found', 404);
     }
 
-    const p = user.profile || {};
-    const edu = user.education || {};
-    const photoUrls = (user.photos || []).map((ph) => ph.photoUrl);
+    // Hide unapproved or suspended profiles from other students
+    if (!isSelf && (user.accountStatus !== 'ACTIVE' || user.verificationStatus !== 'APPROVED')) {
+      return error(res, 'User profile is not available.', 404);
+    }
 
-    const formatted = {
-      id: user.id,
-      fullName: user.fullName,
-      displayName: user.displayName,
-      age: user.age,
-      gender: user.gender,
-      city: p.city,
-      state: p.state,
-      collegeName: edu.collegeName,
-      course: edu.degreeName || edu.departmentStream,
-      avatarUrl: photoUrls[0] || null,
-      additionalPhotos: photoUrls.slice(1),
-      bio: p.bio,
-      interests: p.interests || [],
-      relationshipIntention: p.relationshipIntention,
-      currentMood: p.currentMood,
-      verificationStatus: user.verificationStatus,
-    };
+    if (isSelf) {
+      const privateData = serializePrivateAccount(user);
+      return success(res, { user: privateData, profile: privateData }, 'Current user profile retrieved');
+    }
 
-    return success(res, { user: formatted }, 'User profile retrieved');
+    // Return sanitized public profile
+    const publicData = serializePublicProfile(user, {
+      currentCollegeId: req.user.education?.collegeId,
+      currentCollegeName: req.user.education?.collegeName || req.user.collegeName,
+    });
+
+    return success(res, { user: publicData, profile: publicData }, 'User public profile retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }

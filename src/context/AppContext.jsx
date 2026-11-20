@@ -384,6 +384,9 @@ export const AppProvider = ({ children }) => {
   };
 
   const handlePass = (profile) => {
+    if (profile?.id) {
+      api.discovery.pass(profile.id).catch((err) => console.warn('Pass sync error:', err.message));
+    }
     setPassedProfiles((prev) => [...prev, profile.id]);
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
   };

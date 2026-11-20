@@ -1,6 +1,7 @@
 import { registerSchema, loginSchema, resubmitVerificationSchema } from './auth.validator.js';
 import authService from './auth.service.js';
 import prisma from '../../config/prisma.js';
+import { serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
 
 export const register = async (req, res) => {
@@ -104,7 +105,25 @@ export const logout = async (_req, res) => {
 };
 
 export const getMe = async (req, res) => {
-  return success(res, { user: req.user }, 'Current user profile');
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        profile: true,
+        education: { include: { college: true } },
+        photos: { orderBy: { photoOrder: 'asc' } },
+      },
+    });
+
+    if (!user) {
+      return error(res, 'User not found', 404);
+    }
+
+    const serialized = serializePrivateAccount(user);
+    return success(res, { user: serialized }, 'Current user profile');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
 };
 
 export default { register, login, logout, resubmitVerification, getMe };

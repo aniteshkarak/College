@@ -301,9 +301,23 @@ export const api = {
       if (params.maxAge) searchParams.set('maxAge', params.maxAge);
       if (params.gender && params.gender !== 'All') searchParams.set('gender', params.gender);
       if (params.city && params.city !== 'All') searchParams.set('city', params.city);
+      if (params.page) searchParams.set('page', params.page);
+      if (params.limit) searchParams.set('limit', params.limit);
+      if (params.intention && params.intention !== 'All') searchParams.set('intention', params.intention);
       const q = searchParams.toString();
       return request(`/discovery${q ? `?${q}` : ''}`);
     },
+    getPreferences: () => request('/discovery/preferences'),
+    updatePreferences: (preferences) =>
+      request('/discovery/preferences', {
+        method: 'PUT',
+        body: JSON.stringify(preferences),
+      }),
+    pass: (targetUserId) =>
+      request('/discovery/pass', {
+        method: 'POST',
+        body: JSON.stringify({ targetUserId }),
+      }),
   },
 
   // Matching & Likes

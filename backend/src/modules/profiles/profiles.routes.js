@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import prisma from '../../config/prisma.js';
+import { serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
 import { z } from 'zod';
 
@@ -17,6 +18,28 @@ const updateProfileSchema = z.object({
   course: z.string().optional(),
 });
 
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        profile: true,
+        education: { include: { college: true } },
+        photos: { orderBy: { photoOrder: 'asc' } },
+      },
+    });
+
+    if (!user) {
+      return error(res, 'User not found', 404);
+    }
+
+    const serialized = serializePrivateAccount(user);
+    return success(res, { profile: serialized, user: serialized }, 'Current user profile retrieved');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
 router.put('/me', requireAuth, async (req, res) => {
   try {
     const parsed = updateProfileSchema.safeParse(req.body);
@@ -26,7 +49,7 @@ router.put('/me', requireAuth, async (req, res) => {
 
     const { displayName, bio, interests, hobbies, relationshipIntention, city, state, course } = parsed.data;
 
-    const result = await prisma.$transaction(async (tx) => {
+    const fullUser = await prisma.$transaction(async (tx) => {
       // 1. Update User if displayName provided
       if (displayName) {
         await tx.user.update({
@@ -69,45 +92,18 @@ router.put('/me', requireAuth, async (req, res) => {
       }
 
       // Retrieve full updated user
-      const fullUser = await tx.user.findUnique({
+      return tx.user.findUnique({
         where: { id: req.user.id },
         include: {
           profile: true,
-          education: true,
+          education: { include: { college: true } },
           photos: { orderBy: { photoOrder: 'asc' } },
         },
       });
-
-      return fullUser;
     });
 
-    const p = result.profile || {};
-    const edu = result.education || {};
-    const photoUrls = (result.photos || []).map((ph) => ph.photoUrl);
-
-    return success(
-      res,
-      {
-        profile: {
-          id: result.id,
-          displayName: result.displayName,
-          fullName: result.fullName,
-          age: result.age,
-          gender: result.gender,
-          bio: p.bio,
-          interests: p.interests || [],
-          hobbies: p.hobbies || [],
-          relationshipIntention: p.relationshipIntention,
-          city: p.city,
-          state: p.state,
-          collegeName: edu.collegeName,
-          course: edu.degreeName,
-          avatarUrl: photoUrls[0] || null,
-          additionalPhotos: photoUrls.slice(1),
-        },
-      },
-      'Profile updated successfully'
-    );
+    const serialized = serializePrivateAccount(fullUser);
+    return success(res, { profile: serialized, user: serialized }, 'Profile updated successfully');
   } catch (err) {
     return error(res, err.message, 500);
   }

@@ -89,15 +89,15 @@ router.get('/conversations', requireAuth, async (req, res) => {
           },
           lastMessage: lastMsg
             ? {
-                id: lastMsg.id,
-                content: lastMsg.content,
-                messageType: lastMsg.messageType,
-                mediaUrl: lastMsg.mediaUrl,
-                voiceDuration: lastMsg.voiceDuration,
-                createdAt: lastMsg.createdAt,
-                senderId: lastMsg.senderId,
-                isRead: lastMsg.isRead,
-              }
+              id: lastMsg.id,
+              content: lastMsg.content,
+              messageType: lastMsg.messageType,
+              mediaUrl: lastMsg.mediaUrl,
+              voiceDuration: lastMsg.voiceDuration,
+              createdAt: lastMsg.createdAt,
+              senderId: lastMsg.senderId,
+              isRead: lastMsg.isRead,
+            }
             : null,
           unreadCount,
           updatedAt: conv.updatedAt,
