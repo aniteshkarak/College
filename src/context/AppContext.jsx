@@ -566,10 +566,18 @@ export const AppProvider = ({ children }) => {
   };
 
   const handleReportUser = (reportedUser, category, description) => {
+    if (reportedUser?.id) {
+      api.reports.submit({
+        reportedUserId: reportedUser.id,
+        category: category || 'Other',
+        reason: description || 'In-app user report',
+      }).catch((err) => console.warn('Submit report API sync:', err.message));
+    }
+
     const newReport = {
       id: 'rep_' + Date.now(),
-      reporter: `${currentUser.id} (${currentUser.display_name})`,
-      reported_user: `${reportedUser.id} (${reportedUser.display_name})`,
+      reporter: `${currentUser?.id || 'User'} (${currentUser?.display_name || 'Student'})`,
+      reported_user: `${reportedUser.id} (${reportedUser.display_name || reportedUser.full_name || 'User'})`,
       category,
       description,
       evidence: 'Submitted via in-app report workflow.',
@@ -579,6 +587,16 @@ export const AppProvider = ({ children }) => {
     setAdminReports((prev) => [newReport, ...prev]);
     setReportTarget(null);
     addToast('Report submitted to campus moderation team.', 'success');
+  };
+
+  const handleUnblockUser = async (userId) => {
+    try {
+      await api.matching.unblock(userId);
+      addToast('User unblocked successfully.', 'success');
+    } catch (err) {
+      console.warn('Unblock user API sync:', err.message);
+      addToast(err.message || 'Could not unblock user', 'error');
+    }
   };
 
   // Messaging (Only allowed if mutual friends!)
@@ -1250,6 +1268,7 @@ export const AppProvider = ({ children }) => {
         discoveryFilters,
         setDiscoveryFilters,
         handleBlockUser,
+        handleUnblockUser,
         handleReportUser,
         // Auth & Admin Verification Pipeline
         isAuthModalOpen,

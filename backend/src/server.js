@@ -28,10 +28,23 @@ app.set('io', io);
 io.on('connection', (socket) => {
   logger.info(`⚡ Socket.IO client connected: ${socket.id}`);
 
+  // Join user room for personal notifications & alerts
+  socket.on('join_user', (userId) => {
+    if (userId) {
+      socket.join(`user_${userId}`);
+      logger.debug(`Socket ${socket.id} joined user room: user_${userId}`);
+    }
+  });
+
   // Join personal conversation room
   socket.on('join_conversation', (conversationId) => {
     socket.join(`conv_${conversationId}`);
     logger.debug(`Socket ${socket.id} joined conversation: conv_${conversationId}`);
+  });
+
+  socket.on('leave_conversation', (conversationId) => {
+    socket.leave(`conv_${conversationId}`);
+    logger.debug(`Socket ${socket.id} left conversation: conv_${conversationId}`);
   });
 
   // Real-time message exchange

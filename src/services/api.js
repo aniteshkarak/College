@@ -199,6 +199,18 @@ export const api = {
       request('/auth/reset-password', {
         method: 'POST',
         body: JSON.stringify({ token, newPassword })
+      }),
+
+    changePassword: (currentPassword, newPassword) =>
+      request('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword })
+      }),
+
+    refreshToken: (refreshToken) =>
+      request('/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken })
       })
   },
 
@@ -291,6 +303,54 @@ export const api = {
       const blob = await res.blob();
       return URL.createObjectURL(blob);
     },
+
+    getReports: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.status) sp.set('status', params.status);
+      const q = sp.toString();
+      return request(`/admin/reports${q ? `?${q}` : ''}`);
+    },
+
+    resolveReport: (id, resolutionNotes) =>
+      request(`/admin/reports/${encodeURIComponent(id)}/resolve`, {
+        method: 'POST',
+        body: JSON.stringify({ resolutionNotes }),
+      }),
+
+    dismissReport: (id, dismissReason) =>
+      request(`/admin/reports/${encodeURIComponent(id)}/dismiss`, {
+        method: 'POST',
+        body: JSON.stringify({ dismissReason }),
+      }),
+
+    suspendUser: (id, reason) =>
+      request(`/admin/users/${encodeURIComponent(id)}/suspend`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+
+    activateUser: (id, reason) =>
+      request(`/admin/users/${encodeURIComponent(id)}/activate`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+
+    getUsers: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.search) sp.set('search', params.search);
+      if (params.status) sp.set('status', params.status);
+      if (params.page) sp.set('page', params.page);
+      if (params.limit) sp.set('limit', params.limit);
+      const q = sp.toString();
+      return request(`/admin/users${q ? `?${q}` : ''}`);
+    },
+
+    getAuditLogs: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.limit) sp.set('limit', params.limit);
+      const q = sp.toString();
+      return request(`/admin/audit-logs${q ? `?${q}` : ''}`);
+    },
   },
 
   // Discovery
@@ -323,6 +383,7 @@ export const api = {
   // Matching & Likes
   matching: {
     getIncoming: () => request('/matching/incoming'),
+    getSent: () => request('/matching/sent'),
     getMatches: () => request('/matching/matches'),
     sendRequest: (receiverId) =>
       request('/matching/send-request', {
@@ -346,6 +407,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ blockedId, reason }),
       }),
+    unblock: (unblockId) =>
+      request('/matching/unblock', {
+        method: 'POST',
+        body: JSON.stringify({ unblockId }),
+      }),
+    getBlocked: () => request('/matching/blocked'),
     sendGoRequest: (matchId, targetStage) =>
       request(`/matching/${encodeURIComponent(matchId)}/go`, {
         method: 'POST',
@@ -413,6 +480,15 @@ export const api = {
     markAllRead: () =>
       request('/notifications/mark-all-read', {
         method: 'POST',
+      }),
+  },
+
+  // Safety & Moderation Reports
+  reports: {
+    submit: ({ reportedUserId, category, reason }) =>
+      request('/reports', {
+        method: 'POST',
+        body: JSON.stringify({ reportedUserId, category, reason }),
       }),
   },
 

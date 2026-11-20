@@ -6,10 +6,23 @@ import { z } from 'zod';
 
 const router = Router();
 
+const ALLOWED_CATEGORIES = [
+  'Harassment',
+  'Inappropriate content',
+  'Fake profile',
+  'Impersonation',
+  'Spam',
+  'Unwanted contact',
+  'Threats',
+  'Other',
+];
+
 const reportSchema = z.object({
   reportedUserId: z.string().uuid(),
-  category: z.string().min(2).max(100),
-  reason: z.string().min(5).max(1000),
+  category: z.string().refine((val) => ALLOWED_CATEGORIES.some((c) => c.toLowerCase() === val.toLowerCase()), {
+    message: `Category must be one of: ${ALLOWED_CATEGORIES.join(', ')}`,
+  }),
+  reason: z.string().min(5, 'Reason must be at least 5 characters').max(1000),
 });
 
 router.post('/', requireAuth, async (req, res) => {

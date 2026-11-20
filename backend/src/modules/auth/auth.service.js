@@ -1,7 +1,11 @@
 import * as argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import prisma from '../../config/prisma.js';
 import config from '../../config/env.js';
+import emailService from '../../services/emailService.js';
+import { serializePrivateAccount } from '../../utils/serializers.js';
+import logger from '../../utils/logger.js';
 
 export const registerUser = async (data) => {
   const existing = await prisma.user.findFirst({
@@ -50,44 +54,44 @@ export const registerUser = async (data) => {
       dateOfBirth: birthDate,
       age,
       gender: data.gender,
-      interestedIn: data.interestedIn,
-      city: data.city,
-      state: data.state,
-      collegeName: data.collegeName,
-      course: data.course || null,
-      avatarUrl: data.avatarUrl,
-      additionalPhotos: data.additionalPhotos,
-      verificationIdUrl: data.verificationIdUrl,
-      verificationIdType: data.verificationIdType || 'COLLEGE_ID',
-      relationshipIntention: data.relationshipIntention,
-      verificationStatus: 'PENDING_APPROVAL',
+      accountStatus: 'ACTIVE',
       role: 'STUDENT',
+      verificationStatus: 'PENDING_APPROVAL',
+      profile: {
+        create: {
+          bio: `Verified student at ${data.collegeName}`,
+          interests: data.interestedIn || ['Campus Life'],
+          city: data.city,
+          state: data.state,
+          relationshipIntention: data.relationshipIntention || 'Casual Connection',
+        },
+      },
+      education: {
+        create: {
+          collegeName: data.collegeName,
+          degreeName: data.course || 'Degree Program',
+          departmentStream: 'General Stream',
+          academicYear: '1st Year',
+          graduationYear: 2027,
+          studentStatus: 'CURRENTLY_STUDYING',
+        },
+      },
     },
-    select: {
-      id: true,
-      email: true,
-      mobileNumber: true,
-      fullName: true,
-      displayName: true,
-      age: true,
-      collegeName: true,
-      course: true,
-      avatarUrl: true,
-      additionalPhotos: true,
-      verificationIdType: true,
-      verificationStatus: true,
-      createdAt: true,
+    include: {
+      profile: true,
+      education: true,
+      photos: true,
     },
   });
 
   return {
-    user: newUser,
+    user: serializePrivateAccount(newUser),
     status: 'PENDING_APPROVAL',
-    message: 'Your registration was submitted successfully! It is now pending admin review. Once an admin verifies your College/Govt ID and photos, you will be able to log in.',
+    message: 'Your registration was submitted successfully! It is now pending admin review. Once an admin verifies your details, you will be able to log in.',
   };
 };
 
-export const loginUser = async (identifier, password) => {
+export const loginUser = async (identifier, password, reqMeta = {}) => {
   const isEmail = identifier.includes('@');
   const user = await prisma.user.findFirst({
     where: isEmail
@@ -95,12 +99,13 @@ export const loginUser = async (identifier, password) => {
       : { mobileNumber: identifier.trim() },
     include: {
       profile: true,
-      education: true,
+      education: { include: { college: true } },
       photos: { orderBy: { photoOrder: 'asc' } },
     },
   });
 
   if (!user) {
+    // Check if the user is in PendingRegistration stage
     const pending = await prisma.pendingRegistration.findFirst({
       where: isEmail
         ? { email: identifier.toLowerCase() }
@@ -135,32 +140,22 @@ export const loginUser = async (identifier, password) => {
     throw new Error('Incorrect password. Please try again.');
   }
 
-  const sanitizedUser = {
-    id: user.id,
-    email: user.email,
-    mobileNumber: user.mobileNumber,
-    fullName: user.fullName,
-    displayName: user.displayName,
-    age: user.age,
-    gender: user.gender,
-    collegeName: user.education?.collegeName || '',
-    course: user.education?.course || user.education?.degreeName || '',
-    relationshipIntention: user.profile?.relationshipIntention || '',
-    currentMood: user.profile?.currentMood || 'Want to make friends',
-    subscriptionPlan: user.subscriptionPlan,
-    sentRequestsCount: user.sentRequestsCount,
-    avatarUrl: user.photos?.[0]?.url || '',
-    additionalPhotos: user.photos?.slice(1).map((p) => p.url) || [],
-    verificationStatus: user.verificationStatus,
-    role: user.role,
-  };
+  const sanitizedUser = serializePrivateAccount(user);
+
+  // Check Account Status
+  if (user.accountStatus === 'SUSPENDED') {
+    const err = new Error('Your account has been suspended by administration. Please contact support.');
+    err.code = 'ACCOUNT_SUSPENDED';
+    err.statusCode = 403;
+    throw err;
+  }
 
   // Check Admin Verification Approval Status
   if (user.verificationStatus === 'PENDING_APPROVAL') {
     return {
       status: 'PENDING_APPROVAL',
       user: sanitizedUser,
-      message: 'Your account is currently under admin review. Campus administrators are checking your ID proof and photos. Please check back shortly.',
+      message: 'Your account is currently under admin review. Campus administrators are checking your details. Please check back shortly.',
     };
   }
 
@@ -168,24 +163,223 @@ export const loginUser = async (identifier, password) => {
     return {
       status: 'REJECTED',
       user: sanitizedUser,
-      reason: user.rejectionReason || 'Verification ID or photos did not meet guidelines.',
-      message: 'Your verification was declined. Please update your details and re-upload your valid ID.',
+      message: 'Your verification was declined. Please re-submit your updated details.',
     };
   }
 
-  // User is APPROVED
+  // User is APPROVED: Issue Access Token + Refresh Token
   const token = jwt.sign(
     { sub: user.id, email: user.email, role: user.role },
     config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
+    { expiresIn: config.jwt.expiresIn, issuer: 'college-api', audience: 'college-mobile-web' }
   );
+
+  const refreshToken = crypto.randomBytes(40).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+  // Persist session in UserSession
+  await prisma.userSession.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      ipAddress: reqMeta.ip || null,
+      userAgent: reqMeta.userAgent || null,
+      expiresAt,
+    },
+  }).catch((err) => logger.warn(`Session record failed: ${err.message}`));
 
   return {
     status: 'APPROVED',
     user: sanitizedUser,
     token,
+    refreshToken,
+    expiresIn: config.jwt.expiresIn,
     message: 'Login successful! Welcome to Collégé.',
   };
 };
 
-export default { registerUser, loginUser };
+export const requestPasswordReset = async (email) => {
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const user = await prisma.user.findUnique({
+    where: { email: cleanEmail },
+  });
+
+  // Always return generic success to prevent email enumeration
+  if (!user) {
+    return {
+      success: true,
+      message: 'If an account matches this email, a password reset link has been dispatched.',
+    };
+  }
+
+  // Create single-use password reset token (1 hour)
+  const resetToken = jwt.sign(
+    { sub: user.id, email: user.email, type: 'pwd_reset' },
+    config.jwt.secret,
+    { expiresIn: '1h', issuer: 'college-api', audience: 'college-pwd-reset' }
+  );
+
+  emailService.sendPasswordResetEmail({
+    email: user.email,
+    resetToken,
+  }).catch((err) => logger.warn(`Password reset email failed: ${err.message}`));
+
+  return {
+    success: true,
+    message: 'If an account matches this email, a password reset link has been dispatched.',
+  };
+};
+
+export const resetPassword = async (token, newPassword) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(token, config.jwt.secret, {
+      issuer: 'college-api',
+      audience: 'college-pwd-reset',
+    });
+  } catch (err) {
+    const error = new Error('Invalid or expired password reset token.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (decoded.type !== 'pwd_reset' || !decoded.sub) {
+    const error = new Error('Invalid password reset token payload.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.sub },
+  });
+
+  if (!user) {
+    const error = new Error('User account not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const passwordHash = await argon2.hash(newPassword, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+  });
+
+  // Update password and invalidate previous active sessions
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    await tx.userSession.deleteMany({
+      where: { userId: user.id },
+    });
+  });
+
+  return {
+    success: true,
+    message: 'Password has been reset successfully. Please log in with your new password.',
+  };
+};
+
+export const changePassword = async (userId, currentPassword, newPassword) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    const error = new Error('User not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const isMatch = await argon2.verify(user.passwordHash, currentPassword);
+  if (!isMatch) {
+    const error = new Error('Current password is incorrect.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const passwordHash = await argon2.hash(newPassword, {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+
+  return {
+    success: true,
+    message: 'Password changed successfully.',
+  };
+};
+
+export const refreshToken = async (rawRefreshToken) => {
+  const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
+
+  const session = await prisma.userSession.findFirst({
+    where: {
+      tokenHash,
+      expiresAt: { gt: new Date() },
+    },
+    include: {
+      user: {
+        include: {
+          profile: true,
+          education: true,
+          photos: { orderBy: { photoOrder: 'asc' } },
+        },
+      },
+    },
+  });
+
+  if (!session || !session.user || session.user.accountStatus !== 'ACTIVE') {
+    const error = new Error('Invalid or expired refresh token.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  // Issue new access token
+  const token = jwt.sign(
+    { sub: session.user.id, email: session.user.email, role: session.user.role },
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn, issuer: 'college-api', audience: 'college-mobile-web' }
+  );
+
+  return {
+    success: true,
+    token,
+    user: serializePrivateAccount(session.user),
+  };
+};
+
+export const logoutUser = async (userId, rawRefreshToken) => {
+  if (rawRefreshToken) {
+    const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
+    await prisma.userSession.deleteMany({
+      where: { userId, tokenHash },
+    }).catch(() => {});
+  } else {
+    // Invalidate all sessions for user
+    await prisma.userSession.deleteMany({
+      where: { userId },
+    }).catch(() => {});
+  }
+
+  return { success: true };
+};
+
+export default {
+  registerUser,
+  loginUser,
+  requestPasswordReset,
+  resetPassword,
+  changePassword,
+  refreshToken,
+  logoutUser,
+};

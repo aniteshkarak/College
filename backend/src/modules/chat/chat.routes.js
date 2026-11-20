@@ -4,9 +4,23 @@ import prisma from '../../config/prisma.js';
 import { storageService } from '../../services/storageService.js';
 import { audioUpload } from '../../middleware/uploadMiddleware.js';
 import { success, error } from '../../utils/response.js';
+import { serializePublicProfile } from '../../utils/serializers.js';
 import { z } from 'zod';
 
 const router = Router();
+
+const isConversationBlocked = async (match) => {
+  if (!match || match.status === 'BLOCKED' || match.status === 'UNMATCHED') return true;
+  const block = await prisma.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: match.user1Id, blockedId: match.user2Id },
+        { blockerId: match.user2Id, blockedId: match.user1Id },
+      ],
+    },
+  });
+  return Boolean(block);
+};
 
 const sendMessageSchema = z.object({
   content: z.string().min(1).max(2000),
@@ -54,13 +68,17 @@ router.get('/conversations', requireAuth, async (req, res) => {
       orderBy: { updatedAt: 'desc' },
     });
 
+    const nonBlockedConversations = [];
+    for (const conv of conversations) {
+      if (!(await isConversationBlocked(conv.match))) {
+        nonBlockedConversations.push(conv);
+      }
+    }
+
     const formatted = await Promise.all(
-      conversations.map(async (conv) => {
+      nonBlockedConversations.map(async (conv) => {
         const partner = conv.match.user1Id === currentUserId ? conv.match.user2 : conv.match.user1;
-        const p = partner.profile || {};
-        const edu = partner.education || {};
-        const photoUrls = partner.photos.map((ph) => ph.photoUrl);
-        const avatarUrl = photoUrls[0] || null;
+        const publicPartner = serializePublicProfile(partner);
 
         // Calculate unread count for current user
         const unreadCount = await prisma.message.count({
@@ -78,15 +96,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
           conversationId: conv.id,
           matchId: conv.matchId,
           stage: conv.match.stage,
-          partner: {
-            id: partner.id,
-            full_name: partner.fullName,
-            display_name: partner.displayName,
-            college_name: edu.collegeName || 'College',
-            course: edu.degreeName || edu.departmentStream,
-            avatar_url: avatarUrl,
-            current_mood: p.currentMood || 'Want to make friends',
-          },
+          partner: publicPartner,
           lastMessage: lastMsg
             ? {
               id: lastMsg.id,
@@ -129,6 +139,10 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
 
     if (conversation.match.user1Id !== currentUserId && conversation.match.user2Id !== currentUserId) {
       return error(res, 'Unauthorized to view this conversation', 403);
+    }
+
+    if (await isConversationBlocked(conversation.match)) {
+      return error(res, 'Access denied: Conversation is blocked or inactive', 403);
     }
 
     const whereClause = { conversationId: id };
@@ -180,6 +194,10 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
 
     if (conversation.match.user1Id !== currentUserId && conversation.match.user2Id !== currentUserId) {
       return error(res, 'Unauthorized to post to this conversation', 403);
+    }
+
+    if (await isConversationBlocked(conversation.match)) {
+      return error(res, 'Access denied: Cannot send message to a blocked or inactive conversation', 403);
     }
 
     const recipientId = conversation.match.user1Id === currentUserId ? conversation.match.user2Id : conversation.match.user1Id;
@@ -253,6 +271,10 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
 
       if (conversation.match.user1Id !== currentUserId && conversation.match.user2Id !== currentUserId) {
         return error(res, 'Unauthorized', 403);
+      }
+
+      if (await isConversationBlocked(conversation.match)) {
+        return error(res, 'Access denied: Cannot send voice note to a blocked or inactive conversation', 403);
       }
 
       const recipientId = conversation.match.user1Id === currentUserId ? conversation.match.user2Id : conversation.match.user1Id;
@@ -331,6 +353,10 @@ router.get('/conversations/:id/messages/:messageId/audio', requireAuth, async (r
     // Verify conversation membership
     if (conversation.match.user1Id !== currentUserId && conversation.match.user2Id !== currentUserId) {
       return error(res, 'Access denied: You are not a participant in this conversation', 403);
+    }
+
+    if (await isConversationBlocked(conversation.match)) {
+      return error(res, 'Access denied: Audio unavailable for blocked conversation', 403);
     }
 
     const message = await prisma.message.findUnique({

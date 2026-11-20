@@ -1,4 +1,12 @@
-import { registerSchema, loginSchema, resubmitVerificationSchema } from './auth.validator.js';
+import {
+  registerSchema,
+  loginSchema,
+  resubmitVerificationSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  refreshTokenSchema,
+} from './auth.validator.js';
 import authService from './auth.service.js';
 import prisma from '../../config/prisma.js';
 import { serializePrivateAccount } from '../../utils/serializers.js';
@@ -26,7 +34,12 @@ export const login = async (req, res) => {
     }
 
     const { identifier, password } = parseResult.data;
-    const result = await authService.loginUser(identifier, password);
+    const reqMeta = {
+      ip: req.ip || req.socket?.remoteAddress || null,
+      userAgent: req.get('user-agent') || null,
+    };
+
+    const result = await authService.loginUser(identifier, password, reqMeta);
 
     if (result.status === 'PENDING_APPROVAL') {
       return res.status(403).json({
@@ -47,9 +60,18 @@ export const login = async (req, res) => {
       });
     }
 
+    if (result.refreshToken) {
+      res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+    }
+
     return success(res, result, result.message);
   } catch (err) {
-    if (err.code === 'ACCOUNT_NOT_ACTIVE') {
+    if (err.code === 'ACCOUNT_NOT_ACTIVE' || err.code === 'ACCOUNT_SUSPENDED') {
       return res.status(err.statusCode || 403).json({
         success: false,
         code: err.code,
@@ -98,7 +120,70 @@ export const resubmitVerification = async (req, res) => {
   }
 };
 
-export const logout = async (_req, res) => {
+export const forgotPassword = async (req, res) => {
+  try {
+    const parseResult = forgotPasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return error(res, 'A valid email address is required', 400, parseResult.error.issues);
+    }
+
+    const result = await authService.requestPasswordReset(parseResult.data.email);
+    return success(res, result, result.message);
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const parseResult = resetPasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return error(res, 'Validation failed', 400, parseResult.error.issues);
+    }
+
+    const { token, newPassword } = parseResult.data;
+    const result = await authService.resetPassword(token, newPassword);
+    return success(res, result, result.message);
+  } catch (err) {
+    return error(res, err.message, err.statusCode || 500);
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const parseResult = changePasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return error(res, 'Validation failed', 400, parseResult.error.issues);
+    }
+
+    const { currentPassword, newPassword } = parseResult.data;
+    const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
+    return success(res, result, result.message);
+  } catch (err) {
+    return error(res, err.message, err.statusCode || 500);
+  }
+};
+
+export const refresh = async (req, res) => {
+  try {
+    const rawRefreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
+    const parseResult = refreshTokenSchema.safeParse({ refreshToken: rawRefreshToken });
+    if (!parseResult.success) {
+      return error(res, 'A valid refresh token is required', 400, parseResult.error.issues);
+    }
+
+    const result = await authService.refreshToken(parseResult.data.refreshToken);
+    return success(res, result, 'Token refreshed successfully');
+  } catch (err) {
+    return error(res, err.message, err.statusCode || 401);
+  }
+};
+
+export const logout = async (req, res) => {
+  const rawRefreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
+  if (req.user?.id) {
+    await authService.logoutUser(req.user.id, rawRefreshToken).catch(() => {});
+  }
   res.clearCookie('token');
   res.clearCookie('refreshToken');
   return success(res, null, 'Logged out successfully');
@@ -126,4 +211,14 @@ export const getMe = async (req, res) => {
   }
 };
 
-export default { register, login, logout, resubmitVerification, getMe };
+export default {
+  register,
+  login,
+  logout,
+  resubmitVerification,
+  forgotPassword,
+  resetPassword,
+  changePassword,
+  refresh,
+  getMe,
+};

@@ -28,17 +28,15 @@ export const registerSchema = z.object({
     .string()
     .min(8, 'Password must be at least 8 characters long')
     .max(100, 'Password cannot exceed 100 characters'),
-  // At least 2 photos required:
   avatarUrl: z.string().url('Photo 1 (Profile Avatar) is required'),
   additionalPhotos: z.array(z.string().url()).min(1, 'At least 2 photos are required (Photo 1 + Photo 2)'),
-  // Verification ID proof (College ID or Govt ID)
   verificationIdUrl: z.string().min(1, 'Verification ID document/card proof is required'),
   verificationIdType: z.enum(['COLLEGE_ID', 'GOVT_ID']).default('COLLEGE_ID'),
   relationshipIntention: z.enum(['Casual Connection', 'Dating Connection', 'Serious Relationship']).default('Casual Connection'),
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3, 'Email or Mobile Number is required'), // can be email or mobile
+  identifier: z.string().min(3, 'Email or Mobile Number is required'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -52,4 +50,36 @@ export const resubmitVerificationSchema = z.object({
   verificationIdType: z.enum(['COLLEGE_ID', 'GOVT_ID']).optional(),
 });
 
-export default { registerSchema, loginSchema, resubmitVerificationSchema };
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('A valid email address is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(10, 'Reset token is required'),
+  newPassword: z
+    .string()
+    .min(8, 'New password must be at least 8 characters long')
+    .max(100, 'Password cannot exceed 100 characters'),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z
+    .string()
+    .min(8, 'New password must be at least 8 characters long')
+    .max(100, 'Password cannot exceed 100 characters'),
+});
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(10, 'Refresh token is required'),
+});
+
+export default {
+  registerSchema,
+  loginSchema,
+  resubmitVerificationSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  refreshTokenSchema,
+};

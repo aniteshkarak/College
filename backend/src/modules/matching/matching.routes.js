@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import prisma from '../../config/prisma.js';
 import { success, error } from '../../utils/response.js';
+import { serializePublicProfile } from '../../utils/serializers.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -35,36 +36,60 @@ router.get('/incoming', requireAuth, async (req, res) => {
     });
 
     const formatted = incoming.map((reqItem) => {
-      const s = reqItem.sender;
-      const p = s.profile || {};
-      const edu = s.education || {};
-      const photoUrls = s.photos.map((ph) => ph.photoUrl);
-      const avatarUrl = photoUrls[0] || null;
+      const publicUser = serializePublicProfile(reqItem.sender);
 
       return {
         id: reqItem.id,
         requestId: reqItem.id,
-        user: {
-          id: s.id,
-          full_name: s.fullName,
-          display_name: s.displayName,
-          age: s.age,
-          gender: s.gender,
-          college_name: edu.collegeName || 'College',
-          course: edu.degreeName || edu.departmentStream,
-          avatar_url: avatarUrl,
-          additional_photos: photoUrls.slice(1),
-          bio: p.bio,
-          interests: p.interests || [],
-          relationship_intention: p.relationshipIntention || 'Casual Connection',
-          city: p.city,
-          state: p.state,
-        },
+        senderId: reqItem.senderId,
+        user: publicUser,
         likedAt: reqItem.createdAt,
+        createdAt: reqItem.createdAt,
       };
     });
 
     return success(res, { incomingLikes: formatted, requests: formatted }, 'Incoming likes retrieved');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 1b. Get Sent Requests
+router.get('/sent', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+
+    const sent = await prisma.matchRequest.findMany({
+      where: {
+        senderId: currentUserId,
+      },
+      include: {
+        receiver: {
+          include: {
+            profile: true,
+            education: true,
+            photos: { orderBy: { photoOrder: 'asc' } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const formatted = sent.map((reqItem) => {
+      const publicUser = serializePublicProfile(reqItem.receiver);
+
+      return {
+        id: reqItem.id,
+        requestId: reqItem.id,
+        receiverId: reqItem.receiverId,
+        status: reqItem.status,
+        user: publicUser,
+        sentAt: reqItem.createdAt,
+        createdAt: reqItem.createdAt,
+      };
+    });
+
+    return success(res, { sentRequests: formatted, requests: formatted }, 'Sent requests retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }
@@ -114,10 +139,7 @@ router.get('/matches', requireAuth, async (req, res) => {
 
     const formatted = matches.map((m) => {
       const partner = m.user1Id === currentUserId ? m.user2 : m.user1;
-      const p = partner.profile || {};
-      const edu = partner.education || {};
-      const photoUrls = partner.photos.map((ph) => ph.photoUrl);
-      const avatarUrl = photoUrls[0] || null;
+      const publicUser = serializePublicProfile(partner);
       const lastMsg = m.conversation?.messages[0] || null;
       const activeGoReq = m.goRequests[0] || null;
 
@@ -144,22 +166,7 @@ router.get('/matches', requireAuth, async (req, res) => {
               targetStage: activeGoReq.targetStage,
             }
           : null,
-        user: {
-          id: partner.id,
-          full_name: partner.fullName,
-          display_name: partner.displayName,
-          age: partner.age,
-          gender: partner.gender,
-          college_name: edu.collegeName || 'College',
-          course: edu.degreeName || edu.departmentStream,
-          avatar_url: avatarUrl,
-          additional_photos: photoUrls.slice(1),
-          bio: p.bio,
-          interests: p.interests || [],
-          relationship_intention: p.relationshipIntention || 'Casual Connection',
-          city: p.city,
-          state: p.state,
-        },
+        user: publicUser,
       };
     });
 
@@ -289,32 +296,68 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       );
     }
 
-    // Transaction to update request, create Match and Conversation
+    // Check if either user has blocked the other
+    const blockCheck = await prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: matchReq.senderId, blockedId: currentUserId },
+          { blockerId: currentUserId, blockedId: matchReq.senderId },
+        ],
+      },
+    });
+
+    if (blockCheck) {
+      return error(res, 'Cannot accept request from a blocked user', 403);
+    }
+
+    // Transaction to update request, create or restore Match and Conversation idempotently
     const result = await prisma.$transaction(async (tx) => {
       await tx.matchRequest.update({
         where: { id },
         data: { status: 'ACCEPTED' },
       });
 
-      const newMatch = await tx.match.create({
-        data: {
-          user1Id: matchReq.senderId,
-          user2Id: currentUserId,
-          status: 'ACTIVE',
-          stage: 'Friend',
+      let match = await tx.match.findFirst({
+        where: {
+          OR: [
+            { user1Id: matchReq.senderId, user2Id: currentUserId },
+            { user1Id: currentUserId, user2Id: matchReq.senderId },
+          ],
         },
+        include: { conversation: true },
       });
 
-      const newConversation = await tx.conversation.create({
-        data: {
-          matchId: newMatch.id,
-        },
-      });
+      if (!match) {
+        match = await tx.match.create({
+          data: {
+            user1Id: matchReq.senderId,
+            user2Id: currentUserId,
+            status: 'ACTIVE',
+            stage: 'Friend',
+          },
+          include: { conversation: true },
+        });
+      } else if (match.status !== 'ACTIVE') {
+        match = await tx.match.update({
+          where: { id: match.id },
+          data: { status: 'ACTIVE', stage: 'Friend' },
+          include: { conversation: true },
+        });
+      }
+
+      let conv = match.conversation;
+      if (!conv) {
+        conv = await tx.conversation.create({
+          data: {
+            matchId: match.id,
+          },
+        });
+      }
 
       // System greeting message
       await tx.message.create({
         data: {
-          conversationId: newConversation.id,
+          conversationId: conv.id,
           senderId: currentUserId,
           content: `You and ${matchReq.sender.displayName} accepted each other and are now Mutual Friends! Start talking freely as friends.`,
           messageType: 'SYSTEM_PROMPT',
@@ -328,11 +371,11 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
           type: 'MATCH',
           title: 'Mutual Match!',
           body: `${currentUser.displayName} accepted your match request! You are now Mutual Friends.`,
-          data: { matchId: newMatch.id, conversationId: newConversation.id },
+          data: { matchId: match.id, conversationId: conv.id },
         },
       });
 
-      return { match: newMatch, conversation: newConversation };
+      return { match, conversation: conv };
     });
 
     return success(res, result, 'Match accepted! You are now Mutual Friends.');
@@ -433,6 +476,64 @@ router.post('/block', requireAuth, async (req, res) => {
     });
 
     return success(res, null, 'User has been blocked successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 7b. Unblock User
+router.post('/unblock', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const targetId = req.body?.unblockId || req.body?.blockedId || req.body?.userId;
+
+    if (!targetId || targetId === currentUserId) {
+      return error(res, 'Valid unblock user ID is required', 400);
+    }
+
+    await prisma.userBlock.deleteMany({
+      where: {
+        blockerId: currentUserId,
+        blockedId: targetId,
+      },
+    });
+
+    return success(res, null, 'User has been unblocked successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 7c. Get Blocked Users
+router.get('/blocked', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+
+    const blockedRecords = await prisma.userBlock.findMany({
+      where: {
+        blockerId: currentUserId,
+      },
+      include: {
+        blocked: {
+          include: {
+            profile: true,
+            education: true,
+            photos: { orderBy: { photoOrder: 'asc' } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const formatted = blockedRecords.map((item) => ({
+      id: item.id,
+      blockedId: item.blockedId,
+      blockedAt: item.createdAt,
+      reason: item.reason,
+      user: serializePublicProfile(item.blocked),
+    }));
+
+    return success(res, { blockedUsers: formatted }, 'Blocked users retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }
