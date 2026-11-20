@@ -60,19 +60,6 @@ export const AppProvider = ({ children }) => {
   // Colleges Registry
   const [collegesList, setCollegesList] = useState(PREMIER_COLLEGES);
 
-  // Registered accounts database (Simulated)
-  const [registeredUsers, setRegisteredUsers] = useState([
-    {
-      ...INITIAL_USER,
-      email: 'anirban@iitkgp.ac.in',
-      mobile: '9876543210',
-      password: 'password123',
-      verification_status: 'APPROVED',
-      accountStatus: 'ACTIVE',
-      role: 'STUDENT'
-    }
-  ]);
-
   // Pending Verifications Queue for Admin (72-Hour Manual Verification System)
   const [pendingVerifications, setPendingVerifications] = useState(INITIAL_PENDING_VERIFICATIONS);
 
@@ -127,24 +114,7 @@ export const AppProvider = ({ children }) => {
   const [adminAuditLogs, setAdminAuditLogs] = useState(ADMIN_AUDIT_LOGS);
 
   // Notifications & Modals
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif_1',
-      type: 'like',
-      title: 'New Like Received',
-      body: 'Tanvi Sharma from IIT Kharagpur liked your profile. Check your Match Requests!',
-      time: '15m ago',
-      read: false
-    },
-    {
-      id: 'notif_2',
-      type: 'campus',
-      title: 'New Campus Announcement',
-      body: 'Spring Fest 2026 band night auditions announced on your Campus Board.',
-      time: '1h ago',
-      read: false
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
   const [blockTarget, setBlockTarget] = useState(null);
@@ -174,27 +144,26 @@ export const AppProvider = ({ children }) => {
     api.discovery.getProfiles()
       .then((res) => {
         if (!isMounted) return;
-        if (res?.data?.users && res.data.users.length > 0) {
-          const mapped = res.data.users.map((u) => ({
-            id: u.id,
-            display_name: u.displayName || u.fullName,
-            age: u.profile?.age || u.age || 21,
-            gender: u.profile?.gender || 'Student',
-            city: u.profile?.city || 'Campus',
-            state: u.profile?.state || '',
-            college_name: u.education?.collegeName || u.collegeName || 'Premier College',
-            course: u.education?.course || u.course || 'Degree Program',
-            relationship_intention: u.profile?.relationshipIntention || 'Casual Connection',
-            avatar_url: u.photos?.[0]?.url || u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
-            additional_photos: (u.photos?.slice(1) || []).map((p) => p.url),
-            bio: u.profile?.bio || u.bio || 'Verified college student on Collégé.',
-            interests: u.profile?.interests || u.interests || ['Music', 'Coding'],
-            languages: u.profile?.languagesSpoken || ['English'],
-            mood: u.profile?.currentMood || 'Looking for a conversation',
-            verified: true,
-          }));
-          setProfiles(mapped);
-        }
+        const users = res?.data?.profiles || res?.data?.users || [];
+        const mapped = users.map((u) => ({
+          id: u.id,
+          display_name: u.displayName || u.display_name || u.fullName,
+          age: u.age || u.profile?.age || 21,
+          gender: u.gender || u.profile?.gender || 'Student',
+          city: u.city || u.profile?.city || 'Campus',
+          state: u.state || u.profile?.state || '',
+          college_name: u.collegeName || u.college_name || u.education?.collegeName || 'Premier College',
+          course: u.course || u.degreeName || u.education?.course || 'Degree Program',
+          relationship_intention: u.relationshipIntention || u.relationship_intention || 'Casual Connection',
+          avatar_url: u.avatarUrl || u.avatar_url || u.photos?.[0]?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
+          additional_photos: u.additionalPhotos || u.additional_photos || (u.photos?.slice(1) || []).map((p) => p.url),
+          bio: u.bio || u.profile?.bio || 'Verified college student on Collégé.',
+          interests: u.interests || u.profile?.interests || [],
+          languages: u.languages || u.languagesSpoken || ['English'],
+          mood: u.mood || u.currentMood || 'Looking for a conversation',
+          verified: true,
+        }));
+        setProfiles(mapped);
       })
       .catch((err) => console.warn('Could not load discovery profiles:', err.message));
 
@@ -202,26 +171,25 @@ export const AppProvider = ({ children }) => {
     api.matching.getIncoming()
       .then((res) => {
         if (!isMounted) return;
-        if (res?.data?.requests && res.data.requests.length > 0) {
-          const mapped = res.data.requests.map((r) => ({
-            id: r.id,
-            sender_id: r.senderId,
-            user: {
-              id: r.sender?.id || r.senderId,
-              display_name: r.sender?.displayName || r.sender?.fullName,
-              avatar_url: r.sender?.photos?.[0]?.url || r.sender?.avatarUrl,
-              college_name: r.sender?.education?.collegeName || 'Campus',
-              course: r.sender?.education?.course || 'Student',
-              age: r.sender?.profile?.age || 21,
-              gender: r.sender?.profile?.gender || 'Student',
-              bio: r.sender?.profile?.bio || '',
-              interests: r.sender?.profile?.interests || [],
-              city: r.sender?.profile?.city || '',
-            },
-            created_at: r.createdAt,
-          }));
-          setIncomingLikes(mapped);
-        }
+        const requests = res?.data?.incomingLikes || res?.data?.requests || [];
+        const mapped = requests.map((r) => ({
+          id: r.id,
+          sender_id: r.senderId || r.user?.id,
+          user: {
+            id: r.user?.id || r.senderId,
+            display_name: r.user?.displayName || r.user?.display_name || r.sender?.displayName || r.sender?.fullName,
+            avatar_url: r.user?.avatarUrl || r.user?.avatar_url || r.sender?.photos?.[0]?.url || r.sender?.avatarUrl,
+            college_name: r.user?.collegeName || r.user?.college_name || r.sender?.education?.collegeName || 'Campus',
+            course: r.user?.course || r.sender?.education?.course || 'Student',
+            age: r.user?.age || r.sender?.profile?.age || 21,
+            gender: r.user?.gender || r.sender?.profile?.gender || 'Student',
+            bio: r.user?.bio || r.sender?.profile?.bio || '',
+            interests: r.user?.interests || r.sender?.profile?.interests || [],
+            city: r.user?.city || r.sender?.profile?.city || '',
+          },
+          created_at: r.createdAt || r.likedAt,
+        }));
+        setIncomingLikes(mapped);
       })
       .catch((err) => console.warn('Could not load incoming likes:', err.message));
 
@@ -229,35 +197,35 @@ export const AppProvider = ({ children }) => {
     api.matching.getMatches()
       .then((res) => {
         if (!isMounted) return;
-        if (res?.data?.matches && res.data.matches.length > 0) {
-          const mapped = res.data.matches.map((m) => {
-            const partner = m.user1Id === currentUser.id ? m.user2 : m.user1;
-            return {
-              id: m.id,
-              user: {
-                id: partner?.id,
-                display_name: partner?.displayName || partner?.fullName || 'Campus Match',
-                avatar_url: partner?.photos?.[0]?.url || partner?.avatarUrl,
-                additional_photos: (partner?.photos?.slice(1) || []).map((p) => p.url),
-                college_name: partner?.education?.collegeName || 'Campus',
-                course: partner?.education?.course || 'Student',
-                bio: partner?.profile?.bio || '',
-                interests: partner?.profile?.interests || [],
-                mood: partner?.profile?.currentMood || 'Want to make friends',
-                age: partner?.profile?.age || 21,
-                gender: partner?.profile?.gender || 'Student',
-                city: partner?.profile?.city || '',
-              },
-              matched_at: m.createdAt,
-              status: 'active',
-              stage: 'Friend',
-              unread_count: 0,
-              go_request: null,
-              last_message: null,
-            };
-          });
-          setMatches(mapped);
-        }
+        const matchesList = res?.data?.matches || [];
+        const mapped = matchesList.map((m) => {
+          const partner = m.user || (m.user1Id === currentUser.id ? m.user2 : m.user1);
+          return {
+            id: m.id,
+            conversation_id: m.conversationId || m.id,
+            user: {
+              id: partner?.id,
+              display_name: partner?.displayName || partner?.display_name || partner?.fullName || 'Campus Match',
+              avatar_url: partner?.avatarUrl || partner?.avatar_url || partner?.photos?.[0]?.url,
+              additional_photos: partner?.additionalPhotos || partner?.additional_photos || (partner?.photos?.slice(1) || []).map((p) => p.url),
+              college_name: partner?.collegeName || partner?.college_name || partner?.education?.collegeName || 'Campus',
+              course: partner?.course || partner?.education?.course || 'Student',
+              bio: partner?.bio || partner?.profile?.bio || '',
+              interests: partner?.interests || partner?.profile?.interests || [],
+              mood: partner?.currentMood || partner?.mood || partner?.profile?.currentMood || 'Want to make friends',
+              age: partner?.age || partner?.profile?.age || 21,
+              gender: partner?.gender || partner?.profile?.gender || 'Student',
+              city: partner?.city || partner?.profile?.city || '',
+            },
+            matched_at: m.matched_at || m.createdAt,
+            status: m.status || 'active',
+            stage: m.stage || 'Friend',
+            unread_count: m.unread_count || 0,
+            go_request: m.go_request || null,
+            last_message: m.last_message || null,
+          };
+        });
+        setMatches(mapped);
       })
       .catch((err) => console.warn('Could not load matches:', err.message));
 
@@ -265,11 +233,12 @@ export const AppProvider = ({ children }) => {
     api.chat.getConversations()
       .then((res) => {
         if (!isMounted) return;
-        if (res?.data?.conversations && res.data.conversations.length > 0) {
-          const convMap = {};
-          res.data.conversations.forEach((conv) => {
-            const key = conv.matchId || conv.id;
-            convMap[key] = (conv.messages || []).map((msg) => ({
+        const convs = res?.data?.conversations || [];
+        const convMap = {};
+        convs.forEach((conv) => {
+          const key = conv.matchId || conv.id;
+          if (conv.messages && conv.messages.length > 0) {
+            convMap[key] = conv.messages.map((msg) => ({
               id: msg.id,
               sender_id: msg.senderId,
               content: msg.content,
@@ -277,10 +246,11 @@ export const AppProvider = ({ children }) => {
               duration_seconds: msg.voiceDuration,
               audio_url: msg.mediaUrl ? api.chat.getAudioUrl(conv.id, msg.id) : null,
               created_at: msg.createdAt,
+              is_read: msg.isRead,
             }));
-          });
-          setConversations((prev) => ({ ...prev, ...convMap }));
-        }
+          }
+        });
+        setConversations(convMap);
       })
       .catch((err) => console.warn('Could not load conversations:', err.message));
 
@@ -288,17 +258,16 @@ export const AppProvider = ({ children }) => {
     api.notifications.getAll()
       .then((res) => {
         if (!isMounted) return;
-        if (res?.data?.notifications && res.data.notifications.length > 0) {
-          const mapped = res.data.notifications.map((n) => ({
-            id: n.id,
-            type: n.type.toLowerCase(),
-            title: n.title,
-            body: n.body,
-            time: new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            read: n.isRead,
-          }));
-          setNotifications(mapped);
-        }
+        const notifs = res?.data?.notifications || [];
+        const mapped = notifs.map((n) => ({
+          id: n.id,
+          type: (n.type || 'system').toLowerCase(),
+          title: n.title,
+          body: n.body,
+          time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+          read: n.read ?? n.isRead ?? false,
+        }));
+        setNotifications(mapped);
       })
       .catch((err) => console.warn('Could not load notifications:', err.message));
 
@@ -306,9 +275,7 @@ export const AppProvider = ({ children }) => {
     api.campus.getAnnouncements()
       .then((res) => {
         if (!isMounted) return;
-        if (res?.data?.announcements) {
-          setAnnouncements(res.data.announcements);
-        }
+        setAnnouncements(res?.data?.announcements || []);
         if (res?.data?.allowance) {
           setDailyAllowance(res.data.allowance);
         }
@@ -1036,48 +1003,6 @@ export const AppProvider = ({ children }) => {
         return m;
       })
     );
-
-    // Simulated responsive reply
-    setTimeout(() => {
-      const replies = [
-        `Totally agree! So glad we connected as mutual friends 😊`,
-        `That's awesome! How is your semester going so far?`,
-        `Haha love that! Check out the announcement on our Campus Board too 📢`,
-        `Spot on! Want to try a round of Would You Rather?`
-      ];
-      const randomReply = replies[Math.floor(Math.random() * replies.length)];
-      const replyMsg = {
-        id: 'msg_' + Date.now() + '_bot',
-        sender_id: match.user.id,
-        message_type: 'text',
-        content: randomReply,
-        created_at: new Date().toISOString(),
-        reactions: []
-      };
-
-      setConversations((prevConv) => ({
-        ...prevConv,
-        [matchId]: [...(prevConv[matchId] || []), replyMsg]
-      }));
-
-      setMatches((prevMatches) =>
-        prevMatches.map((m) => {
-          if (m.id === matchId) {
-            return {
-              ...m,
-              unread_count: activeChatMatch?.id === matchId ? 0 : m.unread_count + 1,
-              last_message: {
-                content: randomReply,
-                created_at: replyMsg.created_at,
-                sender_id: match.user.id,
-                message_type: 'text'
-              }
-            };
-          }
-          return m;
-        })
-      );
-    }, 2000);
   };
 
   const handleAddReaction = (matchId, messageId, reactionEmoji) => {
@@ -1105,128 +1030,8 @@ export const AppProvider = ({ children }) => {
 
   // --- COMPLETE MANUAL VERIFICATION & 72-HOUR LIFECYCLE ---
 
-  // Helper: Check local registered accounts & applications (offline simulation / demo fallback)
-  const checkLocalCredentials = (cleanId, password) => {
-    // Check in pending/reviewed applications queue
-    const appMatch = pendingVerifications.find(
-      (v) =>
-        (v.email && v.email.toLowerCase() === cleanId) ||
-        (v.mobile && v.mobile === cleanId) ||
-        (v.application_id && v.application_id.toLowerCase() === cleanId)
-    );
-
-    if (appMatch) {
-      if (appMatch.status === 'PENDING_REVIEW') {
-        return {
-          success: false,
-          status: 'PENDING_REVIEW',
-          student: appMatch,
-          message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
-        };
-      }
-
-      if (appMatch.status === 'UNDER_REVIEW') {
-        return {
-          success: false,
-          status: 'UNDER_REVIEW',
-          student: appMatch,
-          message: 'Your application is currently being inspected by an authorized campus administrator.'
-        };
-      }
-
-      if (appMatch.status === 'NEEDS_CORRECTION') {
-        return {
-          success: false,
-          status: 'NEEDS_CORRECTION',
-          student: appMatch,
-          reason: appMatch.correction_message || 'The administrator requested corrections on your submitted information.',
-          fields: appMatch.correction_fields || [],
-          message: `Correction Requested by Admin: "${appMatch.correction_message}". Please update your details and resubmit.`
-        };
-      }
-
-      if (appMatch.status === 'RESUBMITTED') {
-        return {
-          success: false,
-          status: 'RESUBMITTED',
-          student: appMatch,
-          message: 'Your corrected application was resubmitted and is currently in the admin verification queue.'
-        };
-      }
-
-      if (appMatch.status === 'REJECTED') {
-        return {
-          success: false,
-          status: 'REJECTED',
-          student: appMatch,
-          reason: appMatch.rejection_reason || 'Application was declined by the administrator.',
-          message: `Application declined: "${appMatch.rejection_reason}".`
-        };
-      }
-
-      if (appMatch.status === 'APPROVED') {
-        // Student was approved! Log in
-        const userObj = {
-          id: appMatch.id,
-          full_name: appMatch.legal_name || appMatch.full_name,
-          display_name: appMatch.display_name,
-          date_of_birth: appMatch.date_of_birth,
-          age: appMatch.age,
-          gender: appMatch.gender,
-          interested_in: ['Everyone'],
-          city: appMatch.city || 'Kolkata',
-          state: appMatch.state || 'West Bengal',
-          college_name: appMatch.college_name,
-          course: appMatch.degree_name || appMatch.course,
-          relationship_intention: appMatch.looking_for === 'Dating' ? 'Dating Connection' : 'Casual Connection',
-          avatar_url: appMatch.photo_1,
-          additional_photos: [appMatch.photo_2, appMatch.photo_3].filter(Boolean),
-          bio: appMatch.bio || `Student at ${appMatch.college_name}. Verified campus profile!`,
-          interests: appMatch.interests || ['Music', 'Travelling', 'Coding'],
-          languages: appMatch.languages_spoken || ['English', 'Bengali', 'Hindi'],
-          is_active: true,
-          verification_status: 'APPROVED',
-          accountStatus: 'ACTIVE',
-          mood: 'Looking for a conversation',
-          subscription_plan: 'free',
-          sent_requests_count: 0,
-          created_at: appMatch.submitted_at
-        };
-
-        setCurrentUser(userObj);
-        setIsAuthenticated(true);
-        setCurrentView('matches');
-        addToast(`Welcome to Collégé, ${userObj.display_name}! 🎓✨ Account activated.`, 'success');
-        return { success: true, user: userObj };
-      }
-    }
-
-    // Check in registered users (including default Anirban demo student account)
-    const userMatch = registeredUsers.find(
-      (u) =>
-        (u.email && u.email.toLowerCase() === cleanId) ||
-        (u.mobile && u.mobile === cleanId) ||
-        cleanId === 'anirban'
-    );
-
-    if (userMatch) {
-      setCurrentUser(userMatch);
-      setIsAuthenticated(true);
-      setCurrentView('matches');
-      addToast(`Welcome back, ${userMatch.display_name}! ✨`, 'success');
-      return { success: true, user: userMatch };
-    }
-
-    return {
-      success: false,
-      message: 'No account or application found with this email, mobile number, or Application ID.'
-    };
-  };
-
-  // 1. Log In using Gmail/Email OR Mobile + Password (with Backend API + Local fallback)
+  // 1. Log In using Gmail/Email OR Mobile + Password (strictly verified against database)
   const loginWithCredentials = async (identifier, password) => {
-    const cleanId = (identifier || '').trim().toLowerCase();
-
     try {
       const res = await api.auth.login(identifier, password);
       if (res && res.success && res.data) {
@@ -1239,6 +1044,10 @@ export const AppProvider = ({ children }) => {
         addToast(`Welcome back, ${user.displayName || user.fullName || user.display_name}! ✨`, 'success');
         return { success: true, user };
       }
+      return {
+        success: false,
+        message: res?.message || 'Login failed. Please check your credentials.'
+      };
     } catch (err) {
       // If backend reports an application in review or requiring correction or rejected
       if (err.code === 'ACCOUNT_NOT_ACTIVE' && err.details) {
@@ -1263,24 +1072,14 @@ export const AppProvider = ({ children }) => {
         };
       }
 
-      // If backend explicitly rejected password or user not found, check local mock registry
-      if (err.code === 'INVALID_CREDENTIALS' || err.code === 'USER_NOT_FOUND') {
-        const localResult = checkLocalCredentials(cleanId, password);
-        if (localResult && localResult.success) return localResult;
-        return {
-          success: false,
-          message: err.message || 'Invalid credentials. Password does not match.'
-        };
-      }
-
-      // If backend is offline or network error, fallback to local credentials
-      console.warn('Backend unavailable, using local simulated login:', err.message);
+      return {
+        success: false,
+        message: err.message || 'Invalid credentials. Email or password does not match.'
+      };
     }
-
-    return checkLocalCredentials(cleanId, password);
   };
 
-  // 2. Register New Student Application (Backend API + Local fallback)
+  // 2. Register New Student Application (Database Persistence)
   const registerStudent = async (studentData) => {
     try {
       const res = await api.registration.submit(studentData);
@@ -1295,133 +1094,46 @@ export const AppProvider = ({ children }) => {
           success: true,
           status: app.status || 'PENDING_REVIEW',
           student: app,
-          applicationId: app.application_id,
+          applicationId: app.application_id || app.applicationId,
           message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
         };
       }
-    } catch (err) {
-      if (err.code !== 'SERVER_OFFLINE') {
-        console.warn('Backend registration failed with validation error:', err.message);
-        return {
-          success: false,
-          message: err.message || 'Registration failed.'
-        };
-      }
-      console.warn('Backend server offline, falling back to local registration simulation.');
-    }
-
-    // Duplicate check
-    const duplicate = pendingVerifications.find(
-      (v) =>
-        (v.email && v.email.toLowerCase() === studentData.email.toLowerCase()) ||
-        (v.mobile && v.mobile === studentData.mobile)
-    );
-
-    if (duplicate && ['PENDING_REVIEW', 'UNDER_REVIEW', 'NEEDS_CORRECTION', 'RESUBMITTED'].includes(duplicate.status)) {
       return {
         success: false,
-        status: duplicate.status,
-        message: `An application (${duplicate.application_id}) with this email or mobile is already in review.`
+        message: res?.message || 'Registration failed.'
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: err.message || 'Registration failed.'
       };
     }
-
-    const year = new Date().getFullYear();
-    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const appId = `COL-${year}-${randomSuffix}`;
-    const submittedAt = new Date().toISOString();
-    const reviewDeadline = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
-
-    const newApp = {
-      id: 'app_' + Date.now(),
-      application_id: appId,
-      status: 'PENDING_REVIEW',
-      legal_name: studentData.legal_name || studentData.full_name,
-      display_name: studentData.display_name,
-      date_of_birth: studentData.date_of_birth,
-      age: studentData.age,
-      gender: studentData.gender,
-      email: studentData.email,
-      mobile: studentData.mobile,
-      city: studentData.city,
-      state: studentData.state,
-      languages_spoken: studentData.languages_spoken || ['English'],
-      college_name: studentData.college_name,
-      university_name: studentData.university_name || '',
-      college_location: studentData.college_location || studentData.city,
-      college_state: studentData.college_state || studentData.state,
-      degree_name: studentData.degree_name || studentData.course,
-      department_stream: studentData.department_stream || 'General',
-      academic_year: studentData.academic_year || '1st Year',
-      current_semester: studentData.current_semester || 'Semester 1',
-      graduation_year: studentData.graduation_year || 2026,
-      student_status: studentData.student_status || 'CURRENTLY_STUDYING',
-      verification_id_type: studentData.verification_id_type || 'College Student ID',
-      verification_id_url: studentData.verification_id_url,
-      verification_notes: studentData.verification_notes || 'Student uploaded verification document.',
-      photo_1: studentData.photo_1,
-      photo_2: studentData.photo_2,
-      photo_3: studentData.photo_3,
-      bio: studentData.bio || 'College student ready to connect!',
-      interests: studentData.interests || ['Music', 'Travelling'],
-      hobbies: studentData.hobbies || ['Reading'],
-      personality: studentData.personality || '',
-      looking_for: studentData.looking_for || 'Friendship',
-      age_range_min: studentData.age_range_min || 18,
-      age_range_max: studentData.age_range_max || 26,
-      preferred_distance: studentData.preferred_distance || 'ANYWHERE_INDIA',
-      submitted_at: submittedAt,
-      review_deadline: reviewDeadline,
-      assigned_admin: null,
-      correction_fields: [],
-      correction_message: null,
-      rejection_reason: null
-    };
-
-    setPendingVerifications((prev) => [newApp, ...prev]);
-    setAdminMetrics((prev) => ({
-      ...prev,
-      pending_verifications: prev.pending_verifications + 1
-    }));
-
-    return {
-      success: true,
-      status: 'PENDING_REVIEW',
-      student: newApp,
-      applicationId: appId,
-      message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
-    };
   };
 
   // 3. Resubmit Corrected Details when in NEEDS_CORRECTION
   const resubmitVerification = async (appId, updatedData) => {
     try {
-      await api.registration.resubmit(appId, updatedData);
+      const res = await api.registration.resubmit(appId, updatedData);
+      setPendingVerifications((prev) =>
+        prev.map((app) => {
+          if (app.id === appId || app.application_id === appId) {
+            return {
+              ...app,
+              ...updatedData,
+              status: 'RESUBMITTED',
+              correction_fields: [],
+              correction_message: null,
+            };
+          }
+          return app;
+        })
+      );
+      addToast('Corrected application resubmitted! Our team will continue verification.', 'info');
+      return { success: true, data: res?.data };
     } catch (err) {
-      console.warn('Backend resubmit sync error, continuing with local state:', err.message);
+      addToast(err.message || 'Failed to resubmit application.', 'error');
+      return { success: false, message: err.message };
     }
-
-    const submittedAt = new Date().toISOString();
-    const reviewDeadline = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
-
-    setPendingVerifications((prev) =>
-      prev.map((app) => {
-        if (app.id === appId || app.application_id === appId) {
-          return {
-            ...app,
-            ...updatedData,
-            status: 'RESUBMITTED',
-            correction_fields: [],
-            correction_message: null,
-            submitted_at: submittedAt,
-            review_deadline: reviewDeadline
-          };
-        }
-        return app;
-      })
-    );
-
-    addToast('Corrected application resubmitted! Our team will continue verification.', 'info');
-    return { success: true };
   };
 
   // 4. Admin Action: Claim / Mark Under Review
@@ -1494,40 +1206,11 @@ export const AppProvider = ({ children }) => {
       )
     );
 
-    // Create user profile in registered users
-    const newUser = {
-      id: student.id,
-      applicationId: student.application_id,
-      full_name: student.legal_name || student.full_name,
-      display_name: student.display_name,
-      date_of_birth: student.date_of_birth,
-      age: student.age,
-      gender: student.gender,
-      email: student.email,
-      mobile: student.mobile,
-      college_name: student.college_name,
-      course: student.degree_name || student.course,
-      avatar_url: student.photo_1,
-      additional_photos: [student.photo_2, student.photo_3].filter(Boolean),
-      bio: student.bio,
-      interests: student.interests,
-      languages: student.languages_spoken,
-      is_active: true,
-      accountStatus: 'ACTIVE',
-      verification_status: 'APPROVED',
-      mood: 'Looking for a conversation',
-      subscription_plan: 'free',
-      sent_requests_count: 0,
-      created_at: new Date().toISOString()
-    };
-
-    setRegisteredUsers((prev) => [...prev, newUser]);
-
     // Admin audit log
     const newLog = {
       id: 'log_' + Date.now(),
       admin: `SuperAdmin (${currentUser?.display_name || 'Admin'})`,
-      action: `APPROVED Application ${student.application_id} for ${newUser.full_name}`,
+      action: `APPROVED Application ${student.application_id || student.id} for ${student.legal_name || student.full_name}`,
       reason: '18+ age, college enrollment, identity document, and all 3 photographs manually verified.',
       timestamp: new Date().toISOString()
     };
@@ -1563,7 +1246,7 @@ export const AppProvider = ({ children }) => {
     const newLog = {
       id: 'log_' + Date.now(),
       admin: `SuperAdmin (${currentUser?.display_name || 'Admin'})`,
-      action: `REJECTED Application ${student.application_id} for ${student.legal_name || student.full_name}`,
+      action: `REJECTED Application ${student.application_id || student.id} for ${student.legal_name || student.full_name}`,
       reason: reason || 'Application does not meet platform safety or document guidelines.',
       timestamp: new Date().toISOString()
     };
@@ -1573,7 +1256,7 @@ export const AppProvider = ({ children }) => {
       pending_verifications: Math.max(0, prev.pending_verifications - 1)
     }));
 
-    addToast(`Application ${student.application_id} rejected. Reason: "${reason}"`, 'warning');
+    addToast(`Application ${student.application_id || student.id} rejected. Reason: "${reason}"`, 'warning');
   };
 
   // 8. Sign Out
@@ -1582,6 +1265,13 @@ export const AppProvider = ({ children }) => {
     clearStoredToken();
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setProfiles([]);
+    setIncomingLikes([]);
+    setMatches([]);
+    setConversations({});
+    setAnnouncements([]);
+    setNotifications([]);
+    setActiveChatMatch(null);
     setCurrentView('landing');
     addToast('Logged out of Collégé.', 'info');
   };

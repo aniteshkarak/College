@@ -288,7 +288,7 @@ export const AdminDashboard = () => {
   };
 
   // Applications list: use live applications if backend connected; fallback to normalized local
-  const currentApplications = isBackendConnected && liveApplications.length > 0
+  const currentApplications = isBackendConnected
     ? liveApplications
     : pendingVerifications.map(normalizeApplication);
 

@@ -538,65 +538,6 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
-
-            {/* Test Demo Shortcuts to explore all 72-hour verification states */}
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-2">
-                Simulated Accounts (Explore Statuses):
-              </span>
-              <div className="grid grid-cols-1 gap-1.5 text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginIdentifier('anirban@iitkgp.ac.in');
-                    setLoginPassword('password123');
-                  }}
-                  className="p-2 text-left bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center justify-between"
-                >
-                  <div>
-                    <span className="font-bold text-emerald-800 dark:text-emerald-300">Anirban Mukherjee (Approved & Active)</span>
-                    <span className="block text-[10px] opacity-80 text-emerald-700 dark:text-emerald-400">anirban@iitkgp.ac.in • IIT Kharagpur</span>
-                  </div>
-                  <span className="text-[10px] font-extrabold uppercase bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full">
-                    Active
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginIdentifier('sourav.ganguly@gmail.com');
-                    setLoginPassword('password123');
-                  }}
-                  className="p-2 text-left bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-xl flex items-center justify-between"
-                >
-                  <div>
-                    <span className="font-bold text-indigo-800 dark:text-indigo-300">Sourav Ganguly (In 72h Review)</span>
-                    <span className="block text-[10px] opacity-80 text-indigo-700 dark:text-indigo-400">sourav.ganguly@gmail.com • St. Xavier's</span>
-                  </div>
-                  <span className="text-[10px] font-extrabold uppercase bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full">
-                    72h Queue
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginIdentifier('debolina.bose@gmail.com');
-                    setLoginPassword('password123');
-                  }}
-                  className="p-2 text-left bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl flex items-center justify-between"
-                >
-                  <div>
-                    <span className="font-bold text-amber-800 dark:text-amber-300">Debolina Bose (Needs Correction)</span>
-                    <span className="block text-[10px] opacity-80 text-amber-700 dark:text-amber-400">debolina.bose@gmail.com • Jadavpur Univ</span>
-                  </div>
-                  <span className="text-[10px] font-extrabold uppercase bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">
-                    Correction
-                  </span>
-                </button>
-              </div>
-            </div>
           </div>
         ) : (
           /* ====================================================================== */

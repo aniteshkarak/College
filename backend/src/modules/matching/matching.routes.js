@@ -49,7 +49,7 @@ router.get('/incoming', requireAuth, async (req, res) => {
       };
     });
 
-    return success(res, { incomingLikes: formatted }, 'Incoming likes retrieved');
+    return success(res, { incomingLikes: formatted, requests: formatted }, 'Incoming likes retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }
