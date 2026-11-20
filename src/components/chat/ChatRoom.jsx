@@ -113,10 +113,10 @@ export const ChatRoom = ({ match, onBack }) => {
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-slate-950 overflow-hidden relative">
-      
+
       {/* 1. NATIVE MESSENGER TOP BAR */}
       <div className="flex items-center justify-between px-4 py-3 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 backdrop-blur-md z-20 shadow-xs shrink-0">
-        
+
         {/* Left: Back button & Partner Info (ONLY Name & Mood, Click to view full About profile) */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onBack && (
@@ -166,7 +166,7 @@ export const ChatRoom = ({ match, onBack }) => {
 
         {/* Right: Stage Trigger & Controls */}
         <div className="flex items-center gap-1.5">
-          
+
           {/* THE "GO" BUTTON (Transition from Talking as Friend to Dating Stage) */}
           {currentStage === 'Friend' && (
             <button
@@ -263,7 +263,7 @@ export const ChatRoom = ({ match, onBack }) => {
 
       {/* 2. MESSAGE FEED AREA (LOOK LIKE REAL MESSENGER FEATURE) */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3.5 bg-gradient-to-b from-slate-50/50 to-slate-100/50 dark:from-slate-950 dark:to-slate-900/60">
-        
+
         {/* End-to-end privacy notice */}
         <div className="text-center my-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-white/80 dark:bg-slate-900/80 text-slate-500 border border-slate-200/60 dark:border-slate-800 shadow-2xs">
@@ -361,14 +361,13 @@ export const ChatRoom = ({ match, onBack }) => {
               className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'} animate-slide-up`}
             >
               <div className="relative flex items-end gap-1.5 max-w-[85%] sm:max-w-[75%]">
-                
+
                 {/* Real Messenger Message Bubble */}
                 <div
-                  className={`p-3.5 shadow-sm text-xs leading-relaxed transition-all ${
-                    isMe
+                  className={`p-3.5 shadow-sm text-xs leading-relaxed transition-all ${isMe
                       ? 'bg-gradient-to-tr from-rose-600 to-rose-500 text-white rounded-2xl rounded-br-xs shadow-rose-600/10'
                       : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-2xl rounded-bl-xs border border-slate-200/70 dark:border-slate-800 shadow-slate-900/5'
-                  }`}
+                    }`}
                 >
                   {msg.message_type === 'voice' || msg.messageType === 'VOICE_NOTE' ? (
                     <VoicePlayer
@@ -384,9 +383,8 @@ export const ChatRoom = ({ match, onBack }) => {
 
                   {/* Timestamp & Real Messenger Double Checks */}
                   <div
-                    className={`flex items-center justify-end gap-1 mt-1 text-[9px] font-medium ${
-                      isMe ? 'text-rose-200' : 'text-slate-400'
-                    }`}
+                    className={`flex items-center justify-end gap-1 mt-1 text-[9px] font-medium ${isMe ? 'text-rose-200' : 'text-slate-400'
+                      }`}
                   >
                     <span>
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -476,7 +474,7 @@ export const ChatRoom = ({ match, onBack }) => {
 
       {/* 4. COMPOSER / INPUT BAR */}
       <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
-        
+
         {isRecording ? (
           <VoiceRecorder
             onSendVoice={handleSendVoice}
@@ -600,7 +598,7 @@ export const ChatRoom = ({ match, onBack }) => {
               >
                 <X className="w-4 h-4" />
               </button>
-              
+
               <div className="absolute bottom-3 left-4 right-4 text-white">
                 <div className="flex items-center gap-2">
                   <h3 className="text-xl font-bold font-display">{match.user.display_name}, {match.user.age}</h3>
@@ -722,8 +720,8 @@ export const ChatRoom = ({ match, onBack }) => {
                   {currentStage === 'Friend'
                     ? 'You are currently mutual friends talking casually with zero relationship pressure.'
                     : currentStage === 'Dating'
-                    ? 'You both mutually agreed via the "GO" button to explore dating.'
-                    : 'You both confirmed a serious committed relationship!'}
+                      ? 'You both mutually agreed via the "GO" button to explore dating.'
+                      : 'You both confirmed a serious committed relationship!'}
                 </p>
               </div>
 
@@ -839,11 +837,10 @@ export const ChatRoom = ({ match, onBack }) => {
                     setRefusalReason(reason);
                     setCustomRefusalText('');
                   }}
-                  className={`w-full p-2.5 rounded-xl text-left text-xs border transition-all ${
-                    refusalReason === reason && !customRefusalText
+                  className={`w-full p-2.5 rounded-xl text-left text-xs border transition-all ${refusalReason === reason && !customRefusalText
                       ? 'border-rose-500 bg-rose-50/70 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold'
                       : 'border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                  }`}
+                    }`}
                 >
                   {reason}
                 </button>

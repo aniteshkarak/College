@@ -216,9 +216,9 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
     });
 
     // Broadcast in real-time through Socket.IO room
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`conv_${id}`).emit('new_message', newMessage);
+    const socketIo = req.app?.get('io');
+    if (socketIo) {
+      socketIo.to(`conv_${id}`).emit('new_message', newMessage);
     }
 
     return success(res, { message: newMessage }, 'Message sent', 201);
@@ -301,9 +301,9 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
       });
 
       // Broadcast real-time through Socket.IO
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`conv_${id}`).emit('new_message', newMessage);
+      const socketIo = req.app?.get('io');
+      if (socketIo) {
+        socketIo.to(`conv_${id}`).emit('new_message', newMessage);
       }
 
       return success(res, { message: newMessage }, 'Voice message sent successfully', 201);

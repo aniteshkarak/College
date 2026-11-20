@@ -6,6 +6,33 @@ import { success, error } from '../../utils/response.js';
 import { z } from 'zod';
 
 /**
+ * Unified helper to find an application record by:
+ * - id (UUID)
+ * - applicationId (exact or uppercase, e.g. COL-2026-..., col-2026-...)
+ * - email (case-insensitive)
+ * - mobileNumber
+ */
+export const findApplicationRecord = async (paramId, includeRelations = {}) => {
+  if (!paramId) return null;
+  const cleanId = String(paramId).trim();
+  const upperId = cleanId.toUpperCase();
+  const lowerId = cleanId.toLowerCase();
+
+  return prisma.pendingRegistration.findFirst({
+    where: {
+      OR: [
+        { id: cleanId },
+        { applicationId: cleanId },
+        { applicationId: upperId },
+        { email: lowerId },
+        { mobileNumber: cleanId },
+      ],
+    },
+    include: includeRelations,
+  });
+};
+
+/**
  * GET /api/v1/admin/applications
  * Returns searchable, filterable applications with 72-hour overview cards
  */
@@ -112,15 +139,10 @@ export const getApplicationDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: {
-        OR: [{ id }, { applicationId: id }],
-      },
-      include: {
-        photographs: { orderBy: { photoOrder: 'asc' } },
-        identityDocument: true,
-        reviewHistory: { orderBy: { timestamp: 'desc' } },
-      },
+    const application = await findApplicationRecord(id, {
+      photographs: { orderBy: { photoOrder: 'asc' } },
+      identityDocument: true,
+      reviewHistory: { orderBy: { timestamp: 'desc' } },
     });
 
     if (!application) {
@@ -199,11 +221,7 @@ export const assignApplication = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: {
-        OR: [{ id }, { applicationId: id }],
-      },
-    });
+    const application = await findApplicationRecord(id);
 
     if (!application) {
       return error(res, 'Application not found', 404);
@@ -257,9 +275,7 @@ export const startReview = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-    });
+    const application = await findApplicationRecord(id);
 
     if (!application) {
       return error(res, 'Application not found', 404);
@@ -323,12 +339,9 @@ export const approveApplication = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-      include: {
-        photographs: true,
-        identityDocument: true,
-      },
+    const application = await findApplicationRecord(id, {
+      photographs: true,
+      identityDocument: true,
     });
 
     if (!application) {
@@ -503,9 +516,7 @@ export const rejectApplication = async (req, res) => {
       return error(res, 'Validation failed: A valid rejection reason is required', 400, parseResult.error.issues);
     }
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-    });
+    const application = await findApplicationRecord(id);
 
     if (!application) {
       return error(res, 'Application not found', 404);
@@ -590,9 +601,7 @@ export const requestCorrection = async (req, res) => {
       return error(res, 'Validation failed', 400, parseResult.error.issues);
     }
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-    });
+    const application = await findApplicationRecord(id);
 
     if (!application) {
       return error(res, 'Application not found', 404);
@@ -668,11 +677,8 @@ export const getReviewHistory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-      include: {
-        reviewHistory: { orderBy: { timestamp: 'desc' } },
-      },
+    const application = await findApplicationRecord(id, {
+      reviewHistory: { orderBy: { timestamp: 'desc' } },
     });
 
     if (!application) {
@@ -695,19 +701,21 @@ export const getPrivateDocument = async (req, res) => {
     const { id, documentId } = req.params;
 
     // 1. Verify application exists
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-    });
+    const application = await findApplicationRecord(id);
 
     if (!application) {
       return error(res, 'Application not found', 404);
     }
 
-    // 2. Strictly verify document belongs to this specific application
+    // 2. Strictly verify document belongs to this specific application (by id, filePath or fileName)
     const doc = await prisma.identityDocument.findFirst({
       where: {
-        id: documentId,
         registrationId: application.id,
+        OR: [
+          { id: documentId },
+          { filePath: documentId },
+          { fileName: documentId },
+        ],
       },
     });
 
@@ -749,19 +757,20 @@ export const getPrivatePhoto = async (req, res) => {
     const { id, photoId } = req.params;
 
     // 1. Verify application exists
-    const application = await prisma.pendingRegistration.findFirst({
-      where: { OR: [{ id }, { applicationId: id }] },
-    });
+    const application = await findApplicationRecord(id);
 
     if (!application) {
       return error(res, 'Application not found', 404);
     }
 
-    // 2. Strictly verify photo belongs to this specific application
+    // 2. Strictly verify photo belongs to this specific application (by id or photoUrl)
     const photo = await prisma.userPhoto.findFirst({
       where: {
-        id: photoId,
         registrationId: application.id,
+        OR: [
+          { id: photoId },
+          { photoUrl: photoId },
+        ],
       },
     });
 

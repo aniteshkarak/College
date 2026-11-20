@@ -222,28 +222,28 @@ export const submitRegistrationApplication = async (data, files = {}) => {
 };
 
 export const getApplicationStatus = async (applicationId, identifier) => {
-  const whereClause = {};
+  const whereOr = [];
 
-  if (applicationId) {
-    whereClause.OR = [
-      { id: applicationId },
-      { applicationId: applicationId.toUpperCase() },
-    ];
-  } else if (identifier) {
-    const clean = identifier.trim();
-    whereClause.OR = [
-      { email: clean.toLowerCase() },
-      { mobileNumber: clean },
-      { applicationId: clean.toUpperCase() },
-    ];
-  }
+  const addSearchVariants = (val) => {
+    if (!val) return;
+    const clean = String(val).trim();
+    if (!clean) return;
+    whereOr.push({ id: clean });
+    whereOr.push({ applicationId: clean });
+    whereOr.push({ applicationId: clean.toUpperCase() });
+    whereOr.push({ email: clean.toLowerCase() });
+    whereOr.push({ mobileNumber: clean });
+  };
+
+  addSearchVariants(applicationId);
+  addSearchVariants(identifier);
 
   const app = await prisma.pendingRegistration.findFirst({
-    where: whereClause,
+    where: whereOr.length > 0 ? { OR: whereOr } : {},
     include: {
       photographs: { orderBy: { photoOrder: 'asc' } },
       identityDocument: true,
-      reviewHistory: { orderBy: { createdAt: 'desc' } },
+      reviewHistory: { orderBy: { timestamp: 'desc' } },
     },
   });
 
@@ -287,10 +287,17 @@ export const getApplicationStatus = async (applicationId, identifier) => {
 
 export const resubmitCorrection = async (data, files = {}) => {
   const { applicationId } = data;
+  const clean = String(applicationId || '').trim();
 
   const app = await prisma.pendingRegistration.findFirst({
     where: {
-      OR: [{ id: applicationId }, { applicationId: applicationId.toUpperCase() }],
+      OR: [
+        { id: clean },
+        { applicationId: clean },
+        { applicationId: clean.toUpperCase() },
+        { email: clean.toLowerCase() },
+        { mobileNumber: clean },
+      ],
     },
     include: { photographs: true, identityDocument: true },
   });
