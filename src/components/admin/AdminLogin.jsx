@@ -81,6 +81,12 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
     setErrorMessage('');
   };
 
+  const handleQuickFillPlatformAdmin = () => {
+    setEmail('admin@college.internal');
+    setPassword('AdminRootPassword2026!');
+    setErrorMessage('');
+  };
+
   return (
     <div className="min-h-[82vh] flex items-center justify-center px-4 py-12 animate-fade-in">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 space-y-6">
@@ -162,15 +168,23 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
             </div>
           </div>
 
-          {/* Quick Super Admin Fill Helper */}
-          <div className="flex items-center justify-between text-[11px] pt-1">
+          {/* Quick Database Admin Fill Helpers */}
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] pt-1">
             <button
               type="button"
               onClick={handleQuickFillSuperAdmin}
               className="text-purple-600 dark:text-purple-400 hover:underline font-bold flex items-center gap-1"
             >
               <Sparkles className="w-3 h-3" />
-              Fill Super Admin Email
+              Super Admin (Anitesh)
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickFillPlatformAdmin}
+              className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold flex items-center gap-1"
+            >
+              <Sparkles className="w-3 h-3" />
+              Platform Admin (Reviewer)
             </button>
           </div>
 

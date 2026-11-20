@@ -10,7 +10,7 @@ services:
     container_name: college-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-college_user}
+      POSTGRES_USER: ${POSTGRES_USER:-college_admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CollegeDev_2026_StrongPass}
       POSTGRES_DB: ${POSTGRES_DB:-college_db}
     ports:

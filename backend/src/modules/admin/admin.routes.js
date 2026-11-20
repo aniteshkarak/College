@@ -17,9 +17,10 @@ const router = Router();
 // This route must be registered before protected routes.
 router.use('/auth', adminAuthRoutes);
 
-// Only Super Admin and Verification Admin can review applications.
+// Super Admin, Admin and Verification Admin can review applications.
 const requireVerificationAdmin = requireAdminRoles(
   'SUPER_ADMIN',
+  'ADMIN',
   'VERIFICATION_ADMIN'
 );
 
@@ -119,11 +120,11 @@ router.post(
   applicationsController.rejectApplication
 );
 
-// Platform metrics: Super Admin only.
+// Platform metrics: Super Admin & Admin.
 router.get(
   '/metrics',
   requireAdminAuth,
-  requireAdminRoles('SUPER_ADMIN'),
+  requireAdminRoles('SUPER_ADMIN', 'ADMIN'),
   async (_req, res) => {
     try {
       const [
@@ -172,8 +173,8 @@ router.get(
   }
 );
 
-// Safety & Moderation Reports: Super Admin and Support Admin
-const requireSupportOrSuperAdmin = requireAdminRoles('SUPER_ADMIN', 'SUPPORT_ADMIN');
+// Safety & Moderation Reports: Super Admin, Admin and Support Admin
+const requireSupportOrSuperAdmin = requireAdminRoles('SUPER_ADMIN', 'ADMIN', 'SUPPORT_ADMIN');
 
 router.get('/reports', requireAdminAuth, requireSupportOrSuperAdmin, async (req, res) => {
   try {

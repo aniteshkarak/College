@@ -42,6 +42,9 @@ export const login = async (req, res) => {
     if (err.message === 'Invalid administrator credentials.') {
       return error(res, 'Invalid email or password.', 401);
     }
+    if (err.status || err.statusCode) {
+      return error(res, err.message, err.status || err.statusCode);
+    }
 
     return nextError(res, err);
   }

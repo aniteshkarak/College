@@ -37,7 +37,10 @@ export const loginAdmin = async (email, password) => {
     const passwordMatches = await argon2.verify(
       admin.passwordHash,
       password
-    );
+    ).catch((err) => {
+      console.warn(`[ADMIN_AUTH] Argon2 verification note: ${err.message}`);
+      return false;
+    });
 
     if (!passwordMatches) {
       throw new Error('Invalid administrator credentials.');

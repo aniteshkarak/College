@@ -6,6 +6,7 @@ import { error } from '../../../utils/response.js';
 
 const ALLOWED_ADMIN_ROLES = [
   'SUPER_ADMIN',
+  'ADMIN',
   'VERIFICATION_ADMIN',
   'SUPPORT_ADMIN',
 ];
