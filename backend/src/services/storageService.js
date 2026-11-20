@@ -43,9 +43,10 @@ export const storageService = {
   /**
    * Securely retrieve stream for private documents or photos
    * Strictly prevents directory traversal attacks via path.basename
+   * Supports optional HTTP byte range streaming for iOS/Android audio
    */
-  getPrivateFileStream: (subfolder, rawFilename) => {
-    const filename = path.basename(rawFilename); // strips any ../ or directory components
+  getPrivateFileInfo: (subfolder, rawFilename) => {
+    const filename = path.basename(rawFilename);
     let baseDir = STORAGE_PATHS.DOCUMENTS_DIR;
 
     if (subfolder === 'photos') {
@@ -60,7 +61,6 @@ export const storageService = {
 
     const fullPath = path.join(baseDir, filename);
 
-    // Verify resolved path stays strictly within allowed directory
     if (!fullPath.startsWith(baseDir)) {
       throw new Error('Access denied: Invalid file path traversal attempt.');
     }
@@ -71,7 +71,6 @@ export const storageService = {
       throw err;
     }
 
-    // Determine MIME type
     const ext = path.extname(filename).toLowerCase();
     let mimeType = 'image/webp';
     if (ext === '.pdf') mimeType = 'application/pdf';
@@ -82,12 +81,28 @@ export const storageService = {
     else if (ext === '.mp3') mimeType = 'audio/mpeg';
     else if (ext === '.wav') mimeType = 'audio/wav';
     else if (ext === '.m4a' || ext === '.mp4') mimeType = 'audio/mp4';
+    else if (ext === '.aac') mimeType = 'audio/aac';
 
     return {
-      stream: fs.createReadStream(fullPath),
+      fullPath,
+      filename,
       mimeType,
       fileSize: fs.statSync(fullPath).size,
-      filename,
+    };
+  },
+
+  getPrivateFileStream: (subfolder, rawFilename, rangeOptions = null) => {
+    const info = storageService.getPrivateFileInfo(subfolder, rawFilename);
+    const stream = rangeOptions
+      ? fs.createReadStream(info.fullPath, rangeOptions)
+      : fs.createReadStream(info.fullPath);
+
+    return {
+      stream,
+      mimeType: info.mimeType,
+      fileSize: info.fileSize,
+      filename: info.filename,
+      fullPath: info.fullPath,
     };
   },
 

@@ -207,6 +207,13 @@ export const api = {
         body: JSON.stringify({ currentPassword, newPassword })
       }),
 
+    getSessions: () => request('/auth/sessions'),
+
+    revokeSession: (sessionId) =>
+      request(`/auth/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      }),
+
     refreshToken: (refreshToken) =>
       request('/auth/refresh', {
         method: 'POST',
@@ -442,18 +449,26 @@ export const api = {
       const sp = new URLSearchParams();
       if (params.limit) sp.set('limit', params.limit);
       if (params.before) sp.set('before', params.before);
+      if (params.after) sp.set('after', params.after);
+      if (params.since) sp.set('since', params.since);
       const q = sp.toString();
       return request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages${q ? `?${q}` : ''}`);
     },
-    sendMessage: (conversationId, content, messageType = 'TEXT') =>
+    sync: (since) => {
+      const q = since ? `?since=${encodeURIComponent(since)}` : '';
+      return request(`/chat/sync${q}`);
+    },
+    sendMessage: (conversationId, content, messageType = 'TEXT', idempotencyKey = null) =>
       request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ content, messageType }),
+        body: JSON.stringify({ content, messageType, idempotencyKey }),
       }),
-    sendVoiceMessage: (conversationId, audioBlob, duration = 0) => {
+    sendVoiceMessage: (conversationId, audioBlob, duration = 0, idempotencyKey = null) => {
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'voice.webm');
+      const ext = audioBlob?.type?.includes('mp4') ? 'voice.mp4' : (audioBlob?.type?.includes('ogg') ? 'voice.ogg' : 'voice.webm');
+      formData.append('audio', audioBlob, ext);
       formData.append('duration', duration);
+      if (idempotencyKey) formData.append('idempotencyKey', idempotencyKey);
       return request(`/chat/conversations/${encodeURIComponent(conversationId)}/voice`, {
         method: 'POST',
         body: formData,

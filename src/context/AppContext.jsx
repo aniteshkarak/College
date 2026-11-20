@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import confetti from 'canvas-confetti';
 import { api, setStoredToken, clearStoredToken, getStoredToken } from '../services/api';
 import {
@@ -112,6 +113,10 @@ export const AppProvider = ({ children }) => {
 
   // Active Relationship
   const [activeRelationship, setActiveRelationship] = useState(null);
+
+  // Active Sessions & Sockets
+  const socketRef = useRef(null);
+  const [activeSessions, setActiveSessions] = useState([]);
 
   // Mood
   const [currentMood, setCurrentMood] = useState(MOOD_OPTIONS[3]); // 'Want to make friends'
@@ -326,6 +331,252 @@ export const AppProvider = ({ children }) => {
       isMounted = false;
     };
   }, [isAuthenticated, currentUser?.id]);
+
+  // Fetch active sessions
+  const refreshSessions = () => {
+    if (!isAuthenticated) return;
+    api.auth.getSessions()
+      .then((res) => {
+        if (res?.data?.sessions) {
+          setActiveSessions(res.data.sessions);
+        }
+      })
+      .catch((err) => console.warn('Could not load sessions:', err.message));
+  };
+
+  const handleRevokeSession = async (sessionId) => {
+    try {
+      await api.auth.revokeSession(sessionId);
+      setActiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      addToast('Device session revoked successfully.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to revoke session', 'error');
+    }
+  };
+
+  // Automatically mark conversation read and refresh messages when activeChatMatch opens
+  useEffect(() => {
+    if (activeChatMatch?.id) {
+      api.chat.markRead(activeChatMatch.id).catch(() => {});
+      api.chat.getMessages(activeChatMatch.id)
+        .then((res) => {
+          if (res?.data?.messages && res.data.messages.length > 0) {
+            setConversations((prev) => ({
+              ...prev,
+              [activeChatMatch.id]: res.data.messages.map((msg) => ({
+                id: msg.id,
+                sender_id: msg.senderId,
+                content: msg.content,
+                message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : (msg.messageType === 'SYSTEM_PROMPT' ? 'system' : 'text'),
+                duration_seconds: msg.voiceDuration,
+                audio_url: msg.mediaUrl ? api.chat.getAudioUrl(activeChatMatch.id, msg.id) : null,
+                created_at: msg.createdAt,
+                is_read: msg.isRead,
+              })),
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeChatMatch?.id]);
+
+  // Multi-Device Real-Time Socket.IO Synchronization
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser?.id) return;
+
+    const token = getStoredToken();
+    if (!token) return;
+
+    refreshSessions();
+
+    const socketUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:5000'
+      : window.location.origin;
+
+    const deviceId = localStorage.getItem('college_device_id') || `web_${Date.now()}`;
+    localStorage.setItem('college_device_id', deviceId);
+
+    const socket = io(socketUrl, {
+      auth: {
+        token,
+        deviceId,
+      },
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1500,
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      // Re-sync any missed messages since device was offline
+      const lastSync = localStorage.getItem('college_last_sync');
+      api.chat.sync(lastSync)
+        .then((res) => {
+          if (res?.data?.messages && res.data.messages.length > 0) {
+            setConversations((prev) => {
+              const updated = { ...prev };
+              res.data.messages.forEach((msg) => {
+                const convId = msg.conversationId;
+                const existing = updated[convId] || [];
+                if (!existing.some((m) => m.id === msg.id)) {
+                  updated[convId] = [
+                    ...existing,
+                    {
+                      id: msg.id,
+                      sender_id: msg.senderId,
+                      content: msg.content,
+                      message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : (msg.messageType === 'SYSTEM_PROMPT' ? 'system' : 'text'),
+                      duration_seconds: msg.voiceDuration,
+                      audio_url: msg.mediaUrl ? api.chat.getAudioUrl(convId, msg.id) : null,
+                      created_at: msg.createdAt,
+                      is_read: msg.isRead,
+                    },
+                  ];
+                }
+              });
+              return updated;
+            });
+          }
+          localStorage.setItem('college_last_sync', new Date().toISOString());
+        })
+        .catch(() => {});
+    });
+
+    // Handle new incoming messages (text and voice notes)
+    socket.on('new_message', (msg) => {
+      const convId = msg.conversationId;
+      setConversations((prev) => {
+        const existing = prev[convId] || [];
+        if (existing.some((m) => m.id === msg.id)) return prev;
+        return {
+          ...prev,
+          [convId]: [
+            ...existing,
+            {
+              id: msg.id,
+              sender_id: msg.senderId,
+              content: msg.content,
+              message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : (msg.messageType === 'SYSTEM_PROMPT' ? 'system' : 'text'),
+              duration_seconds: msg.voiceDuration,
+              audio_url: msg.mediaUrl ? api.chat.getAudioUrl(convId, msg.id) : null,
+              created_at: msg.createdAt,
+              is_read: msg.isRead,
+            },
+          ],
+        };
+      });
+
+      // Update match's last message & unread badge
+      setMatches((prev) =>
+        prev.map((m) => {
+          if (m.id === convId || m.conversation_id === convId) {
+            const isCurrentlyInRoom = activeChatMatch && (activeChatMatch.id === m.id || activeChatMatch.id === convId);
+            return {
+              ...m,
+              last_message: {
+                content: msg.content,
+                created_at: msg.createdAt,
+                sender_id: msg.senderId,
+                message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : 'text',
+              },
+              unread_count: isCurrentlyInRoom ? 0 : (m.unread_count || 0) + 1,
+            };
+          }
+          return m;
+        })
+      );
+
+      if (activeChatMatch && (activeChatMatch.id === convId || activeChatMatch.id === msg.conversationId)) {
+        api.chat.markRead(convId).catch(() => {});
+      }
+    });
+
+    // Handle message synchronization across sender's active devices
+    socket.on('message_sync', (msg) => {
+      const convId = msg.conversationId;
+      setConversations((prev) => {
+        const existing = prev[convId] || [];
+        if (existing.some((m) => m.id === msg.id)) return prev;
+        return {
+          ...prev,
+          [convId]: [
+            ...existing,
+            {
+              id: msg.id,
+              sender_id: msg.senderId,
+              content: msg.content,
+              message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : (msg.messageType === 'SYSTEM_PROMPT' ? 'system' : 'text'),
+              duration_seconds: msg.voiceDuration,
+              audio_url: msg.mediaUrl ? api.chat.getAudioUrl(convId, msg.id) : null,
+              created_at: msg.createdAt,
+              is_read: msg.isRead,
+            },
+          ],
+        };
+      });
+
+      setMatches((prev) =>
+        prev.map((m) => {
+          if (m.id === convId || m.conversation_id === convId) {
+            return {
+              ...m,
+              last_message: {
+                content: msg.content,
+                created_at: msg.createdAt,
+                sender_id: msg.senderId,
+                message_type: msg.messageType === 'VOICE_NOTE' ? 'voice' : 'text',
+              },
+            };
+          }
+          return m;
+        })
+      );
+    });
+
+    // Handle real-time read receipts across all devices
+    socket.on('messages_read', (data) => {
+      const convId = data.conversationId;
+      setConversations((prev) => {
+        const list = prev[convId];
+        if (!list) return prev;
+        return {
+          ...prev,
+          [convId]: list.map((m) => ({ ...m, is_read: true })),
+        };
+      });
+
+      setMatches((prev) =>
+        prev.map((m) => {
+          if (m.id === convId || m.conversation_id === convId) {
+            return { ...m, unread_count: 0 };
+          }
+          return m;
+        })
+      );
+    });
+
+    // Handle block events across all active devices
+    socket.on('conversation_blocked', (data) => {
+      addToast('A match or conversation has been blocked and removed.', 'info');
+      setMatches((prev) => prev.filter((m) => m.id !== data.conversationId && m.conversation_id !== data.conversationId));
+      if (activeChatMatch && (activeChatMatch.id === data.conversationId || activeChatMatch.conversation_id === data.conversationId)) {
+        setActiveChatMatch(null);
+        setCurrentView('matches');
+      }
+    });
+
+    // Handle session revoked
+    socket.on('session_revoked', () => {
+      addToast('This device session was revoked.', 'error');
+      handleLogout();
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [isAuthenticated, currentUser?.id, activeChatMatch]);
 
   // Current Plan Limits Helper
   const currentPlanConfig = SUBSCRIPTION_PLANS[currentUser?.subscription_plan] || SUBSCRIPTION_PLANS.free;
@@ -732,12 +983,36 @@ export const AppProvider = ({ children }) => {
       [matchId]: [...(prev[matchId] || []), newMessage]
     }));
 
-    // Synchronize to PostgreSQL Backend via API
+    const idempotencyKey = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+
+    // Synchronize to PostgreSQL Backend via API with idempotencyKey
     if (messagePayload.message_type === 'voice' && messagePayload.audio_blob) {
-      api.chat.sendVoiceMessage(matchId, messagePayload.audio_blob, messagePayload.duration_seconds)
+      api.chat.sendVoiceMessage(matchId, messagePayload.audio_blob, messagePayload.duration_seconds, idempotencyKey)
+        .then((res) => {
+          if (res?.data?.message?.id) {
+            setConversations((prev) => ({
+              ...prev,
+              [matchId]: (prev[matchId] || []).map((m) =>
+                m.id === newMessage.id
+                  ? { ...m, id: res.data.message.id, audio_url: api.chat.getAudioUrl(matchId, res.data.message.id) }
+                  : m
+              ),
+            }));
+          }
+        })
         .catch((err) => console.warn('Send voice message API sync:', err.message));
     } else if (messagePayload.content) {
-      api.chat.sendMessage(matchId, messagePayload.content, 'TEXT')
+      api.chat.sendMessage(matchId, messagePayload.content, 'TEXT', idempotencyKey)
+        .then((res) => {
+          if (res?.data?.message?.id) {
+            setConversations((prev) => ({
+              ...prev,
+              [matchId]: (prev[matchId] || []).map((m) =>
+                m.id === newMessage.id ? { ...m, id: res.data.message.id } : m
+              ),
+            }));
+          }
+        })
         .catch((err) => console.warn('Send text message API sync:', err.message));
     }
 
@@ -1402,6 +1677,9 @@ export const AppProvider = ({ children }) => {
         requestCorrectionOnApplication,
         approveStudentVerification,
         rejectStudentVerification,
+        activeSessions,
+        refreshSessions,
+        handleRevokeSession,
         logout
       }}
     >

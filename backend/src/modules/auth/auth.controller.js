@@ -11,6 +11,7 @@ import authService from './auth.service.js';
 import prisma from '../../config/prisma.js';
 import { serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
+import socketService from '../../services/socketService.js';
 
 export const register = async (req, res) => {
   try {
@@ -181,12 +182,39 @@ export const refresh = async (req, res) => {
 
 export const logout = async (req, res) => {
   const rawRefreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
-  if (req.user?.id) {
-    await authService.logoutUser(req.user.id, rawRefreshToken).catch(() => {});
+  const sessionId = req.body?.sessionId || req.headers['x-session-id'] || null;
+  const userId = req.user?.id;
+
+  if (userId) {
+    await authService.logoutUser(userId, rawRefreshToken, sessionId).catch(() => {});
+    if (sessionId) {
+      socketService.disconnectSessionSockets(userId, sessionId);
+    }
   }
   res.clearCookie('token');
   res.clearCookie('refreshToken');
   return success(res, null, 'Logged out successfully');
+};
+
+export const getSessions = async (req, res) => {
+  try {
+    const currentSessionId = req.headers['x-session-id'] || null;
+    const sessions = await authService.getUserSessions(req.user.id, currentSessionId);
+    return success(res, { sessions }, 'Active sessions retrieved');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+};
+
+export const revokeSession = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const result = await authService.revokeUserSession(req.user.id, sessionId);
+    socketService.disconnectSessionSockets(req.user.id, sessionId);
+    return success(res, result, 'Session revoked successfully');
+  } catch (err) {
+    return error(res, err.message, err.statusCode || 500);
+  }
 };
 
 export const getMe = async (req, res) => {
@@ -215,6 +243,8 @@ export default {
   register,
   login,
   logout,
+  getSessions,
+  revokeSession,
   resubmitVerification,
   forgotPassword,
   resetPassword,

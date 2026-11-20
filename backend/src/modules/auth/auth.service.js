@@ -179,7 +179,7 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
   // Persist session in UserSession
-  await prisma.userSession.create({
+  const session = await prisma.userSession.create({
     data: {
       userId: user.id,
       tokenHash,
@@ -187,13 +187,17 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
       userAgent: reqMeta.userAgent || null,
       expiresAt,
     },
-  }).catch((err) => logger.warn(`Session record failed: ${err.message}`));
+  }).catch((err) => {
+    logger.warn(`Session record failed: ${err.message}`);
+    return null;
+  });
 
   return {
     status: 'APPROVED',
     user: sanitizedUser,
     token,
     refreshToken,
+    sessionId: session?.id || null,
     expiresIn: config.jwt.expiresIn,
     message: 'Login successful! Welcome to Collégé.',
   };
@@ -358,8 +362,80 @@ export const refreshToken = async (rawRefreshToken) => {
   };
 };
 
-export const logoutUser = async (userId, rawRefreshToken) => {
-  if (rawRefreshToken) {
+export const parseUserAgent = (ua) => {
+  if (!ua) return { deviceType: 'Desktop', os: 'Unknown OS', browser: 'Browser' };
+  let deviceType = 'Desktop';
+  let os = 'Unknown OS';
+  let browser = 'Browser';
+
+  const uaLower = ua.toLowerCase();
+  if (/mobile|android|iphone|ipad|ipod/.test(uaLower)) {
+    deviceType = /ipad|tablet/.test(uaLower) ? 'Tablet' : 'Mobile';
+  }
+
+  if (uaLower.includes('android')) os = 'Android';
+  else if (/iphone|ipad|ipod/.test(uaLower)) os = 'iOS';
+  else if (uaLower.includes('windows')) os = 'Windows';
+  else if (uaLower.includes('macintosh') || uaLower.includes('mac os')) os = 'macOS';
+  else if (uaLower.includes('linux')) os = 'Linux';
+
+  if (uaLower.includes('chrome') && !uaLower.includes('edg')) browser = 'Chrome';
+  else if (uaLower.includes('safari') && !uaLower.includes('chrome')) browser = 'Safari';
+  else if (uaLower.includes('firefox')) browser = 'Firefox';
+  else if (uaLower.includes('edg')) browser = 'Edge';
+
+  return { deviceType, os, browser };
+};
+
+export const getUserSessions = async (userId, currentSessionId = null) => {
+  const sessions = await prisma.userSession.findMany({
+    where: {
+      userId,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return sessions.map((s) => {
+    const meta = parseUserAgent(s.userAgent);
+    return {
+      id: s.id,
+      deviceType: meta.deviceType,
+      os: meta.os,
+      browser: meta.browser,
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      isCurrentSession: currentSessionId ? s.id === currentSessionId : false,
+    };
+  });
+};
+
+export const revokeUserSession = async (userId, sessionId) => {
+  const session = await prisma.userSession.findFirst({
+    where: { id: sessionId, userId },
+  });
+
+  if (!session) {
+    const err = new Error('Session not found or already revoked.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  await prisma.userSession.delete({
+    where: { id: sessionId },
+  });
+
+  return { success: true, sessionId };
+};
+
+export const logoutUser = async (userId, rawRefreshToken, sessionId = null) => {
+  if (sessionId) {
+    await prisma.userSession.deleteMany({
+      where: { id: sessionId, userId },
+    }).catch(() => {});
+  } else if (rawRefreshToken) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
     await prisma.userSession.deleteMany({
       where: { userId, tokenHash },
@@ -382,4 +458,7 @@ export default {
   changePassword,
   refreshToken,
   logoutUser,
+  getUserSessions,
+  revokeUserSession,
+  parseUserAgent,
 };

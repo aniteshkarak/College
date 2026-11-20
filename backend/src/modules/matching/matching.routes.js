@@ -3,6 +3,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import prisma from '../../config/prisma.js';
 import { success, error } from '../../utils/response.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
+import socketService from '../../services/socketService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -474,6 +475,22 @@ router.post('/block', requireAuth, async (req, res) => {
         data: { status: 'REJECTED' },
       });
     });
+
+    // Notify connected devices across both accounts and eject from conversation rooms
+    const matchedConv = await prisma.conversation.findFirst({
+      where: {
+        match: {
+          OR: [
+            { user1Id: currentUserId, user2Id: blockedId },
+            { user1Id: blockedId, user2Id: currentUserId },
+          ],
+        },
+      },
+    });
+
+    if (matchedConv) {
+      socketService.notifyConversationBlocked(matchedConv.id, currentUserId, blockedId);
+    }
 
     return success(res, null, 'User has been blocked successfully');
   } catch (err) {

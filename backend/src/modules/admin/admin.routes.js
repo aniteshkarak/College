@@ -3,6 +3,7 @@ import { Router } from 'express';
 import applicationsController from './applications.controller.js';
 import prisma from '../../config/prisma.js';
 import { success, error } from '../../utils/response.js';
+import socketService from '../../services/socketService.js';
 
 import adminAuthRoutes from './auth/adminAuth.routes.js';
 import {
@@ -314,6 +315,9 @@ router.post('/users/:id/suspend', requireAdminAuth, requireSupportOrSuperAdmin, 
 
       return u;
     });
+
+    // Invalidate and terminate all active socket connections for suspended user
+    socketService.disconnectUserSockets(id);
 
     return success(res, { user: updated }, 'User account has been suspended');
   } catch (err) {

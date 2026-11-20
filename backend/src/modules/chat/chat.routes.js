@@ -5,6 +5,7 @@ import { storageService } from '../../services/storageService.js';
 import { audioUpload } from '../../middleware/uploadMiddleware.js';
 import { success, error } from '../../utils/response.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
+import socketService from '../../services/socketService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -27,7 +28,18 @@ const sendMessageSchema = z.object({
   messageType: z.enum(['TEXT', 'VOICE_NOTE', 'SYSTEM_PROMPT']).default('TEXT'),
   mediaUrl: z.string().optional(),
   voiceDuration: z.number().int().positive().optional(),
+  idempotencyKey: z.string().max(100).optional(),
 });
+
+// Helper to look up conversation by either its primary ID or matchId
+const findConversation = async (identifier) => {
+  return prisma.conversation.findFirst({
+    where: {
+      OR: [{ id: identifier }, { matchId: identifier }],
+    },
+    include: { match: true },
+  });
+};
 
 // 1. Get user's active conversations
 router.get('/conversations', requireAuth, async (req, res) => {
@@ -121,17 +133,79 @@ router.get('/conversations', requireAuth, async (req, res) => {
   }
 });
 
-// 2. Get messages in a conversation
+// 2. Cursor-based Sync across all user conversations for reconnecting/offline devices
+router.get('/sync', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { since } = req.query;
+
+    const userMatches = await prisma.match.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
+      },
+      select: { id: true },
+    });
+
+    const matchIds = userMatches.map((m) => m.id);
+    const conversations = await prisma.conversation.findMany({
+      where: { matchId: { in: matchIds } },
+      select: { id: true, matchId: true },
+    });
+
+    const conversationIds = conversations.map((c) => c.id);
+
+    const whereClause = {
+      conversationId: { in: conversationIds },
+    };
+
+    if (since) {
+      const sinceDate = new Date(since);
+      if (!isNaN(sinceDate.getTime())) {
+        whereClause.createdAt = { gt: sinceDate };
+      }
+    }
+
+    const messages = await prisma.message.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+
+    // Unread count per conversation
+    const unreadCounts = {};
+    for (const convId of conversationIds) {
+      unreadCounts[convId] = await prisma.message.count({
+        where: {
+          conversationId: convId,
+          senderId: { not: currentUserId },
+          isRead: false,
+        },
+      });
+    }
+
+    return success(
+      res,
+      {
+        messages,
+        unreadCounts,
+        syncTimestamp: new Date().toISOString(),
+      },
+      'Sync completed'
+    );
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// 3. Get messages in a conversation (with before/after/since cursor support)
 router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { id } = req.params;
-    const { limit = 100, before } = req.query;
+    const { limit = 100, before, after, since } = req.query;
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id },
-      include: { match: true },
-    });
+    const conversation = await findConversation(id);
 
     if (!conversation) {
       return error(res, 'Conversation not found', 404);
@@ -145,9 +219,14 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
       return error(res, 'Access denied: Conversation is blocked or inactive', 403);
     }
 
-    const whereClause = { conversationId: id };
+    const whereClause = { conversationId: conversation.id };
+
     if (before) {
-      whereClause.createdAt = { lt: new Date(before) };
+      const beforeDate = new Date(before);
+      if (!isNaN(beforeDate.getTime())) whereClause.createdAt = { lt: beforeDate };
+    } else if (after || since) {
+      const cursorDate = new Date(after || since);
+      if (!isNaN(cursorDate.getTime())) whereClause.createdAt = { gt: cursorDate };
     }
 
     const messages = await prisma.message.findMany({
@@ -156,23 +235,29 @@ router.get('/conversations/:id/messages', requireAuth, async (req, res) => {
       take: Math.min(parseInt(limit, 10) || 100, 200),
     });
 
+    const partnerId = conversation.match.user1Id === currentUserId ? conversation.match.user2Id : conversation.match.user1Id;
+
     // Mark partner's unread messages as read
-    await prisma.message.updateMany({
+    const updateResult = await prisma.message.updateMany({
       where: {
-        conversationId: id,
+        conversationId: conversation.id,
         senderId: { not: currentUserId },
         isRead: false,
       },
       data: { isRead: true },
     });
 
-    return success(res, { messages }, 'Messages retrieved');
+    if (updateResult.count > 0) {
+      socketService.broadcastMessageRead(conversation.id, currentUserId, partnerId);
+    }
+
+    return success(res, { messages, conversationId: conversation.id }, 'Messages retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }
 });
 
-// 3. Send Text Message
+// 4. Send Text Message (with Idempotency Key & Multi-Device Real-Time Broadcast)
 router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -183,10 +268,17 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
       return error(res, 'Validation failed', 400, parsed.error.issues);
     }
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id },
-      include: { match: true },
-    });
+    const { idempotencyKey } = parsed.data;
+
+    // Idempotency check: if client retried request with identical key, return cached message
+    if (idempotencyKey) {
+      const cached = socketService.getCachedMessageByIdempotency(currentUserId, idempotencyKey);
+      if (cached) {
+        return success(res, { message: cached, duplicate: true }, 'Message returned from cache', 200);
+      }
+    }
+
+    const conversation = await findConversation(id);
 
     if (!conversation) {
       return error(res, 'Conversation not found', 404);
@@ -205,7 +297,7 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
     const newMessage = await prisma.$transaction(async (tx) => {
       const msg = await tx.message.create({
         data: {
-          conversationId: id,
+          conversationId: conversation.id,
           senderId: currentUserId,
           content: parsed.data.content,
           messageType: parsed.data.messageType,
@@ -215,7 +307,7 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
       });
 
       await tx.conversation.update({
-        where: { id },
+        where: { id: conversation.id },
         data: { updatedAt: new Date() },
       });
 
@@ -226,18 +318,21 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
           type: 'TEXT_MESSAGE',
           title: `New message from ${req.user.displayName}`,
           body: parsed.data.content.length > 60 ? parsed.data.content.substring(0, 57) + '...' : parsed.data.content,
-          data: { conversationId: id, messageId: msg.id },
+          data: { conversationId: conversation.id, messageId: msg.id },
         },
       });
 
       return msg;
     });
 
-    // Broadcast in real-time through Socket.IO room
-    const socketIo = req.app?.get('io');
-    if (socketIo) {
-      socketIo.to(`conv_${id}`).emit('new_message', newMessage);
+    if (idempotencyKey) {
+      socketService.setCachedMessageByIdempotency(currentUserId, idempotencyKey, newMessage);
     }
+
+    // Multi-device real-time broadcast:
+    // 1. Recipient's devices receive 'new_message'
+    // 2. Sender's other active devices receive 'message_sync'
+    socketService.broadcastNewMessage(newMessage, recipientId, currentUserId, conversation.id);
 
     return success(res, { message: newMessage }, 'Message sent', 201);
   } catch (err) {
@@ -245,7 +340,7 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
   }
 });
 
-// 4. Send Voice Message (Upload audio blob -> Private storage -> PostgreSQL -> Socket.IO)
+// 5. Send Voice Message (Upload audio blob -> Private storage -> PostgreSQL -> Multi-Device Broadcast)
 router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
   audioUpload(req, res, async (err) => {
     if (err) {
@@ -260,10 +355,7 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
         return error(res, 'Audio file is required for voice message', 400);
       }
 
-      const conversation = await prisma.conversation.findUnique({
-        where: { id },
-        include: { match: true },
-      });
+      const conversation = await findConversation(id);
 
       if (!conversation) {
         return error(res, 'Conversation not found', 404);
@@ -294,7 +386,7 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
       const newMessage = await prisma.$transaction(async (tx) => {
         const msg = await tx.message.create({
           data: {
-            conversationId: id,
+            conversationId: conversation.id,
             senderId: currentUserId,
             content: `Voice Message (${durationSeconds > 0 ? durationSeconds + 's' : 'Audio'})`,
             messageType: 'VOICE_NOTE',
@@ -304,7 +396,7 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
         });
 
         await tx.conversation.update({
-          where: { id },
+          where: { id: conversation.id },
           data: { updatedAt: new Date() },
         });
 
@@ -315,18 +407,15 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
             type: 'VOICE_MESSAGE',
             title: `Voice note from ${req.user.displayName}`,
             body: `Sent an audio voice message (${durationSeconds}s).`,
-            data: { conversationId: id, messageId: msg.id },
+            data: { conversationId: conversation.id, messageId: msg.id },
           },
         });
 
         return msg;
       });
 
-      // Broadcast real-time through Socket.IO
-      const socketIo = req.app?.get('io');
-      if (socketIo) {
-        socketIo.to(`conv_${id}`).emit('new_message', newMessage);
-      }
+      // Broadcast voice message metadata to recipient and sender's other devices
+      socketService.broadcastNewMessage(newMessage, recipientId, currentUserId, conversation.id);
 
       return success(res, { message: newMessage }, 'Voice message sent successfully', 201);
     } catch (routeErr) {
@@ -335,16 +424,13 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
   });
 });
 
-// 5. Secure Streaming of Private Voice Audio (Participant authenticated only)
+// 6. Secure Streaming of Private Voice Audio with HTTP 206 Byte Range Support (iOS Safari / Android / Desktop)
 router.get('/conversations/:id/messages/:messageId/audio', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { id, messageId } = req.params;
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id },
-      include: { match: true },
-    });
+    const conversation = await findConversation(id);
 
     if (!conversation) {
       return error(res, 'Conversation not found', 404);
@@ -363,39 +449,81 @@ router.get('/conversations/:id/messages/:messageId/audio', requireAuth, async (r
       where: { id: messageId },
     });
 
-    if (!message || message.conversationId !== id || !message.mediaUrl) {
+    if (!message || (message.conversationId !== conversation.id && message.conversationId !== id) || !message.mediaUrl) {
       return error(res, 'Audio message not found', 404);
     }
 
-    // Stream securely from private storage
-    const fileStream = storageService.getPrivateFileStream('voice', message.mediaUrl);
+    const fileInfo = storageService.getPrivateFileInfo('voice', message.mediaUrl);
+    const totalSize = fileInfo.fileSize;
+    const rangeHeader = req.headers.range;
 
-    res.setHeader('Content-Type', fileStream.mimeType);
-    res.setHeader('Content-Length', fileStream.fileSize);
-    res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-    res.setHeader('Accept-Ranges', 'bytes');
+    // Support HTTP 206 Partial Content for Safari iOS and Android seeking
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
 
-    fileStream.stream.pipe(res);
+      if (start >= totalSize || end >= totalSize) {
+        res.setHeader('Content-Range', `bytes */${totalSize}`);
+        return res.status(416).send('Requested range not satisfiable');
+      }
+
+      const chunksize = end - start + 1;
+      const fileStream = storageService.getPrivateFileStream('voice', message.mediaUrl, { start, end });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': fileInfo.mimeType,
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      });
+
+      fileStream.stream.pipe(res);
+    } else {
+      const fileStream = storageService.getPrivateFileStream('voice', message.mediaUrl);
+
+      res.setHeader('Content-Type', fileStream.mimeType);
+      res.setHeader('Content-Length', totalSize);
+      res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      fileStream.stream.pipe(res);
+    }
   } catch (err) {
     if (err.statusCode === 404) return error(res, 'Audio file not found in storage', 404);
     return error(res, err.message, 500);
   }
 });
 
-// 6. Mark Conversation Read
+// 7. Mark Conversation Read & Synchronize Across Devices
 router.post('/conversations/:id/read', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { id } = req.params;
 
+    const conversation = await findConversation(id);
+    if (!conversation) {
+      return error(res, 'Conversation not found', 404);
+    }
+
+    if (conversation.match.user1Id !== currentUserId && conversation.match.user2Id !== currentUserId) {
+      return error(res, 'Unauthorized', 403);
+    }
+
+    const partnerId = conversation.match.user1Id === currentUserId ? conversation.match.user2Id : conversation.match.user1Id;
+
     await prisma.message.updateMany({
       where: {
-        conversationId: id,
+        conversationId: conversation.id,
         senderId: { not: currentUserId },
         isRead: false,
       },
       data: { isRead: true },
     });
+
+    // Notify partner (read receipt) and reader's other devices (clears unread badge)
+    socketService.broadcastMessageRead(conversation.id, currentUserId, partnerId);
 
     return success(res, null, 'Conversation marked as read');
   } catch (err) {

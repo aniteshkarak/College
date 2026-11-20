@@ -54,13 +54,31 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-        ? 'audio/ogg;codecs=opus'
-        : 'audio/webm';
+      // Cross-platform runtime MIME detection (Safari iOS, Android Chrome, Desktop)
+      const candidateTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        ''
+      ];
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      let selectedMime = '';
+      for (const candidate of candidateTypes) {
+        if (!candidate) {
+          selectedMime = '';
+          break;
+        }
+        if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(candidate)) {
+          selectedMime = candidate;
+          break;
+        }
+      }
+
+      const recorderOptions = selectedMime ? { mimeType: selectedMime } : {};
+      const mediaRecorder = new MediaRecorder(stream, recorderOptions);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -70,7 +88,8 @@ export const VoiceRecorder = ({ onSendVoice, onCancel }) => {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const actualMime = selectedMime || mediaRecorder.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: actualMime });
         setAudioBlob(blob);
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);

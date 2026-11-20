@@ -19,7 +19,8 @@ All primary architectural objectives were achieved without regressing existing f
 5. **Privacy Controls & DPDP Act Compliance:** Developed dedicated response serializers (`serializePublicProfile` and `serializePrivateAccount`). Public discovery, matching, and community endpoints never expose student email addresses, mobile numbers, legal names, password hashes, or private college ID documents.
 6. **Matching, Two-Way Blocking & Staged Connections (GO Engine):** Fully wired mutual matching, conversation creation, stage transitions (`Friend` $\to$ `Dating` $\to$ `Relationship`), voice note audio streaming, and robust two-way user blocking with unblock capabilities.
 7. **College Campus Board & College-Specific Announcements (Feature 19):** Engineered a college-isolated announcement feed with automatic college membership upon approval, concurrency-safe 5 announcements per calendar day limit resetting at midnight in `Asia/Kolkata` (UTC+5:30), soft-delete preservation of posting records (preventing allowance restoration), non-consuming edits, image poster uploads (up to 5MB WebP), public author sanitization, and administrative moderation with audit logging.
-8. **Automated QA & Verification:** Implemented 58 automated unit and workflow test assertions across 7 test suites, achieving 100% pass rates in local and sandbox environments.
+8. **Multi-Device Real-Time Messaging & Voice Messaging (Feature 20):** Engineered a multi-device real-time communication pipeline allowing students to maintain concurrent active sessions across mobile (Android, iOS) and desktop (Windows, macOS). Features authenticated user-level and conversation-level Socket.IO rooms, Redis adapter support for multi-instance scaling, client-generated idempotency keys for duplicate prevention, cursor-based offline message synchronization (`GET /chat/sync`), real-time read receipt propagation across devices, dynamic MediaRecorder MIME detection, HTTP 206 byte-range audio streaming, and cross-device blocking and session revocation.
+9. **Automated QA & Verification:** Implemented 73 automated unit and workflow test assertions across 8 test suites, achieving 100% pass rates in local and sandbox environments.
 
 ---
 
@@ -362,7 +363,62 @@ Collégé enforces a concurrency-safe limit of **5 announcements per student per
 
 ---
 
-## 13. Complete API Reference
+## 13. Multi-Device Real-Time Messaging & Voice Messaging Engine (Feature 20)
+
+Collégé implements a true multi-device real-time communication pipeline designed for cross-platform synchronization across mobile phones (Android, iPhone) and desktop computers (Windows, macOS):
+
+### 1. Concurrent Device Sessions & Security Isolation
+- **Multi-Device Support:** Students can log in simultaneously on multiple devices (e.g. Android phone, Windows laptop, iPhone).
+- **Session Tracking (`UserSession`):** Each authenticated device session is persisted with `id`, `userId`, `tokenHash`, `ipAddress`, and `userAgent`.
+- **Session Introspection & Revocation:**
+  - `GET /api/v1/auth/sessions`: Lists active sessions with parsed device metadata (`deviceType`, `os`, `browser`, `isCurrentSession`).
+  - `DELETE /api/v1/auth/sessions/:sessionId`: Allows students to revoke a specific device session from account settings.
+  - Revoking one session invalidates only that device and terminates its socket connection (`socketService.disconnectSessionSockets`), leaving other authorized devices completely unaffected.
+- **Granular Logout:** Logging out from one device invalidates that session's refresh token and socket without logging out the student's other active devices.
+
+### 2. Socket.IO Room Architecture & Multi-Device Fanout
+- **JWT Connection Authentication:** Every Socket.IO handshake requires and verifies a valid student JWT token (`auth.token` or Bearer header). Unauthenticated, expired, or suspended connections are immediately rejected.
+- **Room Hierarchy:**
+  - `user:{userId}` (and `user_{userId}`): Joins all active sockets belonging to the student across all devices.
+  - `conversation:{conversationId}` (and `conv_{conversationId}`): Joined only by authorized, non-blocked conversation participants.
+  - `session:{sessionId}`: Identifies sockets belonging to a specific device session.
+- **Bi-Directional Real-Time Fanout:**
+  - When a message is sent (via REST or Socket.IO):
+    1. Persisted transactionally to PostgreSQL.
+    2. Broadcast to recipient's devices via `user:{recipientId}` and `conversation:{conversationId}` (`new_message` event).
+    3. Synchronized to the sender's *other* active devices via `user:{senderId}` (`message_sync` event).
+    4. Delivery acknowledgement returned to the origin device.
+- **Horizontal Multi-Instance Scaling (Redis Adapter):**
+  - Integrated `@socket.io/redis-adapter` with `ioredis` pub/sub channels.
+  - Broadcasts seamlessly traverse multiple backend server instances, with automatic fallback to in-memory adapter when Redis is absent.
+
+### 3. Duplicate Prevention & Cursor-Based Offline Recovery
+- **PostgreSQL as Single Source of Truth:** Messages are never held solely in ephemeral socket memory.
+- **Idempotency Keys:** Clients supply an `idempotencyKey` parameter. If network retry occurs, the backend detects the cached key and returns the already-persisted message without inserting duplicate rows.
+- **Database-Backed Offline Catch-Up:**
+  - `GET /api/v1/chat/sync?since=<ISOString>`: Reconnecting devices query missed messages and read status updates across all active chats since the last sync cursor.
+  - `GET /api/v1/chat/conversations/:id/messages?after=<cursor>`: Supports cursor-based message history retrieval with strictly ascending chronological ordering.
+
+### 4. Cross-Platform Voice Messaging
+- **Dynamic Runtime MIME Detection:** Browser `MediaRecorder` detects supported recording formats at runtime (`audio/webm;codecs=opus`, `audio/webm`, `audio/mp4`, `audio/aac`, `audio/ogg`), providing native recording on Android Chrome, iOS Safari, and Desktop browsers.
+- **Storage Vault:** Audios are validated ($\le$ 60s, $\le$ 10MB) and stored in `storage/private/voice/` outside public web roots.
+- **HTTP 206 Byte-Range Streaming:**
+  - `GET /api/v1/chat/conversations/:id/messages/:messageId/audio` handles `Range: bytes=start-end` headers.
+  - Returns `206 Partial Content` with `Content-Range` and `Accept-Ranges: bytes`, enabling seamless audio seeking and playback on iOS Safari, macOS Safari, and mobile Chrome.
+- **Lightweight Event Payloads:** Socket.IO events transmit only audio metadata and stream URLs—large raw binary audio chunks are never sent over WebSocket payloads.
+
+### 5. Synchronized Read Receipts & Cross-Device Blocking
+- **Read Receipts:** When a student opens a chat, `POST /api/v1/chat/conversations/:id/read` marks messages as read in PostgreSQL and emits `messages_read`:
+  - Recipient devices receive the event to display double checkmarks (`✓✓`).
+  - Reader's other active devices receive the event to clear unread badges in real time.
+- **Cross-Device Blocking:** When User A blocks User B:
+  - `socketService.notifyConversationBlocked` emits `conversation_blocked` to all devices of both users.
+  - Active sockets on all devices are ejected from conversation rooms.
+  - Subsequent text, voice, and audio streaming requests are strictly rejected with HTTP 403.
+
+---
+
+## 14. Complete API Reference
 
 ### 1. Health & System
 - `GET /health` & `GET /api/v1/health`: Reports Node.js process, PostgreSQL status, Redis status, and uptime.
@@ -376,8 +432,10 @@ Collégé enforces a concurrency-safe limit of **5 announcements per student per
 - `POST /resubmit/:applicationId`: Re-submits corrected application to review queue.
 
 ### 3. Authentication & Recovery (`/api/v1/auth`)
-- `POST /login`: Student login (Argon2id check, issues JWT access & refresh token).
-- `POST /logout`: Clears session and cookies.
+- `POST /login`: Student login (Argon2id check, issues JWT access & refresh token, records device session).
+- `POST /logout`: Clears specific device session and cookies.
+- `GET /sessions`: Lists all active device sessions for current student with device/browser metadata.
+- `DELETE /sessions/:sessionId`: Revokes specific device session and disconnects its active socket.
 - `POST /forgot-password`: Requests signed password recovery email.
 - `POST /reset-password`: Sets new password with JWT reset token.
 - `POST /change-password`: Changes password for authenticated student.
@@ -429,11 +487,12 @@ Collégé enforces a concurrency-safe limit of **5 announcements per student per
 
 ### 7. Real-Time Chat & Voice Vault (`/api/v1/chat`)
 - `GET /conversations`: Lists user conversations with unread counts.
-- `GET /conversations/:id/messages`: Paginated chat history.
-- `POST /conversations/:id/messages`: Sends text message.
-- `POST /conversations/:id/voice`: Uploads and sends voice audio message.
-- `GET /conversations/:id/messages/:messageId/audio`: Secure audio stream.
-- `POST /conversations/:id/read`: Marks conversation messages as read.
+- `GET /conversations/:id/messages`: Paginated chat history with `before`, `after`, and `since` cursor filters.
+- `GET /sync`: Delta synchronization across all active conversations for offline/reconnecting devices.
+- `POST /conversations/:id/messages`: Sends text message with client idempotency key and multi-device fanout.
+- `POST /conversations/:id/voice`: Uploads and sends voice audio message with multi-device notification.
+- `GET /conversations/:id/messages/:messageId/audio`: Secure audio stream with HTTP 206 byte-range seeking support.
+- `POST /conversations/:id/read`: Marks conversation messages as read and synchronizes read receipts across all devices.
 
 ### 8. Safety Reports (`/api/v1/reports`)
 - `POST /`: Submits user safety report with category and reason.
@@ -450,27 +509,28 @@ Collégé enforces a concurrency-safe limit of **5 announcements per student per
 
 ---
 
-## 14. Test Results & Verification Summary
+## 15. Test Results & Verification Summary
 
 All test suites were executed with Node.js built-in test runner (`node --test`) using ES modules:
 
 | Test Suite | File Location | Tests | Status | Execution Time |
 | :--- | :--- | :---: | :---: | :---: |
-| **Technology Integration Suite** | `backend/tests/technologies.test.js` | 19 | **19/19 PASS** | 153.9 ms |
-| **Discovery & Privacy Suite** | `backend/tests/discoveryUnit.test.js` | 13 | **13/13 PASS** | 20.1 ms |
-| **Workflows & Security Suite** | `backend/tests/workflowsUnit.test.js` | 11 | **11/11 PASS** | 3.8 ms |
-| **Campus Board 15-Scenario Suite** | `backend/tests/campusBoard.test.js` | 15 | **15/15 PASS** | 31.2 ms |
-| **Total Automated Assertions** | — | **58** | **58/58 PASS (100%)** | **209.0 ms** |
+| **Technology Integration Suite** | `backend/tests/technologies.test.js` | 19 | **19/19 PASS** | 156.5 ms |
+| **Discovery & Privacy Suite** | `backend/tests/discoveryUnit.test.js` | 13 | **13/13 PASS** | 18.4 ms |
+| **Workflows & Security Suite** | `backend/tests/workflowsUnit.test.js` | 11 | **11/11 PASS** | 3.9 ms |
+| **Campus Board 15-Scenario Suite** | `backend/tests/campusBoard.test.js` | 15 | **15/15 PASS** | 33.9 ms |
+| **Multi-Device Chat 15-Scenario Suite** | `backend/tests/multiDeviceChat.test.js` | 15 | **15/15 PASS** | 34.4 ms |
+| **Total Automated Assertions** | — | **73** | **73/73 PASS (100%)** | **247.1 ms** |
 
 ### Frontend Build Verification:
 - **Build Tool:** Vite 6.4.6 with Rollup
 - **Command:** `npm run build --prefix College`
-- **Result:** Successfully compiled 1,624 modules in 4.26 seconds with **0 errors**.
-- **Distribution:** `dist/index.html` (1.22 kB), `dist/assets/index-*.css` (74.69 kB), `dist/assets/index-*.js` (553.56 kB).
+- **Result:** Successfully compiled 1,653 modules in 4.78 seconds with **0 errors**.
+- **Distribution:** `dist/index.html` (1.22 kB), `dist/assets/index-*.css` (75.64 kB), `dist/assets/index-*.js` (614.69 kB).
 
 ---
 
-## 15. Deployment & Environment Configuration
+## 16. Deployment & Environment Configuration
 
 ### Required Environment Variables (`College/backend/.env`):
 ```ini
@@ -527,7 +587,7 @@ EMAIL_FROM="Collégé Campus Team" <noreply@college.internal>
 
 ---
 
-## 16. Future Recommendations
+## 17. Future Recommendations
 
 1. **Facial Liveness & AI Pre-Screening:** Integrate client-side WebRTC facial liveness verification to detect pre-recorded videos or AI-generated deepfakes before submitting photos to the manual admin queue.
 2. **Automated Digilocker & NAD Integration:** Connect with India's National Academic Depository (NAD) and Digilocker APIs for instant automated student enrollment verification where supported by universities.
