@@ -101,4 +101,28 @@ export const audioUpload = multer({
   },
 }).single('audio');
 
+export const announcementUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB per file
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedFields = ['image', 'photo', 'attachment'];
+    if (!allowedFields.includes(file.fieldname)) {
+      const error = new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname);
+      error.message = "Unexpected upload field. Expected 'image' or 'attachment'.";
+      return cb(error, false);
+    }
+    const mime = file.mimetype.toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
+      const error = new Error(`Unsupported file type: ${file.mimetype}. Allowed formats: JPEG, PNG, WebP.`);
+      error.statusCode = 400;
+      error.code = 'UNSUPPORTED_MEDIA_TYPE';
+      return cb(error, false);
+    }
+    cb(null, true);
+  },
+}).single('image');
+
 export default upload;

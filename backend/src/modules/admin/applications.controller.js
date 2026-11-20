@@ -402,11 +402,28 @@ export const approveApplication = async (req, res) => {
         },
       });
 
-      // 3. Education
+      // 3. Education - Link verified College ID from database
+      let verifiedCollegeId = application.collegeId || null;
+      let verifiedCollegeName = application.collegeName;
+
+      if (verifiedCollegeId) {
+        const c = await tx.college.findUnique({ where: { id: verifiedCollegeId } });
+        if (c) verifiedCollegeName = c.name;
+      } else if (application.collegeName) {
+        const c = await tx.college.findFirst({
+          where: { name: { equals: application.collegeName.trim(), mode: 'insensitive' } },
+        });
+        if (c) {
+          verifiedCollegeId = c.id;
+          verifiedCollegeName = c.name;
+        }
+      }
+
       await tx.education.create({
         data: {
           userId: newUser.id,
-          collegeName: application.collegeName,
+          collegeId: verifiedCollegeId,
+          collegeName: verifiedCollegeName,
           universityName: application.universityName,
           degreeName: application.degreeName,
           departmentStream: application.departmentStream,

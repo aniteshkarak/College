@@ -450,4 +450,55 @@ router.get('/audit-logs', requireAdminAuth, requireAdminRoles('SUPER_ADMIN'), as
   }
 });
 
+// Admin Moderation of Campus Announcements
+router.post(
+  '/announcements/:id/moderate',
+  requireAdminAuth,
+  requireSupportOrSuperAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { action = 'DELETE', reason = '' } = req.body || {};
+
+      const existing = await prisma.campusAnnouncement.findUnique({
+        where: { id },
+      });
+      if (!existing) {
+        return error(res, 'Announcement not found', 404);
+      }
+
+      const newCategory = action === 'RESTORE' ? 'General' : 'DELETED';
+      const updated = await prisma.$transaction(async (tx) => {
+        const a = await tx.campusAnnouncement.update({
+          where: { id },
+          data: { category: newCategory },
+        });
+
+        await tx.adminAuditLog.create({
+          data: {
+            adminId: req.admin.id,
+            action: `MODERATE_ANNOUNCEMENT_${action}`,
+            targetType: 'ANNOUNCEMENT',
+            targetId: id,
+            details: JSON.stringify({
+              previousCategory: existing.category,
+              newCategory,
+              action,
+              reason: reason || 'Administrative content moderation',
+            }),
+            ipAddress: req.ip || null,
+            userAgent: req.get('user-agent') || null,
+          },
+        });
+
+        return a;
+      });
+
+      return success(res, { announcement: updated }, `Announcement moderated (${action})`);
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
 export default router;

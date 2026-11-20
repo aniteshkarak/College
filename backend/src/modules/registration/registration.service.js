@@ -87,12 +87,29 @@ export const submitRegistrationApplication = async (data, files = {}) => {
     timeCost: 3,
   });
 
-  // 7. Generate Application ID and 72-Hour Review Deadline
+  // 7. Identify college from existing verified College database table
+  let verifiedCollegeId = data.collegeId || null;
+  let verifiedCollegeName = data.collegeName ? data.collegeName.trim() : '';
+
+  if (verifiedCollegeId) {
+    const col = await prisma.college.findUnique({ where: { id: verifiedCollegeId } });
+    if (col) verifiedCollegeName = col.name;
+  } else if (verifiedCollegeName) {
+    const col = await prisma.college.findFirst({
+      where: { name: { equals: verifiedCollegeName, mode: 'insensitive' } },
+    });
+    if (col) {
+      verifiedCollegeId = col.id;
+      verifiedCollegeName = col.name;
+    }
+  }
+
+  // 8. Generate Application ID and 72-Hour Review Deadline
   const applicationId = generateApplicationId();
   const submittedAt = new Date();
   const reviewDeadline = calculateReviewDeadline(submittedAt);
 
-  // 8. Transaction: Create PendingRegistration + IdentityDocument + 3 Photos + VerificationHistory
+  // 9. Transaction: Create PendingRegistration + IdentityDocument + 3 Photos + VerificationHistory
   const result = await prisma.$transaction(async (tx) => {
     const app = await tx.pendingRegistration.create({
       data: {
@@ -111,7 +128,8 @@ export const submitRegistrationApplication = async (data, files = {}) => {
         passwordHash,
 
         // Step 2 Education
-        collegeName: data.collegeName.trim(),
+        collegeId: verifiedCollegeId,
+        collegeName: verifiedCollegeName,
         universityName: data.universityName?.trim() || 'Affiliated / Autonomous',
         collegeLocation: data.collegeLocation?.trim() || data.city.trim(),
         collegeState: data.collegeState?.trim() || data.state.trim(),

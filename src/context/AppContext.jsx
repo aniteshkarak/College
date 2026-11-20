@@ -101,6 +101,14 @@ export const AppProvider = ({ children }) => {
 
   // Campus Board Announcements (College exclusive)
   const [announcements, setAnnouncements] = useState(INITIAL_CAMPUS_ANNOUNCEMENTS);
+  const [boardInfo, setBoardInfo] = useState(null);
+  const [dailyAllowance, setDailyAllowance] = useState({
+    usedToday: 0,
+    maxDailyLimit: 5,
+    remainingAllowance: 5,
+    message: 'Announcements used today: 0/5',
+    isLimitReached: false,
+  });
 
   // Active Relationship
   const [activeRelationship, setActiveRelationship] = useState(null);
@@ -288,6 +296,31 @@ export const AppProvider = ({ children }) => {
         }
       })
       .catch((err) => console.warn('Could not load notifications:', err.message));
+
+    // 6. Fetch Campus Board Announcements & Daily Allowance
+    api.campus.getAnnouncements()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data?.announcements) {
+          setAnnouncements(res.data.announcements);
+        }
+        if (res?.data?.allowance) {
+          setDailyAllowance(res.data.allowance);
+        }
+      })
+      .catch((err) => console.warn('Could not load campus announcements:', err.message));
+
+    api.campus.getBoard()
+      .then((res) => {
+        if (!isMounted) return;
+        if (res?.data) {
+          setBoardInfo(res.data);
+          if (res.data.allowance) {
+            setDailyAllowance(res.data.allowance);
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not load campus board:', err.message));
 
     return () => {
       isMounted = false;
@@ -507,31 +540,110 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // CAMPUS BOARD: Announcement publishing (College-exclusive)
-  const handleCreateAnnouncement = (annData) => {
-    const newAnnouncement = {
-      id: 'ann_' + Date.now(),
-      college_name: currentUser.college_name,
-      author_name: currentUser.display_name,
-      author_role: 'Student',
-      title: annData.title,
-      category: annData.category || 'Campus Event',
-      badge_color: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
-      content: annData.content,
-      date: 'Today',
-      upvotes: 1,
-      pinned: false
-    };
-
-    setAnnouncements((prev) => [newAnnouncement, ...prev]);
-    addToast(`Announcement broadcast to ${currentUser.college_name} Campus Board! 📢`, 'success');
+  // CAMPUS BOARD: Announcement publishing (College-exclusive & Daily Limit)
+  const refreshCampusBoard = async () => {
+    try {
+      const [annRes, boardRes] = await Promise.all([
+        api.campus.getAnnouncements(),
+        api.campus.getBoard(),
+      ]);
+      if (annRes?.data?.announcements) {
+        setAnnouncements(annRes.data.announcements);
+      }
+      if (boardRes?.data) {
+        setBoardInfo(boardRes.data);
+        if (boardRes.data.allowance) {
+          setDailyAllowance(boardRes.data.allowance);
+        }
+      }
+    } catch (err) {
+      console.warn('Refresh campus board error:', err.message);
+    }
   };
 
-  const handleUpvoteAnnouncement = (annId) => {
+  const handleCreateAnnouncement = async (annData, imageFile = null) => {
+    let payload;
+    if (imageFile) {
+      const formData = new FormData();
+      formData.append('title', annData.title);
+      formData.append('content', annData.content);
+      formData.append('category', annData.category || 'Campus Event');
+      if (annData.isUrgent) formData.append('isUrgent', 'true');
+      formData.append('image', imageFile);
+      payload = formData;
+    } else {
+      payload = {
+        title: annData.title,
+        content: annData.content,
+        category: annData.category || 'Campus Event',
+        isUrgent: Boolean(annData.isUrgent),
+      };
+    }
+
+    try {
+      const res = await api.campus.createAnnouncement(payload);
+      if (res?.data?.announcement) {
+        setAnnouncements((prev) => [res.data.announcement, ...prev]);
+      }
+      if (res?.data?.allowance) {
+        setDailyAllowance(res.data.allowance);
+      }
+      addToast(res?.message || `Announcement broadcast to ${currentUser?.college_name || 'your college'} Campus Board! 📢`, 'success');
+      return res;
+    } catch (err) {
+      console.warn('Create announcement API error:', err.message);
+      if (err.status === 429) {
+        addToast('You have reached your daily announcement limit. You can post again tomorrow.', 'error');
+      } else {
+        addToast(err.message || 'Could not post announcement', 'error');
+      }
+      throw err;
+    }
+  };
+
+  const handleUpdateAnnouncement = async (id, updateData) => {
+    try {
+      const res = await api.campus.updateAnnouncement(id, updateData);
+      if (res?.data?.announcement) {
+        setAnnouncements((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, ...res.data.announcement } : a))
+        );
+      }
+      addToast('Announcement updated successfully.', 'success');
+      return res;
+    } catch (err) {
+      console.warn('Update announcement API error:', err.message);
+      addToast(err.message || 'Could not update announcement', 'error');
+      throw err;
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id) => {
+    try {
+      const res = await api.campus.deleteAnnouncement(id);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      if (res?.data?.allowance) {
+        setDailyAllowance(res.data.allowance);
+      }
+      addToast('Announcement deleted from Campus Board.', 'info');
+      return res;
+    } catch (err) {
+      console.warn('Delete announcement API error:', err.message);
+      addToast(err.message || 'Could not delete announcement', 'error');
+      throw err;
+    }
+  };
+
+  const handleUpvoteAnnouncement = async (annId) => {
     setAnnouncements((prev) =>
-      prev.map((a) => (a.id === annId ? { ...a, upvotes: a.upvotes + 1 } : a))
+      prev.map((a) => (a.id === annId ? { ...a, upvotes: (a.upvotes || 0) + 1 } : a))
     );
-    addToast('Upvoted campus announcement!', 'info');
+    try {
+      await api.campus.upvote(annId);
+      addToast('Upvoted campus announcement!', 'info');
+    } catch (err) {
+      console.warn('Upvote API error:', err.message);
+    }
   };
 
   // SUBSCRIPTION UPGRADE (Free -> Pro 49 -> Unlimited 99 per 28 days)
@@ -1246,7 +1358,12 @@ export const AppProvider = ({ children }) => {
         handleSendGoRequest,
         handleRespondToGoRequest,
         announcements,
+        boardInfo,
+        dailyAllowance,
+        refreshCampusBoard,
         handleCreateAnnouncement,
+        handleUpdateAnnouncement,
+        handleDeleteAnnouncement,
         handleUpvoteAnnouncement,
         currentPlanConfig,
         handleUpgradePlan,

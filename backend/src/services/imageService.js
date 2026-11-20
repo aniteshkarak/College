@@ -175,6 +175,49 @@ export const imageService = {
       fileHashSha256: hash,
     };
   },
+
+  /**
+   * Process and save optional announcement image attachment:
+   * Strips EXIF/GPS, resizes to max width 1200, WebP conversion.
+   */
+  processAndSaveAnnouncementImage: async (inputData) => {
+    const buffer = toBuffer(inputData);
+    if (!buffer || buffer.length === 0) {
+      throw new Error('Valid announcement image buffer is required.');
+    }
+
+    let metadata;
+    try {
+      metadata = await sharp(buffer).metadata();
+    } catch (err) {
+      throw new Error('Uploaded file is corrupted or not a valid image.');
+    }
+
+    const permitted = ['jpeg', 'jpg', 'png', 'webp'];
+    if (!metadata.format || !permitted.includes(metadata.format.toLowerCase())) {
+      throw new Error(`Unsupported image format: ${metadata.format}. Permitted formats are JPEG, PNG, and WebP.`);
+    }
+
+    const uniqueId = `${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    const fileName = `announcement_${uniqueId}.webp`;
+    const filePath = path.join(STORAGE_PATHS.PHOTOS_DIR, fileName);
+
+    await sharp(buffer)
+      .rotate()
+      .resize({ width: 1200, withoutEnlargement: true })
+      .webp({ quality: 82, effort: 4 })
+      .toFile(filePath);
+
+    const stats = await fs.promises.stat(filePath);
+    logger.info(`Sharp processed announcement image: ${fileName} (${stats.size} bytes)`);
+
+    return {
+      fileName,
+      filePath,
+      fileSize: stats.size,
+      mimeType: 'image/webp',
+    };
+  },
 };
 
 export default imageService;

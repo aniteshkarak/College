@@ -351,6 +351,12 @@ export const api = {
       const q = sp.toString();
       return request(`/admin/audit-logs${q ? `?${q}` : ''}`);
     },
+
+    moderateAnnouncement: (id, action = 'DELETE', reason = '') =>
+      request(`/admin/announcements/${encodeURIComponent(id)}/moderate`, {
+        method: 'POST',
+        body: JSON.stringify({ action, reason }),
+      }),
   },
 
   // Discovery
@@ -489,6 +495,48 @@ export const api = {
       request('/reports', {
         method: 'POST',
         body: JSON.stringify({ reportedUserId, category, reason }),
+      }),
+  },
+
+  // Campus Board (College-Exclusive Announcements)
+  campus: {
+    getBoard: () => request('/campus/board'),
+    getAnnouncements: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.page) sp.set('page', params.page);
+      if (params.limit) sp.set('limit', params.limit);
+      if (params.category && params.category !== 'All') sp.set('category', params.category);
+      if (params.search) sp.set('search', params.search);
+      const q = sp.toString();
+      return request(`/campus/announcements${q ? `?${q}` : ''}`);
+    },
+    createAnnouncement: (formDataOrJson) => {
+      let body;
+      let headers = {};
+      if (formDataOrJson instanceof FormData) {
+        body = formDataOrJson;
+      } else {
+        body = JSON.stringify(formDataOrJson);
+      }
+      return request('/campus/announcements', {
+        method: 'POST',
+        headers,
+        body,
+      });
+    },
+    updateAnnouncement: (id, data) =>
+      request(`/campus/announcements/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deleteAnnouncement: (id) =>
+      request(`/campus/announcements/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }),
+    getUsage: () => request('/campus/usage'),
+    upvote: (id) =>
+      request(`/campus/announcements/${encodeURIComponent(id)}/upvote`, {
+        method: 'POST',
       }),
   },
 

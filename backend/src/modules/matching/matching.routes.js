@@ -48,7 +48,7 @@ router.get('/incoming', requireAuth, async (req, res) => {
       };
     });
 
-    return success(res, { incomingLikes: formatted, requests: formatted }, 'Incoming likes retrieved');
+    return success(res, { incomingLikes: formatted }, 'Incoming likes retrieved');
   } catch (err) {
     return error(res, err.message, 500);
   }
@@ -153,18 +153,18 @@ router.get('/matches', requireAuth, async (req, res) => {
         unread_count: 0,
         last_message: lastMsg
           ? {
-              content: lastMsg.content,
-              created_at: lastMsg.createdAt,
-              sender_id: lastMsg.senderId,
-              message_type: lastMsg.messageType,
-            }
+            content: lastMsg.content,
+            created_at: lastMsg.createdAt,
+            sender_id: lastMsg.senderId,
+            message_type: lastMsg.messageType,
+          }
           : null,
         go_request: activeGoReq
           ? {
-              id: activeGoReq.id,
-              from: activeGoReq.initiatorId,
-              targetStage: activeGoReq.targetStage,
-            }
+            id: activeGoReq.id,
+            from: activeGoReq.initiatorId,
+            targetStage: activeGoReq.targetStage,
+          }
           : null,
         user: publicUser,
       };
