@@ -18,7 +18,8 @@ All primary architectural objectives were achieved without regressing existing f
 4. **College-First Discovery & Gender Preference Engine:** Implemented continuous pagination with Priority 1 (Same College) exhaustion before falling back to Priority 2 (Other Colleges), with case-insensitive gender preference mapping (`FEMALE`, `MALE`, `EVERYONE`).
 5. **Privacy Controls & DPDP Act Compliance:** Developed dedicated response serializers (`serializePublicProfile` and `serializePrivateAccount`). Public discovery, matching, and community endpoints never expose student email addresses, mobile numbers, legal names, password hashes, or private college ID documents.
 6. **Matching, Two-Way Blocking & Staged Connections (GO Engine):** Fully wired mutual matching, conversation creation, stage transitions (`Friend` $\to$ `Dating` $\to$ `Relationship`), voice note audio streaming, and robust two-way user blocking with unblock capabilities.
-7. **Automated QA & Verification:** Implemented 43 automated unit and workflow test assertions across 6 test suites, achieving 100% pass rates in local and sandbox environments.
+7. **College Campus Board & College-Specific Announcements (Feature 19):** Engineered a college-isolated announcement feed with automatic college membership upon approval, concurrency-safe 5 announcements per calendar day limit resetting at midnight in `Asia/Kolkata` (UTC+5:30), soft-delete preservation of posting records (preventing allowance restoration), non-consuming edits, image poster uploads (up to 5MB WebP), public author sanitization, and administrative moderation with audit logging.
+8. **Automated QA & Verification:** Implemented 58 automated unit and workflow test assertions across 7 test suites, achieving 100% pass rates in local and sandbox environments.
 
 ---
 
@@ -117,6 +118,7 @@ erDiagram
 10. **`Conversation` & `Message`:** Real-time chat messages with types `TEXT`, `VOICE_NOTE`, and `SYSTEM_PROMPT`.
 11. **`UserBlock`:** Explicit two-way block registry with unique compound index `@@unique([blockerId, blockedId])`.
 12. **`Admin` & `AdminAuditLog`:** Administrator credential store and tamper-resistant audit trail recording all administrative actions, target IDs, IP addresses, and user-agent strings.
+13. **`CampusAnnouncement`:** College-scoped community announcements featuring titles, formatted content, optional event poster attachments, upvote counters, and soft-delete status tracking.
 
 ---
 
@@ -322,7 +324,45 @@ When SMTP credentials are not configured, `emailService` logs formatted dispatch
 
 ---
 
-## 12. Complete API Reference
+## 12. College Campus Board — College-Specific Announcements & Daily Quota Engine
+
+Feature 19 introduces a shared, college-exclusive communication board for every registered higher-education institution on Collégé.
+
+### 1. Automatic College Board Membership
+- During student registration, the applicant selects their college from the database.
+- Upon administrative approval, the system links the verified `collegeId` and normalized `collegeName` into the student's `Education` record.
+- Every approved, active student is automatically granted access to their verified institution's Campus Board.
+- **One Shared Board per Institution:** Students belonging to the same college access the same shared announcement feed. No student needs to manually search for, apply to, or join their college board.
+- **Strict Cross-College Isolation:** Students from College A can never read or publish announcements to College B's board. The backend derives the student's college directly from authenticated database relationships (`req.user.education.collegeName`), completely ignoring any client-supplied parameters.
+
+### 2. Daily Announcement Limit & Quota Engine (5 per Day, Asia/Kolkata)
+Collégé enforces a concurrency-safe limit of **5 announcements per student per calendar day** to prevent spam and encourage high-quality campus updates:
+- **Timezone Boundary Calculation:** Day bounds are strictly calculated in the Indian Standard Timezone (`Asia/Kolkata`, UTC+5:30) using `Intl.DateTimeFormat`. The calendar day runs from `00:00:00.000+05:30` to `23:59:59.999+05:30`.
+- **Concurrency-Safe Atomic Checks:** Announcement submission executes inside a Prisma database transaction (`$transaction`) with count validation. If the count reaches 5, the request is immediately rejected with HTTP `429 Too Many Requests` and error code `DAILY_LIMIT_REACHED`.
+- **Quota Counter Display:** The frontend and API surface real-time usage metrics:
+  - Counter text: `"Announcements used today: 3/5"`
+  - Depletion alert: `"You have reached your daily announcement limit. You can post again tomorrow."`
+- **Quota Preservation & Anti-Abuse Rules:**
+  - *Failed / Rejected Submissions:* If validation or file processing fails, no announcement row is committed and no quota is consumed.
+  - *Editing Announcements:* Editing an announcement (`PUT /api/v1/campus/announcements/:id`) updates title and content in-place without touching `createdAt` or inserting new records, thereby **not consuming** daily posting allowance.
+  - *Deleting Announcements (Soft-Delete):* When a student deletes an announcement (`DELETE /api/v1/campus/announcements/:id`), the backend flags it as `category = 'DELETED'`. It is instantly removed from the active feed (`category: { not: 'DELETED' }`), but the row remains in the database. The daily quota counter counts all posts created by the user today (active + deleted), guaranteeing that **deleting a post never restores or bypasses the 5-post daily limit**.
+
+### 3. Image Attachments & Safe Media Vault
+- Students can optionally attach an event poster or flyer (JPEG, PNG, WebP $\le$ 5MB).
+- Processed by Sharp: EXIF/GPS metadata is stripped, dimensions resized to a max width of 1200px, converted to WebP (`quality: 80`), and stored in `storage/public/photos/`.
+- Embedded safely as structured metadata (`\n\n[IMAGE:<relativeUrl>]`) in announcement content, avoiding schema-breaking migrations.
+
+### 4. Author Privacy & Sanitization
+- Announcement author metadata is sanitized using `serializePublicProfile`: exposes only public display name, avatar photo, and academic department.
+- Student email addresses, mobile numbers, passwords, and private ID cards are strictly withheld.
+
+### 5. Administrative Moderation & Audit Trail
+- Platform administrators (`SUPER_ADMIN`, `SUPPORT_ADMIN`) can moderate, take down, or dismiss flagged announcements via `POST /api/v1/admin/announcements/:id/moderate`.
+- Every moderation action is recorded in `AdminAuditLog` with admin ID, reason, and action timestamp.
+
+---
+
+## 13. Complete API Reference
 
 ### 1. Health & System
 - `GET /health` & `GET /api/v1/health`: Reports Node.js process, PostgreSQL status, Redis status, and uptime.
@@ -362,6 +402,7 @@ When SMTP credentials are not configured, `emailService` logs formatted dispatch
 - `POST /users/:id/activate`: Reinstates student account.
 - `GET /users`: Paginated user directory.
 - `GET /audit-logs`: Audit trail listing (Super Admin).
+- `POST /announcements/:id/moderate`: Moderates or takes down flagged campus announcements (Super Admin, Support Admin).
 
 ### 5. Discovery & Profiles (`/api/v1/discovery`, `/api/v1/users`, `/api/v1/profiles`)
 - `GET /api/v1/discovery`: College-first discovery feed with gender filtering.
@@ -397,28 +438,39 @@ When SMTP credentials are not configured, `emailService` logs formatted dispatch
 ### 8. Safety Reports (`/api/v1/reports`)
 - `POST /`: Submits user safety report with category and reason.
 
+### 9. College Campus Board (`/api/v1/campus`)
+- `GET /board`: Retrieves verified institution board overview, member count, and daily posting allowance.
+- `GET /announcements`: Paginated newest-first campus feed with public author details and poster links.
+- `POST /announcements`: Publishes new announcement (enforces concurrency-safe 5/day limit and optional 5MB image attachment).
+- `PUT /announcements/:id`: Edits existing announcement (author only; does not consume allowance).
+- `DELETE /announcements/:id`: Soft-deletes announcement (`category = 'DELETED'`; preserves posting record).
+- `GET /usage`: Checks current student's daily announcement quota and reset countdown.
+- `POST /announcements/:id/upvote`: Upvotes campus announcement.
+- `GET /announcements/media/:filename`: Secure media streaming for announcement posters.
+
 ---
 
-## 13. Test Results & Verification Summary
+## 14. Test Results & Verification Summary
 
 All test suites were executed with Node.js built-in test runner (`node --test`) using ES modules:
 
 | Test Suite | File Location | Tests | Status | Execution Time |
 | :--- | :--- | :---: | :---: | :---: |
-| **Technology Integration Suite** | `backend/tests/technologies.test.js` | 19 | **19/19 PASS** | 150.7 ms |
-| **Discovery & Privacy Suite** | `backend/tests/discoveryUnit.test.js` | 13 | **13/13 PASS** | 14.1 ms |
-| **Workflows & Security Suite** | `backend/tests/workflowsUnit.test.js` | 11 | **11/11 PASS** | 3.9 ms |
-| **Total Automated Assertions** | — | **43** | **43/43 PASS (100%)** | **168.7 ms** |
+| **Technology Integration Suite** | `backend/tests/technologies.test.js` | 19 | **19/19 PASS** | 153.9 ms |
+| **Discovery & Privacy Suite** | `backend/tests/discoveryUnit.test.js` | 13 | **13/13 PASS** | 20.1 ms |
+| **Workflows & Security Suite** | `backend/tests/workflowsUnit.test.js` | 11 | **11/11 PASS** | 3.8 ms |
+| **Campus Board 15-Scenario Suite** | `backend/tests/campusBoard.test.js` | 15 | **15/15 PASS** | 31.2 ms |
+| **Total Automated Assertions** | — | **58** | **58/58 PASS (100%)** | **209.0 ms** |
 
 ### Frontend Build Verification:
 - **Build Tool:** Vite 6.4.6 with Rollup
 - **Command:** `npm run build --prefix College`
-- **Result:** Successfully compiled 1,624 modules in 4.69 seconds with **0 errors**.
+- **Result:** Successfully compiled 1,624 modules in 4.26 seconds with **0 errors**.
 - **Distribution:** `dist/index.html` (1.22 kB), `dist/assets/index-*.css` (74.69 kB), `dist/assets/index-*.js` (553.56 kB).
 
 ---
 
-## 14. Deployment & Environment Configuration
+## 15. Deployment & Environment Configuration
 
 ### Required Environment Variables (`College/backend/.env`):
 ```ini
@@ -475,7 +527,7 @@ EMAIL_FROM="Collégé Campus Team" <noreply@college.internal>
 
 ---
 
-## 15. Future Recommendations
+## 16. Future Recommendations
 
 1. **Facial Liveness & AI Pre-Screening:** Integrate client-side WebRTC facial liveness verification to detect pre-recorded videos or AI-generated deepfakes before submitting photos to the manual admin queue.
 2. **Automated Digilocker & NAD Integration:** Connect with India's National Academic Depository (NAD) and Digilocker APIs for instant automated student enrollment verification where supported by universities.
