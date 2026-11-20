@@ -1072,6 +1072,13 @@ export const AppProvider = ({ children }) => {
         };
       }
 
+      if (err.code === 'SERVER_OFFLINE') {
+        return {
+          success: false,
+          message: 'Unable to connect to authentication service. Please try again.'
+        };
+      }
+
       return {
         success: false,
         message: err.message || 'Invalid credentials. Email or password does not match.'

@@ -120,7 +120,7 @@ async function request(endpoint, options = {}) {
   } catch (err) {
     // If backend is not running or unreachable, preserve a distinguishable network error
     if (err.name === 'TypeError' && err.message.includes('fetch')) {
-      const networkErr = new Error('Backend server is currently offline or unreachable at ' + API_BASE_URL);
+      const networkErr = new Error('Connection could not be established. Please try again.');
       networkErr.code = 'SERVER_OFFLINE';
       networkErr.status = 503;
       throw networkErr;

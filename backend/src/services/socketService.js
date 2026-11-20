@@ -77,14 +77,17 @@ export const initSocketServer = async (httpServer, app) => {
         lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
+        retryStrategy: () => null,
       });
+      pubClient.on('error', () => {});
       const subClient = pubClient.duplicate();
+      subClient.on('error', () => {});
 
       await Promise.all([pubClient.connect(), subClient.connect()]);
       io.adapter(createAdapter(pubClient, subClient));
       logger.info('⚡ Socket.IO Redis adapter attached for horizontal scaling across instances');
     } catch (err) {
-      logger.warn(`⚡ Socket.IO running with default adapter (Redis note: ${err.message})`);
+      logger.info(`⚡ Socket.IO running with default in-memory adapter`);
     }
   }
 
