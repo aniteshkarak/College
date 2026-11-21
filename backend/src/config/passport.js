@@ -81,6 +81,8 @@ passport.use(
           interests: p.interests || [],
           avatarUrl,
           additionalPhotos: photoUrls.slice(1),
+          education: user.education || null,
+          profile: user.profile || null,
         };
 
         return done(null, sanitized);

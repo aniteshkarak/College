@@ -148,7 +148,7 @@ export const campusService = {
    * Retrieves verified college board information for the student
    */
   getCollegeBoardInfo: async (user) => {
-    const education = user.education;
+    const education = user.education || (user.collegeName ? { collegeName: user.collegeName, collegeId: user.collegeId } : null);
     if (!education || !education.collegeName) {
       throw new Error('You must have a verified college to access the Campus Board.');
     }
@@ -194,7 +194,7 @@ export const campusService = {
    * Fetches paginated announcements strictly for the user's verified college
    */
   listAnnouncements: async (user, query = {}) => {
-    const education = user.education;
+    const education = user.education || (user.collegeName ? { collegeName: user.collegeName, collegeId: user.collegeId } : null);
     if (!education || !education.collegeName) {
       throw new Error('You must have a verified college to view announcements.');
     }
@@ -261,7 +261,7 @@ export const campusService = {
    * Publishes an announcement with strict 5-per-day limit and concurrency safety
    */
   createAnnouncement: async (user, data, imageFile = null) => {
-    const education = user.education;
+    const education = user.education || (user.collegeName ? { collegeName: user.collegeName, collegeId: user.collegeId } : null);
     if (!education || !education.collegeName) {
       throw new Error('You must have a verified college before posting an announcement.');
     }

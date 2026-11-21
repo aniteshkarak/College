@@ -38,7 +38,7 @@ export const AppProvider = ({ children }) => {
       if (target === 'admin') {
         setCurrentView('admin');
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const token = getStoredToken();
     if (token) {
@@ -61,8 +61,20 @@ export const AppProvider = ({ children }) => {
     }
   }, []);
 
-  // Colleges Registry
+  // Colleges Registry loaded dynamically from PostgreSQL database
   const [collegesList, setCollegesList] = useState(PREMIER_COLLEGES);
+
+  useEffect(() => {
+    if (typeof api?.registration?.getColleges === 'function') {
+      api.registration.getColleges()
+        .then((res) => {
+          if (res?.data?.colleges && res.data.colleges.length > 0) {
+            setCollegesList(res.data.colleges);
+          }
+        })
+        .catch((err) => console.warn('Could not load colleges directory from database:', err.message));
+    }
+  }, []);
 
   // Pending Verifications Queue for Admin (72-Hour Manual Verification System)
   const [pendingVerifications, setPendingVerifications] = useState(INITIAL_PENDING_VERIFICATIONS);
@@ -328,7 +340,7 @@ export const AppProvider = ({ children }) => {
   // Automatically mark conversation read and refresh messages when activeChatMatch opens
   useEffect(() => {
     if (activeChatMatch?.id) {
-      api.chat.markRead(activeChatMatch.id).catch(() => {});
+      api.chat.markRead(activeChatMatch.id).catch(() => { });
       api.chat.getMessages(activeChatMatch.id)
         .then((res) => {
           if (res?.data?.messages && res.data.messages.length > 0) {
@@ -347,7 +359,7 @@ export const AppProvider = ({ children }) => {
             }));
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [activeChatMatch?.id]);
 
@@ -415,7 +427,7 @@ export const AppProvider = ({ children }) => {
           }
           localStorage.setItem('college_last_sync', new Date().toISOString());
         })
-        .catch(() => {});
+        .catch(() => { });
     });
 
     // Handle new incoming messages (text and voice notes)
@@ -463,7 +475,7 @@ export const AppProvider = ({ children }) => {
       );
 
       if (activeChatMatch && (activeChatMatch.id === convId || activeChatMatch.id === msg.conversationId)) {
-        api.chat.markRead(convId).catch(() => {});
+        api.chat.markRead(convId).catch(() => { });
       }
     });
 
@@ -607,7 +619,7 @@ export const AppProvider = ({ children }) => {
         spread: 70,
         origin: { y: 0.6 }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     addToast(`Accepted! You and ${likeItem.user.display_name} are now Mutual Friends. Chat unlocked! 💬`, 'success');
   };
@@ -663,15 +675,15 @@ export const AppProvider = ({ children }) => {
       prev.map((m) =>
         m.id === matchId
           ? {
-              ...m,
-              go_request: {
-                id: goMsgId,
-                from: senderId,
-                targetStage,
-                status: 'pending',
-                requested_at: new Date().toISOString()
-              }
+            ...m,
+            go_request: {
+              id: goMsgId,
+              from: senderId,
+              targetStage,
+              status: 'pending',
+              requested_at: new Date().toISOString()
             }
+          }
           : m
       )
     );
@@ -736,7 +748,7 @@ export const AppProvider = ({ children }) => {
 
       try {
         confetti({ particleCount: 90, spread: 70 });
-      } catch (e) {}
+      } catch (e) { }
       addToast(`Accepted! You and ${match.user.display_name} are now in the ${nextStage} stage! ❤️`, 'success');
     } else if (choice === 'refuse' || choice === 'reject' || choice === 'we_are_good_as_a_friend') {
       setMatches((prev) =>
@@ -882,7 +894,7 @@ export const AppProvider = ({ children }) => {
 
     try {
       confetti({ particleCount: 100, spread: 80 });
-    } catch (e) {}
+    } catch (e) { }
 
     const plan = SUBSCRIPTION_PLANS[planId];
     addToast(`Successfully upgraded to ${plan.name} (₹${plan.price} / 28 days)! 👑`, 'success');
@@ -1181,11 +1193,11 @@ export const AppProvider = ({ children }) => {
       prev.map((a) =>
         (a.id === appId || a.application_id === appId)
           ? {
-              ...a,
-              status: 'NEEDS_CORRECTION',
-              correction_fields: fields,
-              correction_message: message
-            }
+            ...a,
+            status: 'NEEDS_CORRECTION',
+            correction_fields: fields,
+            correction_message: message
+          }
           : a
       )
     );
@@ -1293,7 +1305,7 @@ export const AppProvider = ({ children }) => {
 
   const navigateTo = (view) => {
     const publicViews = ['landing', 'about', 'how-it-works', 'safety', 'community', 'privacy', 'terms', 'contact', 'admin'];
-    
+
     // Gatekeeping: Without login or approved account, user cannot enter website (except public views and admin portal)
     if (!isAuthenticated && !publicViews.includes(view)) {
       setIsAuthModalOpen(true);

@@ -36,8 +36,12 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3, 'Email or Mobile Number is required'),
+  identifier: z.string().min(3, 'Email or Mobile Number is required').optional(),
+  email: z.string().optional(),
   password: z.string().min(1, 'Password is required'),
+}).refine((data) => data.identifier || data.email, {
+  message: 'Email or Mobile Number is required',
+  path: ['identifier'],
 });
 
 export const resubmitVerificationSchema = z.object({

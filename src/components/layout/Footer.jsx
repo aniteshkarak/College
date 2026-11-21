@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShieldCheck, Heart, MapPin } from 'lucide-react';
+import { ShieldCheck, Heart, MapPin, Sparkles } from 'lucide-react';
+import AkitsModal from './AkitsModal';
 
 export const Footer = () => {
   const { navigateTo } = useApp();
+  const [isAkitsModalOpen, setIsAkitsModalOpen] = useState(false);
 
   return (
     <footer className="w-full bg-slate-900 text-slate-300 border-t border-slate-800 pt-12 pb-20 md:pb-12 mt-16">
@@ -108,13 +110,31 @@ export const Footer = () => {
 
         </div>
 
-        {/* Legal Disclaimer per PRD */}
+        {/* Legal Disclaimer & AKITS Copyright Section */}
         <div className="border-t border-slate-800 pt-6 flex flex-col md:flex-row items-center justify-between text-[11px] text-slate-500 gap-4">
-          <p>© 2026 Collégé. All rights reserved. Designed for adult college communities (18+).</p>
+          <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 text-center md:text-left text-slate-400">
+            <span>© 2026 All Rights Reserved by</span>
+            <button
+              type="button"
+              onClick={() => setIsAkitsModalOpen(true)}
+              className="font-bold text-purple-400 hover:text-purple-300 underline decoration-purple-500/50 hover:decoration-purple-300 underline-offset-2 transition-all cursor-pointer inline-flex items-center gap-1 focus:outline-none focus:ring-1 focus:ring-purple-500 rounded"
+              title="Click to view AKITS company profile, services and portfolio"
+            >
+              <span>AKITS (Anitesh Karak IT Solution)</span>
+            </button>
+            <span className="hidden sm:inline">•</span>
+            <span>Collégé Platform (18+)</span>
+          </div>
           <p className="text-center md:text-right max-w-xl text-slate-400">
             A digital match or relationship status is not a legally binding or real-world commitment. Collégé complies with India's Digital Personal Data Protection Act, 2023. No video calling or location tracking.
           </p>
         </div>
+
+        {/* AKITS Company Information, Services & Portfolio Modal */}
+        <AkitsModal
+          isOpen={isAkitsModalOpen}
+          onClose={() => setIsAkitsModalOpen(false)}
+        />
       </div>
     </footer>
   );

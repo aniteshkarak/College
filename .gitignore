@@ -23,7 +23,34 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables & secrets
 .env
 .env.*
+**/.env
+**/.env.*
+*.local
+*.secret
+*.secrets
+
+# Private credentials, certificates, and keys
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+
+# Sensitive storage and test outputs
+reports/
+backend/storage/private/*
+!backend/storage/private/.gitkeep
+!backend/storage/private/documents/.gitkeep
+!backend/storage/private/photos/.gitkeep
+!backend/storage/private/thumbnails/.gitkeep
+!backend/storage/private/discovery/.gitkeep
+
+# Explicitly allow safe example templates
 !.env.example
+!.env.sample
+!**/.env.example
+!**/.env.sample

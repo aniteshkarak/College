@@ -34,7 +34,8 @@ export const login = async (req, res) => {
       return error(res, 'Validation failed', 400, parseResult.error.issues);
     }
 
-    const { identifier, password } = parseResult.data;
+    const identifier = parseResult.data.identifier || parseResult.data.email;
+    const { password } = parseResult.data;
     const reqMeta = {
       ip: req.ip || req.socket?.remoteAddress || null,
       userAgent: req.get('user-agent') || null,

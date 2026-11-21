@@ -216,6 +216,17 @@ export const api = {
       request(`/registration/resubmit/${encodeURIComponent(applicationId)}`, {
         method: 'POST',
         body: data instanceof FormData ? data : JSON.stringify(data)
+      }),
+
+    getColleges: (query = '') => {
+      const q = query ? `?q=${encodeURIComponent(query)}` : '';
+      return request(`/registration/colleges${q}`);
+    },
+
+    requestCollege: (collegeData) =>
+      request('/registration/colleges/request', {
+        method: 'POST',
+        body: JSON.stringify(collegeData)
       })
   },
 

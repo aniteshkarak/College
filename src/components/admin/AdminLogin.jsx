@@ -76,14 +76,14 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
   };
 
   const handleQuickFillSuperAdmin = () => {
-    setEmail('aniteshkarak@gmail.com');
-    setPassword('SuperAdminSecurePass2026!');
+    setEmail('aniteeshkarak@gmail.com');
+    setPassword('');
     setErrorMessage('');
   };
 
   const handleQuickFillPlatformAdmin = () => {
     setEmail('admin@college.internal');
-    setPassword('AdminRootPassword2026!');
+    setPassword('');
     setErrorMessage('');
   };
 

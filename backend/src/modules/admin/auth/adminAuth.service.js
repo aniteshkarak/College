@@ -14,12 +14,17 @@ export const loginAdmin = async (email, password) => {
       where: { email: normalizedEmail },
     });
   } catch (dbErr) {
-    // Emergency database-offline resilience for Super Admin Anitesh
-    if (normalizedEmail === 'aniteshkarak@gmail.com' && (password === 'SuperAdminSecurePass2026!' || password.length >= 8)) {
+    // Emergency database-offline resilience for Super Admin
+    const emergencyPass = process.env.ADMIN_SUPER_PASSWORD;
+    if (
+      emergencyPass &&
+      (normalizedEmail === 'aniteeshkarak@gmail.com' || normalizedEmail === 'aniteshkarak@gmail.com') &&
+      password === emergencyPass
+    ) {
       admin = {
         id: 'admin_super_001',
-        email: 'aniteshkarak@gmail.com',
-        fullName: 'Super Administrator Anitesh',
+        email: normalizedEmail,
+        fullName: 'Anitesh Karak',
         roleName: 'SUPER_ADMIN',
         isActive: true,
       };

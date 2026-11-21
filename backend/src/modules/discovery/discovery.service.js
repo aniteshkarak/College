@@ -60,8 +60,8 @@ export const getDiscoveryPreferences = async (userId) => {
     gender: 'EVERYONE',
     minAge: profile?.ageRangeMin || 18,
     maxAge: profile?.ageRangeMax || 28,
-    relationshipIntention: profile?.relationshipIntention || 'All',
-    city: profile?.city || 'All',
+    relationshipIntention: 'All',
+    city: 'All',
     maxDistance: profile?.preferredDistance === 'SAME_COLLEGE' ? 10 : 100,
   };
 };
@@ -307,7 +307,16 @@ export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
     ? {
         education: {
           AND: [
-            ...(userCollegeId ? [{ NOT: { collegeId: userCollegeId } }] : []),
+            ...(userCollegeId
+              ? [
+                  {
+                    OR: [
+                      { collegeId: null },
+                      { collegeId: { not: userCollegeId } },
+                    ],
+                  },
+                ]
+              : []),
             ...(userCollegeName
               ? [{ NOT: { collegeName: { equals: userCollegeName.trim(), mode: 'insensitive' } } }]
               : []),
