@@ -32,11 +32,14 @@ passport.use(
   )
 );
 
-// 2. JWT Strategy (Bearer Token)
+// 2. JWT Strategy (Bearer Token & Secure HttpOnly Cookie)
 passport.use(
   new JwtStrategy(
     {
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req) => req?.cookies?.token || null,
+      ]),
       secretOrKey: config.jwt.secret,
     },
     async (jwtPayload, done) => {

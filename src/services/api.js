@@ -26,29 +26,41 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-// Token Management (Student)
+// Token Management (Student) - Memory-Only Token Protection (Never stored in localStorage)
+let inMemoryAccessToken = null;
+
 export const getStoredToken = () => {
-  try {
-    return localStorage.getItem('college_access_token');
-  } catch (e) {
-    return null;
-  }
+  return inMemoryAccessToken;
 };
 
 export const setStoredToken = (token) => {
+  inMemoryAccessToken = token || null;
   try {
+    // Only store a non-sensitive boolean indicator that a session exists
     if (token) {
-      localStorage.setItem('college_access_token', token);
+      localStorage.setItem('college_has_session', 'true');
     } else {
-      localStorage.removeItem('college_access_token');
+      localStorage.removeItem('college_has_session');
     }
+    // Purge any legacy token from localStorage to satisfy security rules
+    localStorage.removeItem('college_access_token');
   } catch (e) {}
 };
 
 export const clearStoredToken = () => {
+  inMemoryAccessToken = null;
   try {
+    localStorage.removeItem('college_has_session');
     localStorage.removeItem('college_access_token');
   } catch (e) {}
+};
+
+export const hasActiveSessionIndicator = () => {
+  try {
+    return localStorage.getItem('college_has_session') === 'true';
+  } catch (e) {
+    return false;
+  }
 };
 
 // Token & Session Management (Administrator)
@@ -130,7 +142,7 @@ async function request(endpoint, options = {}) {
     ...options,
     headers,
     signal,
-    credentials: 'omit',
+    credentials: 'include',
   };
 
   try {
@@ -244,6 +256,11 @@ export const api = {
     },
 
     getMe: () => request('/auth/me'),
+
+    refresh: () =>
+      request('/auth/refresh', {
+        method: 'POST',
+      }),
 
     forgotPassword: (email) =>
       request('/auth/forgot-password', {

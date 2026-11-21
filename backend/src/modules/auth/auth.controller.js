@@ -62,6 +62,15 @@ export const login = async (req, res) => {
       });
     }
 
+    if (result.token) {
+      res.cookie('token', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+
     if (result.refreshToken) {
       res.cookie('refreshToken', result.refreshToken, {
         httpOnly: true,
@@ -175,6 +184,14 @@ export const refresh = async (req, res) => {
     }
 
     const result = await authService.refreshToken(parseResult.data.refreshToken);
+    if (result.token) {
+      res.cookie('token', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
     return success(res, result, 'Token refreshed successfully');
   } catch (err) {
     return error(res, err.message, err.statusCode || 401);

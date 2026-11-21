@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { api, setStoredToken, clearStoredToken, getStoredToken } from '../services/api';
+import { api, setStoredToken, clearStoredToken, getStoredToken, hasActiveSessionIndicator } from '../services/api';
 import {
   INITIAL_USER,
   DISCOVER_PROFILES,
@@ -21,44 +21,244 @@ import {
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
+  // --- 1. THEME PREFERENCE (college_theme) ---
+  const [theme, setThemeState] = useState(() => {
+    try {
+      return localStorage.getItem('college_theme') || 'system';
+    } catch (e) {
+      return 'system';
+    }
+  });
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      const stored = localStorage.getItem('college_theme') || 'system';
+      if (stored === 'dark') return true;
+      if (stored === 'light') return false;
+      return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const applyThemeToDOM = (targetTheme) => {
+    if (typeof document === 'undefined') return;
+    const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const shouldBeDark = targetTheme === 'dark' || (targetTheme === 'system' && prefersDark);
+    setIsDarkMode(shouldBeDark);
+    if (shouldBeDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  const setTheme = (newTheme) => {
+    const validTheme = ['light', 'dark', 'system'].includes(newTheme) ? newTheme : 'system';
+    setThemeState(validTheme);
+    try {
+      localStorage.setItem('college_theme', validTheme);
+    } catch (e) {}
+    applyThemeToDOM(validTheme);
+  };
+
+  const toggleTheme = () => {
+    if (theme === 'light') setTheme('dark');
+    else if (theme === 'dark') setTheme('system');
+    else setTheme('light');
+  };
+
+  useEffect(() => {
+    applyThemeToDOM(theme);
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleMediaChange = () => {
+      if (theme === 'system') {
+        applyThemeToDOM('system');
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleMediaChange);
+    } else if (mediaQuery.addListener) {
+      mediaQuery.addListener(handleMediaChange);
+    }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleMediaChange);
+      } else if (mediaQuery.removeListener) {
+        mediaQuery.removeListener(handleMediaChange);
+      }
+    };
+  }, [theme]);
+
+  // --- 2. USER PREFERENCES (college_preferences) ---
+  const DEFAULT_PREFERENCES = {
+    theme: 'system',
+    language: 'en',
+    soundEnabled: true,
+    notifications: {
+      matches: true,
+      messages: true,
+      games: true,
+      announcements: true,
+    },
+    discoveryFilters: {
+      minAge: 18,
+      maxAge: 26,
+      gender: 'All',
+      city: 'All',
+      intention: 'All',
+      maxDistance: 100,
+      selectedInterests: [],
+    },
+    lastVisitedSection: 'matches',
+    dismissedHints: [],
+  };
+
+  const [userPreferences, setUserPreferences] = useState(() => {
+    try {
+      const raw = localStorage.getItem('college_preferences');
+      if (!raw) return DEFAULT_PREFERENCES;
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_PREFERENCES,
+        ...parsed,
+        notifications: { ...DEFAULT_PREFERENCES.notifications, ...(parsed.notifications || {}) },
+        discoveryFilters: { ...DEFAULT_PREFERENCES.discoveryFilters, ...(parsed.discoveryFilters || {}) },
+      };
+    } catch (e) {
+      console.warn('Corrupted college_preferences recovered to safe defaults');
+      return DEFAULT_PREFERENCES;
+    }
+  });
+
+  const updatePreferences = (newPrefs) => {
+    setUserPreferences((prev) => {
+      const updated = typeof newPrefs === 'function' ? newPrefs(prev) : { ...prev, ...newPrefs };
+      try {
+        localStorage.setItem('college_preferences', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const playSoundEffect = (type = 'pop') => {
+    if (!userPreferences.soundEnabled || typeof window === 'undefined') return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(type === 'message' ? 587.33 : 880, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.12);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {}
+  };
+
   // Auth & View state - By default unauthenticated (user cannot enter without login or creating account)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentView, setCurrentView] = useState('landing'); // Start on landing page
+  const [currentView, setCurrentView] = useState('landing');
   const [previousView, setPreviousView] = useState('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status'
 
-  // Restore authenticated session from backend token if stored & support direct #admin routing
+  // Restore authenticated session from backend & support direct #admin routing
   useEffect(() => {
-    try {
-      const hash = window.location.hash.replace('#', '');
-      const searchParam = new URLSearchParams(window.location.search).get('view');
-      const target = hash || searchParam;
-      if (target === 'admin') {
-        setCurrentView('admin');
-      }
-    } catch (e) { }
+    const initAuthAndPreferences = async () => {
+      try {
+        const hash = window.location.hash.replace('#', '');
+        const searchParam = new URLSearchParams(window.location.search).get('view');
+        const target = hash || searchParam;
+        if (target === 'admin') {
+          setCurrentView('admin');
+        }
+      } catch (e) {}
 
-    const token = getStoredToken();
-    if (token) {
-      api.auth.getMe()
-        .then((res) => {
-          if (res?.data) {
-            setCurrentUser(res.data);
-            setIsAuthenticated(true);
-            // User sessions ALWAYS stay on student platform
+      const hasSession = hasActiveSessionIndicator() || getStoredToken();
+      if (!hasSession) {
+        setIsAuthChecking(false);
+        return;
+      }
+
+      try {
+        // Attempt to fetch profile from backend with credentials/cookie
+        let res = await api.auth.getMe().catch(async (err) => {
+          if (err?.status === 401) {
+            // Attempt token refresh via HttpOnly refresh cookie
+            const refreshRes = await api.auth.refresh().catch(() => null);
+            if (refreshRes && refreshRes.success) {
+              if (refreshRes.data?.accessToken) {
+                setStoredToken(refreshRes.data.accessToken);
+              }
+              return await api.auth.getMe().catch(() => null);
+            }
+          }
+          return null;
+        });
+
+        if (res && res.data) {
+          const userObj = res.data.user || res.data;
+          setCurrentUser(userObj);
+          setIsAuthenticated(true);
+
+          // Synchronize discovery preferences from PostgreSQL database
+          try {
+            const prefsRes = await api.discovery.getPreferences();
+            if (prefsRes?.data?.preferences) {
+              const serverPrefs = prefsRes.data.preferences;
+              const syncedFilters = {
+                minAge: serverPrefs.minAge || 18,
+                maxAge: serverPrefs.maxAge || 26,
+                gender: serverPrefs.gender || 'All',
+                city: serverPrefs.city || 'All',
+                intention: serverPrefs.relationshipIntention || 'All',
+                maxDistance: serverPrefs.maxDistance || 100,
+                selectedInterests: userPreferences.discoveryFilters?.selectedInterests || [],
+              };
+              setDiscoveryFilters(syncedFilters);
+              updatePreferences({ discoveryFilters: syncedFilters });
+            }
+          } catch (prefErr) {
+            console.warn('Could not sync discovery preferences from backend:', prefErr.message);
+          }
+
+          // Restore last visited view if safe, otherwise default to matches
+          const lastSection = userPreferences.lastVisitedSection;
+          const allowedSections = ['matches', 'discover', 'campus-board', 'profile', 'relationship', 'games', 'settings'];
+          if (allowedSections.includes(lastSection)) {
+            setCurrentView(lastSection);
+          } else {
             setCurrentView('matches');
           }
-        })
-        .catch((err) => {
-          // Only clear stored token if the server explicitly rejected the authentication (401)
-          // Do not wipe user session on temporary connection or server startup delays
-          if (err?.status === 401) {
-            clearStoredToken();
-          }
-        });
-    }
+        } else {
+          // No valid session on server; clear session indicator safely
+          clearStoredToken();
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.warn('Session restoration encountered an issue:', err.message);
+        if (err?.status === 401) {
+          clearStoredToken();
+          setIsAuthenticated(false);
+          setCurrentUser(null);
+        }
+      } finally {
+        setIsAuthChecking(false);
+      }
+    };
+
+    initAuthAndPreferences();
   }, []);
 
   // Colleges Registry loaded dynamically from PostgreSQL database
@@ -85,15 +285,39 @@ export const AppProvider = ({ children }) => {
   const [passedProfiles, setPassedProfiles] = useState([]);
 
   // Filters
-  const [discoveryFilters, setDiscoveryFilters] = useState({
-    minAge: 18,
-    maxAge: 26,
-    gender: 'All',
-    city: 'All',
-    intention: 'All',
-    maxDistance: 100,
-    selectedInterests: []
+  const [discoveryFilters, setDiscoveryFilters] = useState(() => {
+    return userPreferences.discoveryFilters || {
+      minAge: 18,
+      maxAge: 26,
+      gender: 'All',
+      city: 'All',
+      intention: 'All',
+      maxDistance: 100,
+      selectedInterests: []
+    };
   });
+
+  const updateDiscoveryPreferences = async (newFilters) => {
+    const merged = { ...discoveryFilters, ...newFilters };
+    setDiscoveryFilters(merged);
+    updatePreferences({ discoveryFilters: merged });
+
+    if (isAuthenticated) {
+      try {
+        const payload = {};
+        if (merged.gender) payload.gender = merged.gender;
+        if (merged.minAge) payload.minAge = parseInt(merged.minAge, 10);
+        if (merged.maxAge) payload.maxAge = parseInt(merged.maxAge, 10);
+        if (merged.intention) payload.relationshipIntention = merged.intention;
+        if (merged.city) payload.city = merged.city;
+        if (merged.maxDistance) payload.maxDistance = parseInt(merged.maxDistance, 10);
+
+        await api.discovery.updatePreferences(payload);
+      } catch (err) {
+        console.warn('Failed to sync discovery preferences to server:', err.message);
+      }
+    }
+  };
 
   // Incoming Likes ("Who liked you" with Accept / Reject buttons)
   const [incomingLikes, setIncomingLikes] = useState(INITIAL_INCOMING_LIKES);
@@ -1290,6 +1514,9 @@ export const AppProvider = ({ children }) => {
   const logout = () => {
     api.auth.logout();
     clearStoredToken();
+    try {
+      localStorage.removeItem('college_user_prefs');
+    } catch (e) {}
     setIsAuthenticated(false);
     setCurrentUser(null);
     setProfiles([]);
@@ -1315,6 +1542,10 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
+    if (isAuthenticated && !publicViews.includes(view)) {
+      updatePreferences({ lastVisitedSection: view });
+    }
+
     setPreviousView(currentView);
     setCurrentView(view);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1323,6 +1554,15 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider
       value={{
+        theme,
+        setTheme,
+        isDarkMode,
+        toggleTheme,
+        userPreferences,
+        updatePreferences,
+        playSoundEffect,
+        isAuthChecking,
+        updateDiscoveryPreferences,
         isAuthenticated,
         setIsAuthenticated,
         currentUser,

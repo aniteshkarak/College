@@ -34,17 +34,14 @@ export const Navbar = ({ onOpenMoodModal }) => {
     setIsAuthenticated,
     logout,
     setIsAuthModalOpen,
-    setAuthModalMode
+    setAuthModalMode,
+    theme,
+    isDarkMode,
+    toggleTheme
   } = useApp();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle('dark');
-  };
 
   const unreadNotifsCount = notifications.filter((n) => !n.read).length;
   const unreadMessagesCount = matches.reduce((sum, m) => sum + (m.unread_count || 0), 0);
@@ -152,11 +149,12 @@ export const Navbar = ({ onOpenMoodModal }) => {
             </button>
           )}
 
-          {/* Dark Mode Toggle */}
+          {/* Theme Toggle */}
           <button
-            onClick={toggleDarkMode}
+            onClick={toggleTheme}
             className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Toggle theme"
+            title={`Current theme: ${theme} (Click to toggle)`}
+            aria-label={`Current theme: ${theme}`}
           >
             {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </button>

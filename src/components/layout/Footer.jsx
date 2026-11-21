@@ -123,7 +123,21 @@ export const Footer = () => {
               <span>AKITS (Anitesh Karak IT Solution)</span>
             </button>
             <span className="hidden sm:inline">•</span>
-            <span>Collégé Platform (18+)</span>
+            <button
+              type="button"
+              onClick={() => navigateTo('terms')}
+              className="hover:text-purple-300 underline decoration-slate-700 hover:decoration-purple-400 transition-colors cursor-pointer"
+            >
+              Terms & Conditions
+            </button>
+            <span className="hidden sm:inline">•</span>
+            <button
+              type="button"
+              onClick={() => navigateTo('privacy')}
+              className="hover:text-purple-300 underline decoration-slate-700 hover:decoration-purple-400 transition-colors cursor-pointer"
+            >
+              Privacy Policy
+            </button>
           </div>
           <p className="text-center md:text-right max-w-xl text-slate-400">
             A digital match or relationship status is not a legally binding or real-world commitment. Collégé complies with India's Digital Personal Data Protection Act, 2023. No video calling or location tracking.

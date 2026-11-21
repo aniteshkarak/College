@@ -107,13 +107,18 @@ export const AuthModal = ({ isOpen, onClose }) => {
     age_range_max: 25,
     preferred_distance: 'SAME_CITY',
 
-    // STEP 6: Consents & DPDP Compliance
+    // STEP 6: Consents & DPDP Compliance (Starts UNCHECKED per Statutory DPDP Requirements)
     termsAccepted: false,
     privacyAccepted: false,
     ageConfirmed18Plus: false,
-    verificationConsent: false
+    verificationConsent: false,
+    marketingConsent: false,
+    termsVersion: '2.4-2026.11',
+    privacyVersion: '2.4-2026.11',
+    consentTimestamp: null
   });
 
+  const [viewingLegalDoc, setViewingLegalDoc] = useState(null); // 'terms' | 'privacy' | null
   const [ageError, setAgeError] = useState('');
 
   // Toggle URL input visibility if user prefers manual URL over file upload
@@ -244,11 +249,18 @@ export const AuthModal = ({ isOpen, onClose }) => {
       return;
     }
     if (!formData.termsAccepted || !formData.privacyAccepted || !formData.ageConfirmed18Plus || !formData.verificationConsent) {
-      addToast('You must acknowledge all terms, 18+ eligibility, and 72-hour manual review consent.', 'warning');
+      addToast('You must review and agree to the Terms & Conditions and Privacy Policy, and confirm 18+ eligibility.', 'warning');
       return;
     }
 
-    const result = await registerStudent(formData);
+    const payloadWithConsent = {
+      ...formData,
+      termsVersion: '2.4-2026.11',
+      privacyVersion: '2.4-2026.11',
+      consentTimestamp: new Date().toISOString()
+    };
+
+    const result = await registerStudent(payloadWithConsent);
     if (result && result.success) {
       setApplicantStatusView({
         status: 'PENDING_REVIEW',
@@ -1512,47 +1524,100 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
-                {/* Consents Checkbox List */}
-                <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start gap-2">
+                {/* Consents Checkbox List (Mandatory Statutory DPDP Compliance) */}
+                <div className="space-y-2.5 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="text-[11px] font-bold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-1.5 flex items-center justify-between">
+                    <span>Mandatory Consents (Unchecked by Default)</span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-mono">v2.4 (Nov 2026)</span>
+                  </div>
+
+                  {/* 1. Terms & Conditions */}
+                  <div className="flex items-start gap-2.5">
                     <input
                       type="checkbox"
-                      id="termsConsent"
+                      id="termsAcceptedConsent"
                       checked={formData.termsAccepted}
                       onChange={(e) => setFormData({ ...formData, termsAccepted: e.target.checked })}
                       required
-                      className="w-4 h-4 mt-0.5 accent-rose-500 cursor-pointer"
+                      className="w-4 h-4 mt-0.5 accent-purple-600 cursor-pointer shrink-0"
                     />
-                    <label htmlFor="termsConsent" className="text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer">
-                      I accept the <span className="text-rose-500 font-semibold">Terms of Service</span> and <span className="text-rose-500 font-semibold">Privacy Policy</span>.
+                    <label htmlFor="termsAcceptedConsent" className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal cursor-pointer">
+                      I have read, understood and agree to the{' '}
+                      <button
+                        type="button"
+                        onClick={() => setViewingLegalDoc('terms')}
+                        className="text-purple-600 dark:text-purple-400 font-bold underline hover:text-purple-700 dark:hover:text-purple-300 cursor-pointer"
+                      >
+                        Terms & Conditions
+                      </button>{' '}
+                      (Version 2.4). <span className="text-rose-500 font-semibold">*</span>
                     </label>
                   </div>
 
-                  <div className="flex items-start gap-2">
+                  {/* 2. Privacy Policy */}
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      id="privacyAcceptedConsent"
+                      checked={formData.privacyAccepted}
+                      onChange={(e) => setFormData({ ...formData, privacyAccepted: e.target.checked })}
+                      required
+                      className="w-4 h-4 mt-0.5 accent-purple-600 cursor-pointer shrink-0"
+                    />
+                    <label htmlFor="privacyAcceptedConsent" className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal cursor-pointer">
+                      I have read and accept the{' '}
+                      <button
+                        type="button"
+                        onClick={() => setViewingLegalDoc('privacy')}
+                        className="text-purple-600 dark:text-purple-400 font-bold underline hover:text-purple-700 dark:hover:text-purple-300 cursor-pointer"
+                      >
+                        Privacy Policy
+                      </button>{' '}
+                      (Version 2.4) and consent to personal data processing for registration, 72h manual verification, and safety operations. <span className="text-rose-500 font-semibold">*</span>
+                    </label>
+                  </div>
+
+                  {/* 3. 18+ Age Solemn Confirmation */}
+                  <div className="flex items-start gap-2.5">
                     <input
                       type="checkbox"
                       id="age18Consent"
                       checked={formData.ageConfirmed18Plus}
                       onChange={(e) => setFormData({ ...formData, ageConfirmed18Plus: e.target.checked })}
                       required
-                      className="w-4 h-4 mt-0.5 accent-rose-500 cursor-pointer"
+                      className="w-4 h-4 mt-0.5 accent-purple-600 cursor-pointer shrink-0"
                     />
-                    <label htmlFor="age18Consent" className="text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer">
-                      I solemnly confirm that I am at least 18 years old.
+                    <label htmlFor="age18Consent" className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal cursor-pointer">
+                      I solemnly confirm that I am at least 18 years old. Users below 18 are not permitted. <span className="text-rose-500 font-semibold">*</span>
                     </label>
                   </div>
 
-                  <div className="flex items-start gap-2">
+                  {/* 4. College Verification Document Consent */}
+                  <div className="flex items-start gap-2.5">
                     <input
                       type="checkbox"
                       id="verificationConsent"
                       checked={formData.verificationConsent}
                       onChange={(e) => setFormData({ ...formData, verificationConsent: e.target.checked })}
                       required
-                      className="w-4 h-4 mt-0.5 accent-rose-500 cursor-pointer"
+                      className="w-4 h-4 mt-0.5 accent-purple-600 cursor-pointer shrink-0"
                     />
-                    <label htmlFor="verificationConsent" className="text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer">
-                      I consent to manual human verification of my college credentials under India's <span className="text-rose-500 font-semibold">DPDP Act, 2023</span>.
+                    <label htmlFor="verificationConsent" className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal cursor-pointer">
+                      I consent to manual human verification of my college document by authorized staff under India's DPDP Act, 2023. <span className="text-rose-500 font-semibold">*</span>
+                    </label>
+                  </div>
+
+                  {/* 5. Separate Optional Marketing Consent (NOT Required) */}
+                  <div className="flex items-start gap-2.5 pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                    <input
+                      type="checkbox"
+                      id="marketingConsent"
+                      checked={formData.marketingConsent}
+                      onChange={(e) => setFormData({ ...formData, marketingConsent: e.target.checked })}
+                      className="w-4 h-4 mt-0.5 accent-purple-600 cursor-pointer shrink-0"
+                    />
+                    <label htmlFor="marketingConsent" className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal cursor-pointer">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Optional:</span> I agree to receive platform updates, campus announcements, and event notifications via email.
                     </label>
                   </div>
                 </div>
@@ -1574,6 +1639,98 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 </div>
               </form>
             )}
+          </div>
+        )}
+
+        {/* Inline Legal Document Reader for Registration Compliance */}
+        {viewingLegalDoc && (
+          <div
+            className="fixed inset-0 z-[70] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setViewingLegalDoc(null);
+            }}
+          >
+            <div className="relative w-full max-w-3xl max-h-[88vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-800 dark:text-slate-200 my-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                      {viewingLegalDoc === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+                    </h3>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      Version 2.4 • Effective Nov 21, 2026 • India DPDP Act
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingLegalDoc(null)}
+                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  Return to Registration
+                </button>
+              </div>
+
+              {/* Scrollable Content Body */}
+              <div className="overflow-y-auto p-6 sm:p-8 space-y-6 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {viewingLegalDoc === 'terms' ? (
+                  <div className="space-y-4">
+                    <div className="p-3.5 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/40 text-xs">
+                      <strong>Summary of Terms:</strong> By registering with Collégé, you confirm that you are at least 18 years old, agree to genuine account representation, understand that connections require mutual acceptance, and agree not to engage in harassment, fake identities, or unlawful activity.
+                    </div>
+                    <p><strong>1. Introduction:</strong> Welcome to Collégé. These Terms govern your access to and use of our platform, features and services. Agreement is mandatory for use.</p>
+                    <p><strong>2. Eligibility:</strong> You must be at least 18 years of age. Genuine representation is strictly required. Underage accounts are prohibited.</p>
+                    <p><strong>3. Registration & Verification:</strong> Requires 3 personal photographs, valid college verification document, and profile data. Submissions undergo manual human administrator review before activation.</p>
+                    <p><strong>4. Account Responsibility:</strong> You are strictly responsible for maintaining credential secrecy and platform compliance.</p>
+                    <p><strong>5. Profile Visibility:</strong> Private contacts (email, mobile, verification ID) are never publicly exposed through profile APIs.</p>
+                    <p><strong>6. Discovery & Matching:</strong> Connections become matches only upon explicit mutual acceptance. Messaging is gated to approved matches.</p>
+                    <p><strong>7. Messaging:</strong> Zero tolerance for harassment, abuse, unsolicited content, spam or fraud.</p>
+                    <p><strong>8. Campus Board:</strong> Announcements must be genuine, non-spam and respectful to the campus community.</p>
+                    <p><strong>9. Blocking & Reporting:</strong> Any user can report or block accounts. Misuse of reporting is prohibited.</p>
+                    <p><strong>10. Prohibited Activities:</strong> Hacking, scraping, fake identities, spam and harassment are strictly barred.</p>
+                    <p><strong>11. User Content:</strong> You retain ownership of your content, granting Collégé a limited operating license.</p>
+                    <p><strong>12. Suspension:</strong> Violations may result in account restriction, suspension or termination.</p>
+                    <p><strong>13. Service Availability:</strong> Provided without uninterrupted availability guarantees.</p>
+                    <p><strong>14. Limitation:</strong> Users interact at their own discretion. Caution is advised.</p>
+                    <p><strong>15-17. Changes, Law & Contact:</strong> Governed by the laws of India. Support contact available at support@college.internal.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-2xl border border-indigo-200 dark:border-indigo-800/40 text-xs font-medium text-indigo-950 dark:text-indigo-200">
+                      <strong>Our Core Commitment:</strong> We do not sell your personal information, rent your data to advertisers, or reuse your photographs for unrelated advertising without explicit permission.
+                    </div>
+                    <p><strong>1. Privacy Commitment:</strong> Lawful, purpose-bound data collection under India's DPDP Act (2023).</p>
+                    <p><strong>2. Information Collected:</strong> Name, email, mobile, DOB/age, gender, college details, verification ID, 3 profile photos, messages and technical diagnostic logs.</p>
+                    <p><strong>3. Purpose of Processing:</strong> Registration, 72h manual verification, discovery, secure messaging, safety moderation and statutory compliance.</p>
+                    <p><strong>4. Secure Storage:</strong> Access-controlled database and private storage buckets. Restricted to authorized personnel.</p>
+                    <p><strong>5. Data Sharing Restrictions:</strong> We never sell data. Disclosures are limited to infrastructure hosts, message recipients, and lawful statutory mandates.</p>
+                    <p><strong>6-8. Profile, Document & Message Privacy:</strong> Verification documents and private contacts are confidential. Messages accessible only to chat participants.</p>
+                    <p><strong>9-10. Security & Retention:</strong> Reasonable security safeguards implemented. Retained only as long as necessary. Erasure provided on request.</p>
+                    <p><strong>11. Statutory Rights:</strong> You have the right to request data access summaries, correction, and account erasure within 72 hours.</p>
+                    <p><strong>12-16. Cookies, External Services & Contact:</strong> Dedicated Grievance Officer available at privacy@college.internal.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">
+                  You can also view the full dedicated page via the website footer.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setViewingLegalDoc(null)}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  Return to Registration
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
