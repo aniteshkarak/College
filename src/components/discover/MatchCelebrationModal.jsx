@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import { Heart, MessageCircle, Gamepad2, X, Sparkles } from 'lucide-react';
 
 export const MatchCelebrationModal = () => {
@@ -61,7 +62,7 @@ export const MatchCelebrationModal = () => {
         <div className="flex items-center justify-center gap-4 mb-8">
           <div className="relative">
             <img
-              src={currentUser.avatar_url}
+              src={resolvePhotoUrl(currentUser.avatar_url || currentUser.avatarUrl)}
               alt={currentUser.display_name}
               className="w-20 h-20 rounded-full object-cover ring-4 ring-rose-500/40 shadow-xl"
             />
@@ -76,7 +77,7 @@ export const MatchCelebrationModal = () => {
 
           <div className="relative">
             <img
-              src={matchedCelebrationUser.avatar_url}
+              src={resolvePhotoUrl(matchedCelebrationUser.avatar_url || matchedCelebrationUser.avatarUrl)}
               alt={matchedCelebrationUser.display_name}
               className="w-20 h-20 rounded-full object-cover ring-4 ring-rose-500/40 shadow-xl"
             />

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { api, setStoredToken, clearStoredToken, getStoredToken, hasActiveSessionIndicator } from '../services/api';
+import { api, setStoredToken, clearStoredToken, getStoredToken, hasActiveSessionIndicator, getStoredUser, setStoredUser } from '../services/api';
 import {
   INITIAL_USER,
   DISCOVER_PROFILES,
@@ -115,6 +115,7 @@ export const AppProvider = ({ children }) => {
       selectedInterests: [],
     },
     lastVisitedSection: 'matches',
+    lastActiveChatId: null,
     dismissedHints: [],
   };
 
@@ -163,14 +164,46 @@ export const AppProvider = ({ children }) => {
     } catch (e) {}
   };
 
-  // Auth & View state - By default unauthenticated (user cannot enter without login or creating account)
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [currentView, setCurrentView] = useState('landing');
+  // Auth & View state - Persistent Browser Storage for Instant Zero-Flicker Session Restoration
+  const savedUser = getStoredUser();
+  const savedToken = getStoredToken();
+  const hasSavedSession = !!(savedUser && savedToken);
+
+  const [isAuthenticated, setIsAuthenticated] = useState(hasSavedSession);
+  const [isAuthChecking, setIsAuthChecking] = useState(!hasSavedSession);
+  const [currentUser, setCurrentUser] = useState(savedUser);
+  const [currentView, setCurrentView] = useState(() => {
+    try {
+      const hash = window.location.hash.replace('#', '');
+      const searchParam = new URLSearchParams(window.location.search).get('view');
+      const target = hash || searchParam;
+      if (target === 'admin') return 'admin';
+    } catch (e) {}
+
+    if (hasSavedSession) {
+      try {
+        const rawPrefs = localStorage.getItem('college_preferences');
+        const parsedPrefs = rawPrefs ? JSON.parse(rawPrefs) : null;
+        const lastSection = parsedPrefs?.lastVisitedSection;
+        const allowedSections = ['matches', 'discover', 'campus-board', 'profile', 'relationship', 'games', 'settings', 'chats', 'edit-profile'];
+        if (allowedSections.includes(lastSection)) {
+          return lastSection;
+        }
+      } catch (e) {}
+      return 'matches';
+    }
+    return 'landing';
+  });
   const [previousView, setPreviousView] = useState('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status'
+
+  // Automatically keep browser localStorage college_user synchronized whenever currentUser updates
+  useEffect(() => {
+    if (currentUser) {
+      setStoredUser(currentUser);
+    }
+  }, [currentUser]);
 
   // Restore authenticated session from backend & support direct #admin routing
   useEffect(() => {
@@ -181,11 +214,12 @@ export const AppProvider = ({ children }) => {
         const target = hash || searchParam;
         if (target === 'admin') {
           setCurrentView('admin');
+          return;
         }
       } catch (e) {}
 
-      const hasSession = hasActiveSessionIndicator() || getStoredToken();
-      if (!hasSession) {
+      const token = getStoredToken();
+      if (!token) {
         setIsAuthChecking(false);
         return;
       }
@@ -194,11 +228,12 @@ export const AppProvider = ({ children }) => {
         // Attempt to fetch profile from backend with credentials/cookie
         let res = await api.auth.getMe().catch(async (err) => {
           if (err?.status === 401) {
-            // Attempt token refresh via HttpOnly refresh cookie
+            // Attempt token refresh via refresh token
             const refreshRes = await api.auth.refresh().catch(() => null);
             if (refreshRes && refreshRes.success) {
-              if (refreshRes.data?.accessToken) {
-                setStoredToken(refreshRes.data.accessToken);
+              const newToken = refreshRes.data?.token || refreshRes.data?.accessToken;
+              if (newToken) {
+                setStoredToken(newToken);
               }
               return await api.auth.getMe().catch(() => null);
             }
@@ -209,6 +244,7 @@ export const AppProvider = ({ children }) => {
         if (res && res.data) {
           const userObj = res.data.user || res.data;
           setCurrentUser(userObj);
+          setStoredUser(userObj);
           setIsAuthenticated(true);
 
           // Synchronize discovery preferences from PostgreSQL database
@@ -234,22 +270,24 @@ export const AppProvider = ({ children }) => {
 
           // Restore last visited view if safe, otherwise default to matches
           const lastSection = userPreferences.lastVisitedSection;
-          const allowedSections = ['matches', 'discover', 'campus-board', 'profile', 'relationship', 'games', 'settings'];
+          const allowedSections = ['matches', 'discover', 'campus-board', 'profile', 'relationship', 'games', 'settings', 'chats', 'edit-profile'];
           if (allowedSections.includes(lastSection)) {
             setCurrentView(lastSection);
           } else {
             setCurrentView('matches');
           }
-        } else {
-          // No valid session on server; clear session indicator safely
+        } else if (!savedUser) {
+          // No valid session on server and no saved user; clear session indicator safely
           clearStoredToken();
+          setStoredUser(null);
           setIsAuthenticated(false);
           setCurrentUser(null);
         }
       } catch (err) {
         console.warn('Session restoration encountered an issue:', err.message);
-        if (err?.status === 401) {
+        if (err?.status === 401 || err?.status === 403) {
           clearStoredToken();
+          setStoredUser(null);
           setIsAuthenticated(false);
           setCurrentUser(null);
         }
@@ -281,8 +319,22 @@ export const AppProvider = ({ children }) => {
 
   // Discovery
   const [profiles, setProfiles] = useState(DISCOVER_PROFILES);
-  const [likedProfiles, setLikedProfiles] = useState([]);
-  const [passedProfiles, setPassedProfiles] = useState([]);
+  const [likedProfiles, setLikedProfiles] = useState(() => {
+    try {
+      const stored = localStorage.getItem('college_liked_profiles');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [passedProfiles, setPassedProfiles] = useState(() => {
+    try {
+      const stored = localStorage.getItem('college_passed_profiles');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Filters
   const [discoveryFilters, setDiscoveryFilters] = useState(() => {
@@ -325,7 +377,19 @@ export const AppProvider = ({ children }) => {
   // Mutual Friends / Matches (Can only message after Accept!)
   const [matches, setMatches] = useState(INITIAL_MUTUAL_FRIENDS);
   const [conversations, setConversations] = useState(INITIAL_CONVERSATIONS);
-  const [activeChatMatch, setActiveChatMatch] = useState(null);
+  const [activeChatMatch, setActiveChatMatchState] = useState(null);
+
+  const setActiveChatMatch = (matchOrUpdater) => {
+    setActiveChatMatchState((prev) => {
+      const next = typeof matchOrUpdater === 'function' ? matchOrUpdater(prev) : matchOrUpdater;
+      if (next?.id) {
+        updatePreferences({ lastActiveChatId: next.id });
+      } else if (next === null) {
+        updatePreferences({ lastActiveChatId: null });
+      }
+      return next;
+    });
+  };
 
   // Campus Board Announcements (College exclusive)
   const [announcements, setAnnouncements] = useState(INITIAL_CAMPUS_ANNOUNCEMENTS);
@@ -397,6 +461,7 @@ export const AppProvider = ({ children }) => {
           relationship_intention: u.relationshipIntention || u.relationship_intention || 'Casual Connection',
           avatar_url: u.avatarUrl || u.avatar_url || u.photos?.[0]?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
           additional_photos: u.additionalPhotos || u.additional_photos || (u.photos?.slice(1) || []).map((p) => p.url),
+          photos: u.photos || [],
           bio: u.bio || u.profile?.bio || 'Verified college student on Collégé.',
           interests: u.interests || u.profile?.interests || [],
           languages: u.languages || u.languagesSpoken || ['English'],
@@ -466,6 +531,15 @@ export const AppProvider = ({ children }) => {
           };
         });
         setMatches(mapped);
+
+        // Restore active chat if user was in a chat previously
+        const savedChatId = userPreferences.lastActiveChatId;
+        if (savedChatId && mapped.length > 0) {
+          const matchToRestore = mapped.find((m) => m.id === savedChatId || m.user?.id === savedChatId);
+          if (matchToRestore) {
+            setActiveChatMatch(matchToRestore);
+          }
+        }
       })
       .catch((err) => console.warn('Could not load matches:', err.message));
 
@@ -868,7 +942,11 @@ export const AppProvider = ({ children }) => {
 
     api.matching.sendRequest(profile.id).catch((err) => console.warn('Send request API sync:', err.message));
 
-    setLikedProfiles((prev) => [...prev, profile.id]);
+    setLikedProfiles((prev) => {
+      const next = [...prev, profile.id];
+      try { localStorage.setItem('college_liked_profiles', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
     setCurrentUser((prev) => ({
       ...prev,
@@ -882,7 +960,11 @@ export const AppProvider = ({ children }) => {
     if (profile?.id) {
       api.discovery.pass(profile.id).catch((err) => console.warn('Pass sync error:', err.message));
     }
-    setPassedProfiles((prev) => [...prev, profile.id]);
+    setPassedProfiles((prev) => {
+      const next = [...prev, profile.id];
+      try { localStorage.setItem('college_passed_profiles', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
   };
 
@@ -1277,14 +1359,22 @@ export const AppProvider = ({ children }) => {
   // 1. Log In using Gmail/Email OR Mobile + Password (strictly verified against database)
   const loginWithCredentials = async (identifier, password) => {
     try {
-      const res = await api.auth.login(identifier, password);
+      const cleanIdentifier = String(identifier || '').trim();
+      const res = await api.auth.login(cleanIdentifier, password);
       if (res && res.success && res.data) {
-        const { user, accessToken } = res.data;
-        if (accessToken) setStoredToken(accessToken);
-        setCurrentUser(user);
+        const { user } = res.data;
+        const token = res.data.token || res.data.accessToken;
+        if (token) setStoredToken(token);
+        if (user) {
+          setCurrentUser(user);
+          setStoredUser(user);
+        }
         setIsAuthenticated(true);
-        // User login always opens the student platform, never the admin panel
-        setCurrentView('matches');
+        // Restore last visited view if the user had one saved, otherwise default to matches
+        const savedView = userPreferences.lastVisitedSection;
+        const validViews = ['matches', 'discover', 'campus-board', 'profile', 'relationship', 'games', 'settings', 'chats', 'edit-profile'];
+        const targetView = validViews.includes(savedView) ? savedView : 'matches';
+        setCurrentView(targetView);
         addToast(`Welcome back, ${user.displayName || user.fullName || user.display_name}! ✨`, 'success');
         return { success: true, user };
       }
@@ -1514,8 +1604,15 @@ export const AppProvider = ({ children }) => {
   const logout = () => {
     api.auth.logout();
     clearStoredToken();
+    setStoredUser(null);
     try {
+      localStorage.removeItem('college_access_token');
+      localStorage.removeItem('college_has_session');
+      localStorage.removeItem('college_user');
       localStorage.removeItem('college_user_prefs');
+      localStorage.removeItem('college_liked_profiles');
+      localStorage.removeItem('college_passed_profiles');
+      localStorage.removeItem('college_last_sync');
     } catch (e) {}
     setIsAuthenticated(false);
     setCurrentUser(null);

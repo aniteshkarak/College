@@ -36,11 +36,11 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3, 'Email or Mobile Number is required').optional(),
+  identifier: z.string().min(1, 'Email, Mobile Number, or User ID is required').optional(),
   email: z.string().optional(),
   password: z.string().min(1, 'Password is required'),
-}).refine((data) => data.identifier || data.email, {
-  message: 'Email or Mobile Number is required',
+}).refine((data) => (data.identifier && data.identifier.trim().length > 0) || (data.email && data.email.trim().length > 0), {
+  message: 'Email, Mobile Number, or User ID is required',
   path: ['identifier'],
 });
 

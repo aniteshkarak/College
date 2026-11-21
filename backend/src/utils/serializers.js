@@ -6,6 +6,22 @@
  */
 
 /**
+ * Formats a raw photo filename or URL into a reachable API endpoint path.
+ * External URLs (Unsplash/HTTP) and data URLs are preserved as-is.
+ */
+export const formatPhotoUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const clean = url.replace(/^\/+/, '');
+  if (clean.startsWith('api/v1/photos/')) {
+    return `/${clean}`;
+  }
+  return `/api/v1/photos/${clean}`;
+};
+
+/**
  * Serializes a user record for PUBLIC consumption by other students in Discover, Matching, and Community feeds.
  * ONLY exposes safe, verified public profile attributes.
  *
@@ -85,14 +101,14 @@ export const serializePublicProfile = (user, options = {}) => {
     mood: p.currentMood || 'Want to make friends',
 
     // Verified Visuals (Only approved photos, private documents completely omitted)
-    avatarUrl,
-    avatar_url: avatarUrl,
-    additionalPhotos: photoUrls.slice(1),
-    additional_photos: photoUrls.slice(1),
+    avatarUrl: formatPhotoUrl(avatarUrl),
+    avatar_url: formatPhotoUrl(avatarUrl),
+    additionalPhotos: photoUrls.slice(1).map(formatPhotoUrl),
+    additional_photos: photoUrls.slice(1).map(formatPhotoUrl),
     photos: approvedPhotos.map((ph) => ({
       order: ph.photoOrder,
       isMain: ph.isMain,
-      url: ph.photoUrl,
+      url: formatPhotoUrl(ph.photoUrl),
     })),
 
     // Discovery Priority Metadata
@@ -149,15 +165,24 @@ export const serializePrivateAccount = (user) => {
 
     // Education & College
     collegeId: edu.collegeId || null,
+    college_id: edu.collegeId || null,
     collegeName: edu.collegeName || null,
+    college_name: edu.collegeName || null,
     universityName: edu.universityName || null,
+    university_name: edu.universityName || null,
     course: edu.degreeName || edu.departmentStream || null,
     degreeName: edu.degreeName || null,
+    degree_name: edu.degreeName || null,
     departmentStream: edu.departmentStream || null,
+    department_stream: edu.departmentStream || null,
     academicYear: edu.academicYear || null,
+    academic_year: edu.academicYear || null,
     currentSemester: edu.currentSemester || null,
+    current_semester: edu.currentSemester || null,
     graduationYear: edu.graduationYear || null,
+    graduation_year: edu.graduationYear || null,
     studentStatus: edu.studentStatus || null,
+    student_status: edu.studentStatus || null,
 
     // Personal & Match Preferences
     bio: p.bio || null,
@@ -165,25 +190,32 @@ export const serializePrivateAccount = (user) => {
     hobbies: Array.isArray(p.hobbies) ? p.hobbies : [],
     personality: p.personality || null,
     relationshipIntention: p.relationshipIntention || 'Casual Connection',
+    relationship_intention: p.relationshipIntention || 'Casual Connection',
     lookingFor: p.lookingFor || 'Friendship',
+    looking_for: p.lookingFor || 'Friendship',
     ageRangeMin: p.ageRangeMin || 18,
+    age_range_min: p.ageRangeMin || 18,
     ageRangeMax: p.ageRangeMax || 26,
+    age_range_max: p.ageRangeMax || 26,
     preferredDistance: p.preferredDistance || 'ANYWHERE_INDIA',
+    preferred_distance: p.preferredDistance || 'ANYWHERE_INDIA',
     city: p.city || null,
     state: p.state || null,
     languages: Array.isArray(p.languages) ? p.languages : [],
     currentMood: p.currentMood || 'Want to make friends',
+    current_mood: p.currentMood || 'Want to make friends',
+    mood: p.currentMood || 'Want to make friends',
 
     // Photos
-    avatarUrl,
-    avatar_url: avatarUrl,
-    additionalPhotos: photoUrls.slice(1),
-    additional_photos: photoUrls.slice(1),
+    avatarUrl: formatPhotoUrl(avatarUrl),
+    avatar_url: formatPhotoUrl(avatarUrl),
+    additionalPhotos: photoUrls.slice(1).map(formatPhotoUrl),
+    additional_photos: photoUrls.slice(1).map(formatPhotoUrl),
     photos: photos.map((ph) => ({
       id: ph.id,
       order: ph.photoOrder,
       isMain: ph.isMain,
-      url: ph.photoUrl,
+      url: formatPhotoUrl(ph.photoUrl),
       isApproved: ph.isApproved,
     })),
 

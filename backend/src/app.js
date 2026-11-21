@@ -34,6 +34,7 @@ import relationshipsRoutes from './modules/relationships/relationships.routes.js
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
 import reportsRoutes from './modules/reports/reports.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
+import { STORAGE_PATHS } from './config/storage.js';
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use(
   helmet({
     contentSecurityPolicy: false, // Allows Swagger UI assets
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows image loading across ports/origins
   })
 );
 app.use(
@@ -156,6 +158,34 @@ app.use('/api/v1/reports', reportsRoutes);
 
 // Admin Application Verification & Moderation Portal
 app.use('/api/v1/admin', adminRoutes);
+
+// Public Static File Serving for Approved Profile Photos & Thumbnails
+const staticPhotoHeaders = (res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+};
+
+app.use('/api/v1/photos', express.static(STORAGE_PATHS.PHOTOS_DIR, { setHeaders: staticPhotoHeaders }));
+app.use('/api/v1/thumbnails', express.static(STORAGE_PATHS.THUMBNAILS_DIR, { setHeaders: staticPhotoHeaders }));
+app.use('/api/v1/discovery-photos', express.static(STORAGE_PATHS.DISCOVERY_DIR, { setHeaders: staticPhotoHeaders }));
+
+// Fallback image placeholder if requested photo is missing on disk (prevents broken image icons)
+const placeholderSvg = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+    <rect width="600" height="600" fill="#0f172a"/>
+    <circle cx="300" cy="240" r="100" fill="#e11d48" opacity="0.85"/>
+    <path d="M150 490 C150 380 450 380 450 490 Z" fill="#e11d48" opacity="0.85"/>
+    <text x="300" y="545" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">Collégé Student</text>
+  </svg>`
+);
+app.use(['/api/v1/photos', '/api/v1/thumbnails', '/api/v1/discovery-photos'], (_req, res) => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.status(200).send(placeholderSvg);
+});
 
 // 404 Route Not Found
 app.use((_req, res) => {

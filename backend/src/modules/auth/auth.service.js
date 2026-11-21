@@ -92,28 +92,60 @@ export const registerUser = async (data) => {
 };
 
 export const loginUser = async (identifier, password, reqMeta = {}) => {
-  const isEmail = identifier.includes('@');
+  if (!identifier || typeof identifier !== 'string') {
+    throw new Error('Please enter your email, mobile number, user ID, or application ID.');
+  }
+
+  const cleanId = identifier.trim();
+  const cleanIdLower = cleanId.toLowerCase();
+  const digitsOnly = cleanId.replace(/\D/g, '');
+  const mobileVariants = [cleanId];
+  if (digitsOnly.length === 10) {
+    mobileVariants.push(digitsOnly);
+    mobileVariants.push(`+91${digitsOnly}`);
+  } else if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
+    mobileVariants.push(digitsOnly.slice(2));
+    mobileVariants.push(`+${digitsOnly}`);
+  }
+
+  // Look up User by email, mobile variants, user ID, applicationId, or linked application code
   const user = await prisma.user.findFirst({
-    where: isEmail
-      ? { email: identifier.toLowerCase() }
-      : { mobileNumber: identifier.trim() },
+    where: {
+      OR: [
+        { email: { equals: cleanIdLower, mode: 'insensitive' } },
+        { mobileNumber: { in: mobileVariants } },
+        { id: cleanId },
+        { applicationId: cleanId },
+        { application: { applicationId: { equals: cleanId, mode: 'insensitive' } } },
+      ],
+    },
     include: {
       profile: true,
       education: { include: { college: true } },
       photos: { orderBy: { photoOrder: 'asc' } },
+      application: true,
     },
   });
 
   if (!user) {
     // Check if the user is in PendingRegistration stage
     const pending = await prisma.pendingRegistration.findFirst({
-      where: isEmail
-        ? { email: identifier.toLowerCase() }
-        : { mobileNumber: identifier.trim() },
+      where: {
+        OR: [
+          { email: { equals: cleanIdLower, mode: 'insensitive' } },
+          { mobileNumber: { in: mobileVariants } },
+          { id: cleanId },
+          { applicationId: { equals: cleanId, mode: 'insensitive' } },
+        ],
+      },
     });
 
     if (pending) {
-      const isMatch = await argon2.verify(pending.passwordHash, password);
+      let isMatch = await argon2.verify(pending.passwordHash, password).catch(() => false);
+      if (!isMatch && password.trim() !== password) {
+        isMatch = await argon2.verify(pending.passwordHash, password.trim()).catch(() => false);
+      }
+
       if (isMatch) {
         const err = new Error(`Application status: ${pending.status}. Review may take up to 72 hours.`);
         err.code = 'ACCOUNT_NOT_ACTIVE';
@@ -129,15 +161,45 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
           rejectionReason: pending.rejectionReason || null,
         };
         throw err;
+      } else {
+        throw new Error('Incorrect password. Please try again.');
       }
     }
 
-    throw new Error('Incorrect credentials. No account found with this email or mobile number.');
+    throw new Error('Incorrect credentials. No account found with this email, mobile number, or ID.');
   }
 
-  const isMatch = await argon2.verify(user.passwordHash, password);
+  let isMatch = await argon2.verify(user.passwordHash, password).catch(() => false);
+  if (!isMatch && password.trim() !== password) {
+    isMatch = await argon2.verify(user.passwordHash, password.trim()).catch(() => false);
+  }
+
+  // Fallback check against linked application passwordHash (and auto-heal if matched)
+  if (!isMatch && user.application?.passwordHash) {
+    let pendingMatch = await argon2.verify(user.application.passwordHash, password).catch(() => false);
+    if (!pendingMatch && password.trim() !== password) {
+      pendingMatch = await argon2.verify(user.application.passwordHash, password.trim()).catch(() => false);
+    }
+    if (pendingMatch) {
+      isMatch = true;
+      const newHash = await argon2.hash(password.trim());
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newHash },
+      }).catch((e) => logger.warn(`Failed to auto-heal user passwordHash: ${e.message}`));
+    }
+  }
+
   if (!isMatch) {
     throw new Error('Incorrect password. Please try again.');
+  }
+
+  // Keep PendingRegistration passwordHash in sync if pending record exists
+  if (user.applicationId) {
+    prisma.pendingRegistration.update({
+      where: { id: user.applicationId },
+      data: { passwordHash: user.passwordHash },
+    }).catch(() => {});
   }
 
   const sanitizedUser = serializePrivateAccount(user);

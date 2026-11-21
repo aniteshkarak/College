@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import { MOOD_OPTIONS } from '../../services/mockData';
 import ChatRoom from './ChatRoom';
 import {
@@ -197,7 +198,7 @@ export const MessengerView = () => {
                     {/* Avatar */}
                     <div className="relative shrink-0 pt-0.5">
                       <img
-                        src={m.user.avatar_url}
+                        src={resolvePhotoUrl(m.user.avatar_url || m.user.avatarUrl)}
                         alt={m.user.display_name}
                         className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/20 shadow-xs"
                       />

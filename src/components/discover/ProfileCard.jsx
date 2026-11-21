@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import {
   Heart,
   X,
@@ -21,7 +22,24 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showFullBio, setShowFullBio] = useState(false);
 
-  const photos = [profile.avatar_url, ...(profile.additional_photos || [])];
+  // Extract all photos (main photo + 2 additional photos) and resolve URLs
+  const rawPhotos = (
+    profile.photos && profile.photos.length > 0
+      ? profile.photos.map((p) => (typeof p === 'string' ? p : p.url))
+      : [
+          profile.avatar_url || profile.avatarUrl,
+          ...(profile.additional_photos || profile.additionalPhotos || [])
+        ]
+  ).filter(Boolean);
+
+  const photos = rawPhotos.length > 0
+    ? rawPhotos.map(resolvePhotoUrl)
+    : ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600'];
+
+  // Reset photo carousel to first photo when profile card changes
+  React.useEffect(() => {
+    setPhotoIndex(0);
+  }, [profile.id]);
 
   const nextPhoto = (e) => {
     e.stopPropagation();
@@ -49,6 +67,10 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
           src={photos[photoIndex]}
           alt={profile.display_name}
           className="w-full h-full object-cover transition-opacity duration-300"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600';
+          }}
         />
 
         {/* Dark gradient overlay for readable text */}
@@ -144,17 +166,17 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
             <div className="mb-2">
               <span
                 className={`inline-block px-3 py-1 rounded-full text-[11px] font-bold tracking-wide uppercase shadow border ${
-                  intentionStyles[profile.relationship_intention] || 'bg-rose-500 text-white'
+                  intentionStyles[profile.relationship_intention || profile.relationshipIntention] || 'bg-rose-500 text-white'
                 }`}
               >
-                {profile.relationship_intention}
+                {profile.relationship_intention || profile.relationshipIntention || 'Casual Connection'}
               </span>
             </div>
 
             {/* Name, Age, Distance */}
             <div className="flex items-baseline gap-2.5 mb-1.5">
               <h2 className="text-2xl font-bold tracking-tight text-white drop-shadow-md">
-                {profile.display_name}
+                {profile.display_name || profile.displayName}
               </h2>
               <span className="text-xl font-medium text-slate-300">
                 {profile.age}
@@ -163,10 +185,10 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
 
             {/* College & City */}
             <div className="space-y-1 text-xs text-slate-300 drop-shadow-sm mb-3">
-              {profile.college_name && (
+              {(profile.college_name || profile.collegeName) && (
                 <div className="flex items-center gap-1.5">
                   <GraduationCap className="w-4 h-4 text-rose-400 shrink-0" />
-                  <span className="truncate">{profile.college_name} {profile.course ? `• ${profile.course}` : ''}</span>
+                  <span className="truncate">{profile.college_name || profile.collegeName} {profile.course ? `• ${profile.course}` : ''}</span>
                 </div>
               )}
               <div className="flex items-center gap-1.5">

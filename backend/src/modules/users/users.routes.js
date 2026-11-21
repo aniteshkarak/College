@@ -1,11 +1,26 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import prisma from '../../config/prisma.js';
 import { serializePublicProfile, serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
+import profileController from '../profiles/profile.controller.js';
 import { z } from 'zod';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+// Profile Management Endpoints (Supports PUT /api/v1/users/profile)
+router.get('/profile', requireAuth, profileController.getMyProfile);
+router.put('/profile', requireAuth, profileController.updateMyProfile);
+
+// Photo Management Endpoints
+router.post('/photos', requireAuth, upload.single('photo'), profileController.uploadPhoto);
+router.delete('/photos/:photoId', requireAuth, profileController.deletePhoto);
+router.patch('/photos/:photoId/main', requireAuth, profileController.setMainPhoto);
 
 const moodSchema = z.object({
   mood: z.string().min(1).max(100),

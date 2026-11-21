@@ -217,7 +217,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     setApplicantStatusView(null);
 
-    const result = await loginWithCredentials(loginIdentifier, loginPassword);
+    const result = await loginWithCredentials(loginIdentifier.trim(), loginPassword);
 
     if (result && result.success) {
       onClose();

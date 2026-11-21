@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import {
   Heart,
   Users2,
@@ -70,7 +71,7 @@ export const RelationshipHub = () => {
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <img
-                    src={activeRelationship.partner.avatar_url}
+                    src={resolvePhotoUrl(activeRelationship.partner.avatar_url || activeRelationship.partner.avatarUrl)}
                     alt={activeRelationship.partner.display_name}
                     className="w-16 h-16 rounded-full object-cover ring-4 ring-white/40"
                   />

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import {
   Flame,
   Heart,
@@ -227,7 +228,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
                 className="flex items-center gap-2 p-1 pl-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
               >
                 <img
-                  src={currentUser.avatar_url}
+                  src={resolvePhotoUrl(currentUser.avatar_url || currentUser.avatarUrl || currentUser.photos?.[0]?.url)}
                   alt={currentUser.display_name}
                   className="w-8 h-8 rounded-full object-cover ring-2 ring-rose-500/30"
                 />

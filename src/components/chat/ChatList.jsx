@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import {
   Heart,
   UserCheck,
@@ -129,7 +130,7 @@ export const ChatList = ({ onSelectMatch }) => {
                 <div className="flex items-center gap-3.5">
                   <div className="relative shrink-0">
                     <img
-                      src={likeItem.user.avatar_url}
+                      src={resolvePhotoUrl(likeItem.user.avatar_url || likeItem.user.avatarUrl)}
                       alt={likeItem.user.display_name}
                       className="w-14 h-14 rounded-2xl object-cover ring-2 ring-rose-500/20 shadow-sm"
                     />
@@ -231,7 +232,7 @@ export const ChatList = ({ onSelectMatch }) => {
                   <div className="flex items-center gap-3.5">
                     <div className="relative shrink-0">
                       <img
-                        src={m.user.avatar_url}
+                        src={resolvePhotoUrl(m.user.avatar_url || m.user.avatarUrl)}
                         alt={m.user.display_name}
                         className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-500/30"
                       />

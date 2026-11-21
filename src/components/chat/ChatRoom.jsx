@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { resolvePhotoUrl } from '../../services/api';
 import VoiceRecorder from './VoiceRecorder';
 import VoicePlayer from './VoicePlayer';
 import {
@@ -137,7 +138,7 @@ export const ChatRoom = ({ match, onBack }) => {
           >
             <div className="relative shrink-0">
               <img
-                src={match.user.avatar_url}
+                src={resolvePhotoUrl(match.user.avatar_url || match.user.avatarUrl)}
                 alt={match.user.display_name}
                 className="w-10 h-10 rounded-2xl object-cover ring-2 ring-emerald-500/30 shadow-xs group-hover:ring-rose-500 transition-all"
               />
@@ -587,7 +588,7 @@ export const ChatRoom = ({ match, onBack }) => {
             {/* Header image banner */}
             <div className="relative h-44 w-full bg-slate-800 shrink-0">
               <img
-                src={match.user.avatar_url}
+                src={resolvePhotoUrl(match.user.avatar_url || match.user.avatarUrl)}
                 alt={match.user.display_name}
                 className="w-full h-full object-cover"
               />
@@ -623,16 +624,16 @@ export const ChatRoom = ({ match, onBack }) => {
               {/* Intention Pill */}
               <div>
                 <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/40 uppercase tracking-wide">
-                  {match.user.relationship_intention || 'Dating Connection'}
+                  {match.user.relationship_intention || match.user.relationshipIntention || 'Casual Connection'}
                 </span>
               </div>
 
               {/* College & Location */}
               <div className="space-y-1.5 text-slate-600 dark:text-slate-300">
-                {match.user.college_name && (
+                {(match.user.college_name || match.user.collegeName) && (
                   <div className="flex items-center gap-2">
                     <GraduationCap className="w-4 h-4 text-rose-500 shrink-0" />
-                    <span>{match.user.college_name} {match.user.course ? `• ${match.user.course}` : ''}</span>
+                    <span>{match.user.college_name || match.user.collegeName} {match.user.course ? `• ${match.user.course}` : ''}</span>
                   </div>
                 )}
                 {match.user.city && (
@@ -668,6 +669,40 @@ export const ChatRoom = ({ match, onBack }) => {
                   </div>
                 </div>
               )}
+
+              {/* All Photos Gallery of the Partner (Main photo + 2 additional photos) */}
+              {(() => {
+                const partnerPhotos = (
+                  match.user.photos && match.user.photos.length > 0
+                    ? match.user.photos.map((p) => (typeof p === 'string' ? p : p.url))
+                    : [
+                        match.user.avatar_url || match.user.avatarUrl,
+                        ...(match.user.additional_photos || match.user.additionalPhotos || [])
+                      ]
+                ).filter(Boolean);
+                if (partnerPhotos.length <= 1) return null;
+                return (
+                  <div>
+                    <h5 className="font-bold text-[11px] uppercase tracking-wider text-slate-400 mb-1.5">
+                      All Photos ({partnerPhotos.length})
+                    </h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {partnerPhotos.map((url, idx) => (
+                        <div key={idx} className="relative rounded-xl overflow-hidden h-24 bg-slate-800 border border-slate-200/20">
+                          <img
+                            src={resolvePhotoUrl(url)}
+                            alt={`Photo ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute bottom-1 left-1.5 text-[9px] font-bold text-white bg-black/60 backdrop-blur-xs px-1.5 py-0.2 rounded-md">
+                            {idx === 0 ? '★ Main' : `Photo ${idx + 1}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="p-3 border-t border-slate-100 dark:border-slate-800 shrink-0">

@@ -26,41 +26,89 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-// Token Management (Student) - Memory-Only Token Protection (Never stored in localStorage)
+/**
+ * Resolves a photo identifier or relative filename to a full reachable URL.
+ * If already a data: or http(s) URL, returns as-is.
+ * If a relative filename like 'photo_order1_...webp', routes to '/api/v1/photos/filename'.
+ */
+export const resolvePhotoUrl = (photoPath) => {
+  const fallback = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600';
+  if (!photoPath || typeof photoPath !== 'string') return fallback;
+  if (photoPath.startsWith('data:') || photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
+    return photoPath;
+  }
+  // Strip leading slash
+  const clean = photoPath.replace(/^\/+/, '');
+  if (clean.startsWith('api/v1/photos/')) {
+    return `/${clean}`;
+  }
+  if (clean.startsWith('photos/')) {
+    return `/api/v1/${clean}`;
+  }
+  return `/api/v1/photos/${clean}`;
+};
+
+// Token Management (Student) - Persistent Browser Storage for Login Persistence Across Refreshes
 let inMemoryAccessToken = null;
 
 export const getStoredToken = () => {
-  return inMemoryAccessToken;
+  if (inMemoryAccessToken) return inMemoryAccessToken;
+  try {
+    const token = localStorage.getItem('college_access_token');
+    if (token) {
+      inMemoryAccessToken = token;
+      return token;
+    }
+  } catch (e) {}
+  return null;
 };
 
 export const setStoredToken = (token) => {
   inMemoryAccessToken = token || null;
   try {
-    // Only store a non-sensitive boolean indicator that a session exists
     if (token) {
+      localStorage.setItem('college_access_token', token);
       localStorage.setItem('college_has_session', 'true');
     } else {
+      localStorage.removeItem('college_access_token');
       localStorage.removeItem('college_has_session');
     }
-    // Purge any legacy token from localStorage to satisfy security rules
-    localStorage.removeItem('college_access_token');
   } catch (e) {}
 };
 
 export const clearStoredToken = () => {
   inMemoryAccessToken = null;
   try {
-    localStorage.removeItem('college_has_session');
     localStorage.removeItem('college_access_token');
+    localStorage.removeItem('college_has_session');
   } catch (e) {}
 };
 
 export const hasActiveSessionIndicator = () => {
   try {
-    return localStorage.getItem('college_has_session') === 'true';
+    return localStorage.getItem('college_has_session') === 'true' || !!localStorage.getItem('college_access_token');
   } catch (e) {
     return false;
   }
+};
+
+export const getStoredUser = () => {
+  try {
+    const raw = localStorage.getItem('college_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const setStoredUser = (user) => {
+  try {
+    if (user) {
+      localStorage.setItem('college_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('college_user');
+    }
+  } catch (e) {}
 };
 
 // Token & Session Management (Administrator)
@@ -244,23 +292,43 @@ export const api = {
 
   // Authentication
   auth: {
-    login: (identifier, password) =>
-      request('/auth/login', {
+    login: async (identifier, password) => {
+      const res = await request('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ identifier, password })
-      }),
+      });
+      if (res?.success && res?.data) {
+        const token = res.data.token || res.data.accessToken;
+        if (token) setStoredToken(token);
+        if (res.data.user) setStoredUser(res.data.user);
+      }
+      return res;
+    },
 
     logout: () => {
       clearStoredToken();
+      setStoredUser(null);
       return request('/auth/logout', { method: 'POST' }).catch(() => ({ success: true }));
     },
 
-    getMe: () => request('/auth/me'),
+    getMe: async () => {
+      const res = await request('/auth/me');
+      if (res?.success && res?.data?.user) {
+        setStoredUser(res.data.user);
+      }
+      return res;
+    },
 
-    refresh: () =>
-      request('/auth/refresh', {
+    refresh: async () => {
+      const res = await request('/auth/refresh', {
         method: 'POST',
-      }),
+      });
+      if (res?.success && res?.data) {
+        const token = res.data.token || res.data.accessToken;
+        if (token) setStoredToken(token);
+      }
+      return res;
+    },
 
     forgotPassword: (email) =>
       request('/auth/forgot-password', {
@@ -630,10 +698,26 @@ export const api = {
 
   // Profile Management
   profile: {
+    getMe: () => request('/profiles/me'),
     update: (data) =>
       request('/profiles/me', {
         method: 'PUT',
         body: JSON.stringify(data),
+      }),
+    uploadPhoto: (photoPayload) => {
+      // Supports base64 data URL object: { photo, photoOrder, isMain, replacePhotoId }
+      return request('/profiles/photos', {
+        method: 'POST',
+        body: JSON.stringify(photoPayload),
+      });
+    },
+    deletePhoto: (photoId) =>
+      request(`/profiles/photos/${encodeURIComponent(photoId)}`, {
+        method: 'DELETE',
+      }),
+    setMainPhoto: (photoId) =>
+      request(`/profiles/photos/${encodeURIComponent(photoId)}/main`, {
+        method: 'PATCH',
       }),
     updateMood: (mood) =>
       request('/users/mood', {

@@ -6,9 +6,10 @@ import { STORAGE_PATHS } from '../config/storage.js';
 import logger from '../utils/logger.js';
 
 /**
- * Converts data URL or base64 string to a Buffer if needed
+ * Converts data URL or base64 string to a Buffer if needed.
+ * Also handles HTTP/HTTPS URLs by downloading them or generating a mock image buffer for demo presets.
  */
-export const toBuffer = (input) => {
+export const toBuffer = async (input) => {
   if (!input) return null;
   if (Buffer.isBuffer(input)) return input;
   if (typeof input === 'string') {
@@ -16,8 +17,37 @@ export const toBuffer = (input) => {
       const parts = input.split(',');
       return Buffer.from(parts[1], 'base64');
     }
-    // standard base64
-    return Buffer.from(input, 'base64');
+    // Remote HTTP / HTTPS URL (e.g. Unsplash demo presets)
+    if (input.startsWith('http://') || input.startsWith('https://')) {
+      try {
+        const response = await fetch(input);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          return Buffer.from(arrayBuffer);
+        }
+      } catch (err) {
+        logger.warn(`Remote image fetch failed for ${input}: ${err.message}. Generating fallback graphic buffer.`);
+      }
+      // If network fails to fetch remote URL, create a valid 600x600 SVG PNG buffer via Sharp
+      try {
+        return await sharp({
+          create: {
+            width: 600,
+            height: 600,
+            channels: 4,
+            background: { r: 225, g: 29, b: 72, alpha: 1 }
+          }
+        }).png().toBuffer();
+      } catch (e) {
+        return null;
+      }
+    }
+    // Standard base64
+    try {
+      return Buffer.from(input, 'base64');
+    } catch (e) {
+      return null;
+    }
   }
   return null;
 };
@@ -34,7 +64,7 @@ export const imageService = {
    *    - Circular profile thumbnail (150x150, WebP)
    */
   processAndSavePhoto: async (inputData, photoOrder = 1) => {
-    const buffer = toBuffer(inputData);
+    const buffer = await toBuffer(inputData);
     if (!buffer || buffer.length === 0) {
       throw new Error('Valid photograph image buffer is required.');
     }
@@ -109,7 +139,7 @@ export const imageService = {
    * Stored in private directory; never directly served through static public routes.
    */
   processAndSaveDocument: async (inputData, originalName = 'college_id.jpg', mimeType = 'image/jpeg') => {
-    const buffer = toBuffer(inputData);
+    const buffer = await toBuffer(inputData);
     if (!buffer || buffer.length === 0) {
       throw new Error('Valid identity document buffer is required.');
     }
@@ -217,6 +247,33 @@ export const imageService = {
       fileSize: stats.size,
       mimeType: 'image/webp',
     };
+  },
+
+  /**
+   * Safely deletes physical photo files (main, discovery, thumbnail) from disk.
+   * Skips remote URLs (Unsplash/HTTP) and safely handles missing files.
+   */
+  deletePhotoFiles: async (fileName) => {
+    if (!fileName || typeof fileName !== 'string') return;
+    if (fileName.startsWith('http://') || fileName.startsWith('https://') || fileName.startsWith('data:')) return;
+    const clean = path.basename(fileName);
+    const baseName = clean.replace(/\.webp$/i, '');
+    const discName = `${baseName}_disc.webp`;
+    const thumbName = `${baseName}_thumb.webp`;
+
+    const pathsToDelete = [
+      path.join(STORAGE_PATHS.PHOTOS_DIR, clean),
+      path.join(STORAGE_PATHS.DISCOVERY_DIR, discName),
+      path.join(STORAGE_PATHS.THUMBNAILS_DIR, thumbName),
+    ];
+
+    for (const p of pathsToDelete) {
+      try {
+        await fs.promises.unlink(p);
+      } catch (e) {
+        // file might already be absent, ignore safely
+      }
+    }
   },
 };
 
