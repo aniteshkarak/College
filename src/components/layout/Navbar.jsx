@@ -13,6 +13,7 @@ import {
   Sliders,
   LogOut,
   User,
+  Smile,
   Check,
   Moon,
   Sun,
@@ -146,7 +147,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
               className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full text-xs font-bold shadow-xs hover:shadow-md hover:brightness-105 transition-all"
             >
               <Crown className="w-3.5 h-3.5" />
-              <span>{currentUser.subscription_plan === 'free' ? '₹49/mo' : currentPlanConfig.name}</span>
+              <span>{currentUser?.subscription_plan === 'free' || !currentUser?.subscription_plan ? '₹49/mo' : (currentPlanConfig?.name || 'Pro Plan')}</span>
             </button>
           )}
 
@@ -228,22 +229,22 @@ export const Navbar = ({ onOpenMoodModal }) => {
                 className="flex items-center gap-2 p-1 pl-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
               >
                 <img
-                  src={resolvePhotoUrl(currentUser.avatar_url || currentUser.avatarUrl || currentUser.photos?.[0]?.url)}
-                  alt={currentUser.display_name}
+                  src={resolvePhotoUrl(currentUser?.avatar_url || currentUser?.avatarUrl || currentUser?.photos?.[0]?.url)}
+                  alt={currentUser?.display_name || currentUser?.displayName || 'User'}
                   className="w-8 h-8 rounded-full object-cover ring-2 ring-rose-500/30"
                 />
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 hidden sm:inline max-w-[90px] truncate">
-                  {currentUser.display_name}
+                  {currentUser?.display_name || currentUser?.displayName || 'User'}
                 </span>
               </button>
 
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 p-2 animate-slide-up z-50">
                   <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">{currentUser.full_name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser.college_name}</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">{currentUser?.full_name || currentUser?.fullName || 'Student'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser?.college_name || currentUser?.collegeName || 'Premier College'}</p>
                     <span className="inline-block mt-1 px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 rounded-full text-[10px] font-semibold">
-                      {currentUser.verification_status}
+                      {currentUser?.verification_status || currentUser?.verificationStatus || 'APPROVED'}
                     </span>
                   </div>
 
