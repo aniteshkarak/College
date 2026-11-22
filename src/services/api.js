@@ -5,7 +5,7 @@
  */
 
 const getApiBaseUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
+  if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
   // When running in a browser:
@@ -724,6 +724,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ mood }),
       }),
+    getUser: (id) => request(`/users/${encodeURIComponent(id)}`),
+  },
+
+  // User Endpoints
+  users: {
     updateMood: (mood) =>
       request('/users/profile/mood', {
         method: 'PATCH',

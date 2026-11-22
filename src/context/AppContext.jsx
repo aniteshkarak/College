@@ -442,7 +442,8 @@ export const AppProvider = ({ children }) => {
       : (moodTarget || MOOD_OPTIONS[0]);
 
     // Send to backend API first to guarantee PostgreSQL persistence
-    const res = await api.users.updateMood(moodObj.label);
+    const updateMoodFn = api.users?.updateMood || api.profile?.updateMood;
+    const res = await updateMoodFn(moodObj.label);
     if (!res || !res.success) {
       throw new Error(res?.message || 'Failed to save mood in PostgreSQL database');
     }
