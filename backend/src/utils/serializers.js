@@ -160,9 +160,12 @@ export const serializePrivateAccount = (user) => {
     // Account & Verification State
     accountStatus: user.accountStatus,
     verificationStatus: user.verificationStatus,
+    verification_status: user.verificationStatus || 'APPROVED',
     role: user.role,
     subscriptionPlan: user.subscriptionPlan,
-    sentRequestsCount: user.sentRequestsCount,
+    subscription_plan: user.subscriptionPlan ? String(user.subscriptionPlan).toLowerCase() : 'free',
+    sentRequestsCount: user.sentRequestsCount || 0,
+    sent_requests_count: user.sentRequestsCount || 0,
 
     // Education & College
     collegeId: edu.collegeId || null,
