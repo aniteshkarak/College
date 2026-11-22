@@ -2,6 +2,8 @@ import prisma from '../../config/prisma.js';
 import { serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
 import { imageService } from '../../services/imageService.js';
+import socketService from '../../services/socketService.js';
+import { validateMood } from '../users/users.routes.js';
 import { z } from 'zod';
 
 const updateProfileSchema = z.object({
@@ -163,7 +165,14 @@ export const updateMyProfile = async (req, res) => {
       if (lookingFor !== undefined) profileUpdate.lookingFor = lookingFor;
       if (city !== undefined) profileUpdate.city = city.trim();
       if (state !== undefined) profileUpdate.state = state.trim();
-      if (currentMood !== undefined) profileUpdate.currentMood = currentMood;
+      if (currentMood !== undefined) {
+        const validatedMood = validateMood(currentMood);
+        if (!validatedMood) {
+          throw new Error(`Unsupported mood "${currentMood}".`);
+        }
+        profileUpdate.currentMood = validatedMood.label;
+        profileUpdate.moodUpdatedAt = new Date();
+      }
 
       if (Object.keys(profileUpdate).length > 0) {
         await tx.userProfile.upsert({
@@ -206,6 +215,10 @@ export const updateMyProfile = async (req, res) => {
         },
       });
     });
+
+    if (currentMood) {
+      socketService.broadcastMoodUpdate(req.user.id, currentMood);
+    }
 
     const serialized = serializePrivateAccount(updatedUser);
     return success(res, { profile: serialized, user: serialized }, 'Profile updated successfully in database');

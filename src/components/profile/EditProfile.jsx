@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ALL_INTERESTS, ALL_LANGUAGES, ALL_INTENTIONS } from '../../services/mockData';
+import { ALL_INTERESTS, ALL_LANGUAGES, ALL_INTENTIONS, MOOD_OPTIONS } from '../../services/mockData';
 import { api, resolvePhotoUrl } from '../../services/api';
 import {
   ArrowLeft,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export const EditProfile = () => {
-  const { currentUser, setCurrentUser, navigateTo, addToast } = useApp();
+  const { currentUser, setCurrentUser, navigateTo, addToast, currentMood, updateUserMood } = useApp();
 
   const [formData, setFormData] = useState({
     display_name: currentUser?.displayName || currentUser?.display_name || '',
@@ -28,6 +28,7 @@ export const EditProfile = () => {
     gender: currentUser?.gender || 'Female',
     interested_in: currentUser?.interested_in || [currentUser?.lookingFor || 'Women'],
     relationship_intention: currentUser?.relationshipIntention || currentUser?.relationship_intention || 'Casual Connection',
+    current_mood: currentMood?.label || currentUser?.currentMood || currentUser?.mood || 'Want to make friends',
     college_name: currentUser?.collegeName || currentUser?.college_name || '',
     course: currentUser?.course || currentUser?.degreeName || '',
     academic_year: currentUser?.academicYear || currentUser?.academic_year || '3rd Year',
@@ -206,6 +207,8 @@ export const EditProfile = () => {
         age: formData.age,
         gender: formData.gender,
         relationshipIntention: formData.relationship_intention,
+        currentMood: formData.current_mood,
+        mood: formData.current_mood,
         lookingFor: formData.interested_in?.[0] || 'Women',
         collegeName: formData.college_name?.trim(),
         course: formData.course?.trim(),
@@ -221,6 +224,9 @@ export const EditProfile = () => {
       if (res && res.success) {
         const updatedUser = res.data.user || res.data.profile;
         setCurrentUser(updatedUser);
+        if (formData.current_mood) {
+          updateUserMood(formData.current_mood);
+        }
         addToast('Profile updated and saved to PostgreSQL successfully! ✨', 'success');
         navigateTo('profile');
       } else {
@@ -512,6 +518,48 @@ export const EditProfile = () => {
                 >
                   <p className="text-xs font-bold text-slate-900 dark:text-white">{item.title}</p>
                   <p className="text-[11px] text-slate-500">{item.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Current Campus Mood (Saved in PostgreSQL) */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Campus Mood Status
+            </h3>
+            <span className="text-[11px] font-semibold text-rose-500 bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded-full border border-rose-200/60 dark:border-rose-900/40">
+              PostgreSQL Persisted
+            </span>
+          </div>
+          <p className="text-xs text-slate-500">
+            Select your current campus mood. This is saved directly to the database and displayed across Discover and Chats.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 max-h-56 overflow-y-auto pr-1">
+            {MOOD_OPTIONS.map((item) => {
+              const isSelected = (formData.current_mood || '').toLowerCase() === item.label.toLowerCase() || (formData.current_mood || '').toLowerCase() === item.id.toLowerCase();
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => setFormData({ ...formData, current_mood: item.label })}
+                  className={`p-2.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-2 ${
+                    isSelected
+                      ? 'border-rose-500 bg-rose-50/80 dark:bg-rose-950/60 shadow-xs ring-1 ring-rose-400'
+                      : 'border-slate-100 dark:border-slate-800 hover:border-rose-200 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30'
+                  }`}
+                >
+                  <span className="text-xl shrink-0">{item.emoji}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{item.label}</p>
+                    {isSelected && (
+                      <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-0.5 mt-0.5">
+                        <Check className="w-3 h-3" /> Selected
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}

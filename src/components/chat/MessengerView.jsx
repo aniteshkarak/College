@@ -113,16 +113,20 @@ export const MessengerView = () => {
 
               {/* Quick Mood Selection Grid (When Expanded) */}
               {isMoodPickerExpanded && (
-                <div className="mt-2.5 pt-2.5 border-t border-rose-200/40 dark:border-slate-700/60 grid grid-cols-3 gap-1.5 animate-slide-up">
+                <div className="mt-2.5 pt-2.5 border-t border-rose-200/40 dark:border-slate-700/60 grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto pr-1 animate-slide-up">
                   {MOOD_OPTIONS.map((mood) => {
-                    const isSelected = currentMood?.id === mood.id;
+                    const isSelected = currentMood?.id === mood.id || currentMood?.label?.toLowerCase() === mood.label?.toLowerCase();
                     return (
                       <button
                         key={mood.id}
-                        onClick={() => {
-                          setCurrentMood(mood);
-                          addToast(`Mood set to: ${mood.emoji} ${mood.label}`, 'success');
-                          setIsMoodPickerExpanded(false);
+                        onClick={async () => {
+                          try {
+                            const saved = await updateUserMood(mood);
+                            addToast(`Campus Mood saved to database: ${saved.emoji} ${saved.label}`, 'success');
+                            setIsMoodPickerExpanded(false);
+                          } catch (err) {
+                            addToast(err.message || 'Failed to save mood.', 'error');
+                          }
                         }}
                         className={`p-1.5 rounded-xl text-center border transition-all ${
                           isSelected
@@ -235,7 +239,7 @@ export const MessengerView = () => {
                       {m.user.mood && (
                         <div className="flex items-center gap-1 my-0.5">
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50">
-                            <span>{typeof m.user.mood === 'object' ? m.user.mood.emoji : '✨'}</span>
+                            <span>{(() => { const raw = typeof m.user.mood === 'object' ? m.user.mood.label : m.user.mood; const matched = MOOD_OPTIONS.find((opt) => opt.label.toLowerCase() === String(raw || '').toLowerCase() || opt.id.toLowerCase() === String(raw || '').toLowerCase()); return matched?.emoji || '✨'; })()}</span>
                             <span className="truncate max-w-[140px]">
                               {typeof m.user.mood === 'object' ? m.user.mood.label : m.user.mood}
                             </span>

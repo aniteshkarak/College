@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { resolvePhotoUrl } from '../../services/api';
+import { api, resolvePhotoUrl } from '../../services/api';
+import { MOOD_OPTIONS } from '../../services/mockData';
+import { MoodPickerModal } from '../daily/MoodPickerModal';
 import {
   MapPin,
   GraduationCap,
@@ -14,7 +16,22 @@ import {
 } from 'lucide-react';
 
 export const ProfileView = () => {
-  const { currentUser, navigateTo, activeRelationship, setIsPremiumModalOpen, currentPlanConfig, matches } = useApp();
+  const { currentUser, setCurrentUser, navigateTo, activeRelationship, setIsPremiumModalOpen, currentPlanConfig, matches, currentMood } = useApp();
+  const [isMoodModalOpen, setIsMoodModalOpen] = useState(false);
+
+  // Whenever student opens their profile, fetch latest mood and profile from PostgreSQL
+  useEffect(() => {
+    api.auth.getMe()
+      .then((res) => {
+        if (res && res.data) {
+          const userObj = res.data.user || res.data;
+          if (userObj) {
+            setCurrentUser(userObj);
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not refresh profile on open:', err.message));
+  }, []);
 
   // Extract all photos (Photo 1 / Main Avatar + Photo 2 + Photo 3)
   const allUserPhotos = (
@@ -81,11 +98,22 @@ export const ProfileView = () => {
                 <ShieldCheck className="w-3.5 h-3.5" /> {currentUser.verification_status}
               </span>
 
-              {currentUser.mood && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200/60">
-                  ✨ Mood: {currentUser.mood}
-                </span>
-              )}
+              {(() => {
+                const raw = currentMood?.label || currentUser.currentMood || currentUser.mood || currentUser.current_mood;
+                const matched = MOOD_OPTIONS.find((m) => m.label.toLowerCase() === String(raw || '').toLowerCase() || m.id.toLowerCase() === String(raw || '').toLowerCase());
+                const emoji = matched?.emoji || currentMood?.emoji || '✨';
+                const label = matched?.label || raw || 'Set Mood';
+                return (
+                  <button
+                    onClick={() => setIsMoodModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200/80 hover:border-rose-400 dark:hover:border-rose-700 transition-all shadow-2xs cursor-pointer group"
+                    title="Click to update your Campus Mood in PostgreSQL database"
+                  >
+                    <span className="group-hover:scale-125 transition-transform">{emoji}</span>
+                    <span>Mood: {label}</span>
+                  </button>
+                );
+              })()}
 
               {activeRelationship && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200">
@@ -256,6 +284,12 @@ export const ProfileView = () => {
           {currentUser.subscription_plan === 'free' ? 'Upgrade to ₹49' : 'Manage Plan'}
         </button>
       </div>
+
+      {/* Interactive Mood Picker Modal */}
+      <MoodPickerModal
+        isOpen={isMoodModalOpen}
+        onClose={() => setIsMoodModalOpen(false)}
+      />
 
     </div>
   );

@@ -409,8 +409,66 @@ export const AppProvider = ({ children }) => {
   const socketRef = useRef(null);
   const [activeSessions, setActiveSessions] = useState([]);
 
-  // Mood
-  const [currentMood, setCurrentMood] = useState(MOOD_OPTIONS[3]); // 'Want to make friends'
+  // Mood Resolution Helper
+  const resolveMoodOption = (moodStr) => {
+    if (!moodStr) return MOOD_OPTIONS[0];
+    if (typeof moodStr === 'object' && moodStr.label) return moodStr;
+    const clean = String(moodStr).trim().toLowerCase();
+    const exact = MOOD_OPTIONS.find((m) => m.id.toLowerCase() === clean || m.label.toLowerCase() === clean);
+    if (exact) return exact;
+    const partial = MOOD_OPTIONS.find((m) => m.label.toLowerCase().includes(clean) || clean.includes(m.id.toLowerCase()));
+    if (partial) return partial;
+    return { id: 'custom', label: moodStr, emoji: '✨' };
+  };
+
+  // Mood State - Initialized from currentUser or persistent storage
+  const [currentMood, setCurrentMoodState] = useState(() => {
+    const saved = savedUser?.currentMood || savedUser?.current_mood || savedUser?.mood;
+    return resolveMoodOption(saved);
+  });
+
+  // Automatically keep currentMood synchronized whenever currentUser changes
+  useEffect(() => {
+    const userMood = currentUser?.currentMood || currentUser?.current_mood || currentUser?.mood;
+    if (userMood) {
+      setCurrentMoodState(resolveMoodOption(userMood));
+    }
+  }, [currentUser?.currentMood, currentUser?.current_mood, currentUser?.mood]);
+
+  // Update Mood: Persists to PostgreSQL first, updates frontend state on confirmation, and rolls back on failure
+  const updateUserMood = async (moodTarget) => {
+    const moodObj = typeof moodTarget === 'string'
+      ? resolveMoodOption(moodTarget)
+      : (moodTarget || MOOD_OPTIONS[0]);
+
+    // Send to backend API first to guarantee PostgreSQL persistence
+    const res = await api.users.updateMood(moodObj.label);
+    if (!res || !res.success) {
+      throw new Error(res?.message || 'Failed to save mood in PostgreSQL database');
+    }
+
+    const savedMoodLabel = res.data?.currentMood || res.data?.mood || moodObj.label;
+    const finalMoodObj = resolveMoodOption(savedMoodLabel);
+
+    // Update frontend state ONLY after database confirms success
+    setCurrentMoodState(finalMoodObj);
+
+    // Update currentUser state and persistent storage
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        currentMood: finalMoodObj.label,
+        current_mood: finalMoodObj.label,
+        mood: finalMoodObj.label,
+        moodUpdatedAt: res.data?.moodUpdatedAt || new Date().toISOString(),
+      };
+      setStoredUser(updated);
+      return updated;
+    });
+
+    return finalMoodObj;
+  };
 
   // Admin Data
   const [adminMetrics, setAdminMetrics] = useState(ADMIN_METRICS);
@@ -849,6 +907,56 @@ export const AppProvider = ({ children }) => {
         setActiveChatMatch(null);
         setCurrentView('matches');
       }
+    });
+
+    // Handle real-time mood update broadcast across all online students
+    socket.on('mood_updated', (data) => {
+      if (!data?.userId || !data?.mood) return;
+
+      // 0. Update own profile if modified in another tab or device
+      if (currentUser?.id === data.userId) {
+        setCurrentMoodState(resolveMoodOption(data.mood));
+        setCurrentUser((prev) => {
+          if (!prev) return prev;
+          const updated = { ...prev, mood: data.mood, currentMood: data.mood, current_mood: data.mood };
+          setStoredUser(updated);
+          return updated;
+        });
+      }
+
+      // 1. Update Discover profiles feed in real time
+      setProfiles((prev) =>
+        prev.map((p) => (p.id === data.userId ? { ...p, mood: data.mood, currentMood: data.mood } : p))
+      );
+
+      // 2. Update Incoming Likes in real time
+      setIncomingLikes((prev) =>
+        prev.map((i) =>
+          (i.user?.id === data.userId || i.sender_id === data.userId)
+            ? { ...i, user: { ...i.user, mood: data.mood, currentMood: data.mood } }
+            : i
+        )
+      );
+
+      // 3. Update Mutual Friends & Matches in real time
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.user.id === data.userId
+            ? { ...m, user: { ...m.user, mood: data.mood, currentMood: data.mood } }
+            : m
+        )
+      );
+
+      // 4. Update Active Chat partner header in real time
+      setActiveChatMatch((prev) => {
+        if (prev?.user?.id === data.userId) {
+          return {
+            ...prev,
+            user: { ...prev.user, mood: data.mood, currentMood: data.mood },
+          };
+        }
+        return prev;
+      });
     });
 
     // Handle session revoked
@@ -1697,7 +1805,10 @@ export const AppProvider = ({ children }) => {
         currentPlanConfig,
         handleUpgradePlan,
         currentMood,
-        setCurrentMood,
+        setCurrentMood: updateUserMood,
+        updateUserMood,
+        resolveMoodOption,
+        MOOD_OPTIONS,
         adminMetrics,
         adminReports,
         adminAuditLogs,

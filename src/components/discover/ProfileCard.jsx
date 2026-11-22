@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { resolvePhotoUrl } from '../../services/api';
+import { MOOD_OPTIONS } from '../../services/mockData';
 import {
   Heart,
   X,
@@ -117,11 +118,18 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
                 {profile.verification_status}
               </span>
             )}
-            {profile.mood && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/50 backdrop-blur-md text-rose-200 border border-white/10 shadow">
-                <span>✨</span> {profile.mood}
-              </span>
-            )}
+            {(profile.mood || profile.currentMood || profile.current_mood) && (() => {
+              const raw = profile.mood || profile.currentMood || profile.current_mood;
+              const matched = MOOD_OPTIONS.find((m) => m.label.toLowerCase() === String(raw).toLowerCase() || m.id.toLowerCase() === String(raw).toLowerCase());
+              const emoji = matched?.emoji || '✨';
+              const label = matched?.label || raw;
+              return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/60 backdrop-blur-md text-white border border-white/20 shadow">
+                  <span>{emoji}</span>
+                  <span className="truncate max-w-[120px]">{label}</span>
+                </span>
+              );
+            })()}
           </div>
 
           {/* More options menu */}

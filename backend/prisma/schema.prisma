@@ -163,6 +163,7 @@ model UserProfile {
   state                 String
   languages             String[]
   currentMood           String?   @default("Want to make friends")
+  moodUpdatedAt         DateTime? @default(now())
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

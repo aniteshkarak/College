@@ -155,7 +155,7 @@ export const ChatRoom = ({ match, onBack }) => {
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 shrink-0 shadow-2xs"
                   title={`${match.user.display_name}'s current campus mood`}
                 >
-                  <span>{typeof match.user.mood === 'object' ? match.user.mood.emoji : '✨'}</span>
+                  <span>{(() => { const raw = typeof match.user.mood === 'object' ? match.user.mood.label : match.user.mood; const matched = MOOD_OPTIONS.find((opt) => opt.label.toLowerCase() === String(raw || '').toLowerCase() || opt.id.toLowerCase() === String(raw || '').toLowerCase()); return matched?.emoji || '✨'; })()}</span>
                   <span className="truncate max-w-[140px]">
                     {typeof match.user.mood === 'object' ? match.user.mood.label : match.user.mood}
                   </span>

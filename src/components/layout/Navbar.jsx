@@ -132,7 +132,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
             <button
               onClick={onOpenMoodModal}
               title="Update your current campus mood"
-              className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-rose-50 dark:bg-slate-800/80 hover:bg-rose-100 border border-rose-200/60 dark:border-rose-900/40 rounded-full text-xs font-medium text-rose-700 dark:text-rose-300 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-rose-50 dark:bg-slate-800/80 hover:bg-rose-100 dark:hover:bg-slate-700/80 border border-rose-200/60 dark:border-rose-900/40 rounded-full text-xs font-semibold text-rose-700 dark:text-rose-300 transition-all shadow-2xs hover:scale-102 cursor-pointer"
             >
               <span>{currentMood?.emoji || '✨'}</span>
               <span className="max-w-[110px] truncate">{currentMood?.label || 'Mood'}</span>
@@ -256,6 +256,15 @@ export const Navbar = ({ onOpenMoodModal }) => {
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl"
                     >
                       <User className="w-4 h-4 text-slate-500" /> View Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        onOpenMoodModal();
+                        setIsProfileOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl"
+                    >
+                      <Smile className="w-4 h-4 text-rose-500" /> Change Campus Mood
                     </button>
                     <button
                       onClick={() => {

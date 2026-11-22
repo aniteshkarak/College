@@ -138,12 +138,21 @@ export const CONVERSATION_GAMES = {
 };
 
 export const MOOD_OPTIONS = [
+  { id: 'happy', label: 'Happy & Vibe', emoji: '✨' },
+  { id: 'sad', label: 'Feeling Sad', emoji: '🥺' },
+  { id: 'feeling_bad', label: 'Feeling Bad / Low', emoji: '🌧️' },
   { id: 'bored', label: 'Bored', emoji: '🥱' },
-  { id: 'happy', label: 'Happy', emoji: '✨' },
-  { id: 'romantic', label: 'Feeling romantic', emoji: '🌹' },
+  { id: 'lonely', label: 'Feeling Lonely', emoji: '🫂' },
+  { id: 'stressed', label: 'Stressed / Overwhelmed', emoji: '🤯' },
+  { id: 'romantic', label: 'Feeling Romantic', emoji: '🌹' },
+  { id: 'dating', label: 'Open to Dating', emoji: '💫' },
   { id: 'friends', label: 'Want to make friends', emoji: '🤝' },
   { id: 'chat', label: 'Looking for a conversation', emoji: '💬' },
-  { id: 'dating', label: 'Open to dating', emoji: '💫' }
+  { id: 'chill', label: 'Chilling & Relaxed', emoji: '☕' },
+  { id: 'excited', label: 'Excited & Hyped', emoji: '🎉' },
+  { id: 'studying', label: 'In Study Mode', emoji: '📚' },
+  { id: 'heartbroken', label: 'Heartbroken', emoji: '💔' },
+  { id: 'playful', label: 'Playful & Fun', emoji: '😜' }
 ];
 
 export const ALL_INTERESTS = [

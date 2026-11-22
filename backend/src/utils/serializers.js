@@ -99,6 +99,7 @@ export const serializePublicProfile = (user, options = {}) => {
     looking_for: p.lookingFor || 'Friendship',
     currentMood: p.currentMood || 'Want to make friends',
     mood: p.currentMood || 'Want to make friends',
+    moodUpdatedAt: p.moodUpdatedAt || p.updatedAt || null,
 
     // Verified Visuals (Only approved photos, private documents completely omitted)
     avatarUrl: formatPhotoUrl(avatarUrl),
@@ -205,6 +206,7 @@ export const serializePrivateAccount = (user) => {
     currentMood: p.currentMood || 'Want to make friends',
     current_mood: p.currentMood || 'Want to make friends',
     mood: p.currentMood || 'Want to make friends',
+    moodUpdatedAt: p.moodUpdatedAt || p.updatedAt || null,
 
     // Photos
     avatarUrl: formatPhotoUrl(avatarUrl),

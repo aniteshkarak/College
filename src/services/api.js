@@ -720,7 +720,12 @@ export const api = {
         method: 'PATCH',
       }),
     updateMood: (mood) =>
-      request('/users/mood', {
+      request('/users/profile/mood', {
+        method: 'PATCH',
+        body: JSON.stringify({ mood }),
+      }),
+    updateMood: (mood) =>
+      request('/users/profile/mood', {
         method: 'PATCH',
         body: JSON.stringify({ mood }),
       }),

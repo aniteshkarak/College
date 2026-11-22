@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { resolvePhotoUrl } from '../../services/api';
+import { MOOD_OPTIONS } from '../../services/mockData';
 import {
   Heart,
   UserCheck,
@@ -251,7 +252,7 @@ export const ChatList = ({ onSelectMatch }) => {
                       {m.user.mood && (
                         <div className="flex items-center gap-1 mt-0.5">
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[9px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50">
-                            <span>{typeof m.user.mood === 'object' ? m.user.mood.emoji : '✨'}</span>
+                            <span>{(() => { const raw = typeof m.user.mood === 'object' ? m.user.mood.label : m.user.mood; const matched = MOOD_OPTIONS.find((opt) => opt.label.toLowerCase() === String(raw || '').toLowerCase() || opt.id.toLowerCase() === String(raw || '').toLowerCase()); return matched?.emoji || '✨'; })()}</span>
                             <span className="truncate max-w-[140px]">
                               {typeof m.user.mood === 'object' ? m.user.mood.label : m.user.mood}
                             </span>

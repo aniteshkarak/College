@@ -536,12 +536,24 @@ export const setCachedMessageByIdempotency = (senderId, idempotencyKey, message)
   });
 };
 
+export const broadcastMoodUpdate = (userId, mood, moodUpdatedAt = null) => {
+  if (!ioInstance) return;
+  ioInstance.emit('mood_updated', {
+    userId,
+    mood,
+    currentMood: mood,
+    moodUpdatedAt: moodUpdatedAt ? new Date(moodUpdatedAt).toISOString() : new Date().toISOString(),
+    timestamp: new Date().toISOString(),
+  });
+};
+
 export const getIo = () => ioInstance;
 
 export default {
   initSocketServer,
   broadcastNewMessage,
   broadcastMessageRead,
+  broadcastMoodUpdate,
   notifyConversationBlocked,
   disconnectSessionSockets,
   disconnectUserSockets,

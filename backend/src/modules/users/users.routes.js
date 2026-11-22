@@ -5,6 +5,7 @@ import prisma from '../../config/prisma.js';
 import { serializePublicProfile, serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
 import profileController from '../profiles/profile.controller.js';
+import socketService from '../../services/socketService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -22,28 +23,104 @@ router.post('/photos', requireAuth, upload.single('photo'), profileController.up
 router.delete('/photos/:photoId', requireAuth, profileController.deletePhoto);
 router.patch('/photos/:photoId/main', requireAuth, profileController.setMainPhoto);
 
+export const SUPPORTED_MOODS = [
+  { id: 'happy', label: 'Happy & Vibe', emoji: '✨' },
+  { id: 'sad', label: 'Feeling Sad', emoji: '🥺' },
+  { id: 'feeling_bad', label: 'Feeling Bad / Low', emoji: '🌧️' },
+  { id: 'bored', label: 'Bored', emoji: '🥱' },
+  { id: 'lonely', label: 'Feeling Lonely', emoji: '🫂' },
+  { id: 'stressed', label: 'Stressed / Overwhelmed', emoji: '🤯' },
+  { id: 'romantic', label: 'Feeling Romantic', emoji: '🌹' },
+  { id: 'dating', label: 'Open to Dating', emoji: '💫' },
+  { id: 'friends', label: 'Want to make friends', emoji: '🤝' },
+  { id: 'chat', label: 'Looking for a conversation', emoji: '💬' },
+  { id: 'chill', label: 'Chilling & Relaxed', emoji: '☕' },
+  { id: 'excited', label: 'Excited & Hyped', emoji: '🎉' },
+  { id: 'studying', label: 'In Study Mode', emoji: '📚' },
+  { id: 'heartbroken', label: 'Heartbroken', emoji: '💔' },
+  { id: 'playful', label: 'Playful & Fun', emoji: '😜' }
+];
+
+export const validateMood = (raw) => {
+  if (!raw || typeof raw !== 'string') return null;
+  const clean = raw.trim().toLowerCase();
+  const found = SUPPORTED_MOODS.find(
+    (m) => m.id.toLowerCase() === clean || m.label.toLowerCase() === clean
+  );
+  return found || null;
+};
+
 const moodSchema = z.object({
-  mood: z.string().min(1).max(100),
+  mood: z.string().min(1).max(100).optional(),
+  currentMood: z.string().min(1).max(100).optional(),
+  current_mood: z.string().min(1).max(100).optional(),
+}).refine((data) => data.mood || data.currentMood || data.current_mood, {
+  message: 'Mood cannot be empty',
 });
 
-router.patch('/mood', requireAuth, async (req, res) => {
+export const handleMoodUpdate = async (req, res) => {
   try {
     const parsed = moodSchema.safeParse(req.body);
     if (!parsed.success) {
-      return error(res, 'Validation failed', 400, parsed.error.issues);
+      return error(res, 'Validation failed: Please provide a valid mood status.', 400, parsed.error.issues);
     }
 
-    const updated = await prisma.userProfile.update({
+    const rawMood = parsed.data.mood || parsed.data.currentMood || parsed.data.current_mood;
+    const validatedMood = validateMood(rawMood);
+    if (!validatedMood) {
+      return error(
+        res,
+        `Validation failed: Unsupported mood "${rawMood}". Supported moods are: ${SUPPORTED_MOODS.map((m) => m.label).join(', ')}`,
+        400,
+        { supportedMoods: SUPPORTED_MOODS.map((m) => m.label) }
+      );
+    }
+
+    const now = new Date();
+
+    const updated = await prisma.userProfile.upsert({
       where: { userId: req.user.id },
-      data: { currentMood: parsed.data.mood },
-      select: { currentMood: true },
+      update: {
+        currentMood: validatedMood.label,
+        moodUpdatedAt: now,
+      },
+      create: {
+        userId: req.user.id,
+        currentMood: validatedMood.label,
+        moodUpdatedAt: now,
+        bio: '',
+        city: 'Campus',
+        state: 'State',
+      },
+      select: {
+        currentMood: true,
+        moodUpdatedAt: true,
+        updatedAt: true,
+      },
     });
 
-    return success(res, { currentMood: updated.currentMood }, 'Mood updated successfully');
+    // Broadcast real-time mood update to all connected users
+    socketService.broadcastMoodUpdate(req.user.id, updated.currentMood, updated.moodUpdatedAt);
+
+    return success(
+      res,
+      {
+        currentMood: updated.currentMood,
+        mood: updated.currentMood,
+        moodUpdatedAt: updated.moodUpdatedAt,
+        updatedAt: updated.updatedAt,
+      },
+      'Mood updated successfully in database'
+    );
   } catch (err) {
-    return error(res, err.message, 500);
+    return error(res, `Failed to update mood: ${err.message}`, 500);
   }
-});
+};
+
+router.patch('/profile/mood', requireAuth, handleMoodUpdate);
+router.put('/profile/mood', requireAuth, handleMoodUpdate);
+router.patch('/mood', requireAuth, handleMoodUpdate);
+router.put('/mood', requireAuth, handleMoodUpdate);
 
 /**
  * GET /api/v1/users/:id
