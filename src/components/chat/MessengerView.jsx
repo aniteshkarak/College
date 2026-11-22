@@ -33,6 +33,7 @@ export const MessengerView = () => {
     setIsPremiumModalOpen,
     currentMood,
     setCurrentMood,
+    updateUserMood,
     addToast
   } = useApp();
 
