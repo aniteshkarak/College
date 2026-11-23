@@ -57,7 +57,7 @@ const MainLayout = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       
       {/* Top Header Navbar: Hidden on mobile when inside an active personal chat, and hidden in Admin Panel */}
       <div className={(currentView === 'chats' && activeChatMatch) || currentView === 'admin' ? 'hidden' : 'block'}>
@@ -65,7 +65,7 @@ const MainLayout = () => {
       </div>
 
       {/* Main View Area */}
-      <main className={`flex-1 ${currentView === 'chats' ? 'p-0' : currentView === 'admin' ? 'p-0' : 'pb-20 md:pb-8'}`}>
+      <main className={`flex-1 w-full max-w-full overflow-x-hidden ${currentView === 'chats' ? 'p-0' : currentView === 'admin' ? 'p-0' : 'pb-20 md:pb-8'}`}>
         
         {/* PUBLIC PAGES */}
         {currentView === 'landing' && <LandingPage onOpenAuth={() => setIsAuthModalOpen(true)} />}

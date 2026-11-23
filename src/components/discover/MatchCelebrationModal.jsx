@@ -34,8 +34,8 @@ export const MatchCelebrationModal = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-      <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-3xl max-w-sm w-full p-6 sm:p-8 text-center shadow-2xl border border-rose-500/30 relative overflow-hidden animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+      <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white rounded-2xl sm:rounded-3xl max-w-sm w-full p-5 sm:p-8 text-center shadow-2xl border border-rose-500/30 relative overflow-hidden animate-slide-up max-h-[90dvh] overflow-y-auto">
         
         {/* Glow circles */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />

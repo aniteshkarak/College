@@ -84,7 +84,7 @@ export const ProfileView = () => {
     <div className="w-full max-w-2xl mx-auto px-4 py-6">
       
       {/* Top Profile Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-sm mb-6 relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-8 shadow-sm mb-6 relative overflow-hidden">
         
         {/* Glow accent */}
         <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -296,7 +296,7 @@ export const ProfileView = () => {
       </div>
 
       {/* Membership & Subscription Banner */}
-      <div className="p-5 bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-orange-500/10 border border-amber-200 dark:border-amber-900/40 rounded-3xl flex items-center justify-between">
+      <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-orange-500/10 border border-amber-200 dark:border-amber-900/40 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0">
             <Crown className="w-5 h-5" />
@@ -312,7 +312,7 @@ export const ProfileView = () => {
         </div>
         <button
           onClick={() => setIsPremiumModalOpen(true)}
-          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-bold shadow hover:brightness-105 cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-bold shadow hover:brightness-105 cursor-pointer text-center"
         >
           {currentUser?.subscription_plan === 'free' || !currentUser?.subscription_plan ? 'Upgrade to ₹49' : 'Manage Plan'}
         </button>

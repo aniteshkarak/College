@@ -251,8 +251,8 @@ export const EditProfile = () => {
         >
           <ArrowLeft className="w-4 h-4" /> Cancel
         </button>
-        <h2 className="text-lg font-bold font-display text-slate-900 dark:text-white">
-          Edit Profile & Intentions
+        <h2 className="text-base sm:text-lg font-bold font-display text-slate-900 dark:text-white truncate">
+          Edit Profile<span className="hidden sm:inline"> & Intentions</span>
         </h2>
         <button
           onClick={handleSave}

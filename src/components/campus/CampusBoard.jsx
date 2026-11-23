@@ -188,7 +188,7 @@ export const CampusBoard = () => {
     <div className="w-full max-w-4xl mx-auto px-4 py-6">
       
       {/* College Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl mb-6 relative overflow-hidden border border-rose-900/40">
+      <div className="bg-gradient-to-r from-slate-900 via-rose-950 to-slate-900 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-xl mb-6 relative overflow-hidden border border-rose-900/40">
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -210,8 +210,8 @@ export const CampusBoard = () => {
               </span>
             </div>
 
-            <h1 className="font-display font-bold text-2xl sm:text-3xl tracking-tight flex items-center gap-2">
-              <Megaphone className="w-6 h-6 text-rose-400" />
+            <h1 className="font-display font-bold text-xl sm:text-3xl tracking-tight flex items-center gap-2">
+              <Megaphone className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400 shrink-0" />
               <span>{collegeName} Campus Board</span>
             </h1>
             <p className="text-xs text-slate-300 mt-1 max-w-xl">
@@ -219,11 +219,11 @@ export const CampusBoard = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm transition-all flex items-center justify-center border border-white/10"
+              className="p-2.5 sm:p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm transition-all flex items-center justify-center border border-white/10 shrink-0"
               title="Refresh feed"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-rose-400' : ''}`} />
@@ -232,13 +232,13 @@ export const CampusBoard = () => {
             <button
               onClick={() => setIsPostModalOpen(true)}
               disabled={dailyAllowance?.isLimitReached}
-              className={`px-5 py-3 rounded-2xl text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
                 dailyAllowance?.isLimitReached
                   ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'
                   : 'gradient-brand-bg text-white shadow-rose-600/30 hover:brightness-110 active:scale-95'
               }`}
             >
-              <PlusCircle className="w-4 h-4" />
+              <PlusCircle className="w-4 h-4 shrink-0" />
               <span>{dailyAllowance?.isLimitReached ? 'Daily Limit Reached' : 'Make Announcement'}</span>
             </button>
           </div>
@@ -310,7 +310,7 @@ export const CampusBoard = () => {
             return (
               <div
                 key={ann.id}
-                className={`p-6 rounded-3xl bg-white dark:bg-slate-900 border transition-all shadow-sm ${
+                className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-white dark:bg-slate-900 border transition-all shadow-sm ${
                   ann.isUrgent || ann.pinned
                     ? 'border-rose-300 dark:border-rose-900/60 ring-2 ring-rose-500/10'
                     : 'border-slate-200 dark:border-slate-800'
@@ -352,31 +352,31 @@ export const CampusBoard = () => {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 min-w-0 max-w-[65%] sm:max-w-none">
                     {/* Author Avatar */}
                     {ann.author?.avatarUrl || ann.author_avatar ? (
                       <img
                         src={ann.author?.avatarUrl || ann.author_avatar}
                         alt={ann.author_name}
-                        className="w-7 h-7 rounded-full object-cover border border-rose-500/30"
+                        className="w-7 h-7 rounded-full object-cover border border-rose-500/30 shrink-0"
                       />
                     ) : (
-                      <div className="w-7 h-7 rounded-full gradient-brand-bg text-white text-[11px] font-bold flex items-center justify-center">
+                      <div className="w-7 h-7 rounded-full gradient-brand-bg text-white text-[11px] font-bold flex items-center justify-center shrink-0">
                         {(ann.author_name || 'S').charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <div className="text-xs">
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    <div className="text-xs min-w-0 truncate">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                         {ann.author_name || ann.author?.displayName || 'Campus Student'}
                       </span>
-                      <span className="text-[11px] text-slate-400 ml-1.5">
+                      <span className="text-[11px] text-slate-400 ml-1.5 hidden sm:inline">
                         • {ann.author_role || ann.author?.course || 'Student'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {/* Author Edit / Delete Controls */}
                     {isAuthor && (
                       <div className="flex items-center gap-1 mr-2 border-r border-slate-200 dark:border-slate-700 pr-2">
@@ -447,8 +447,8 @@ export const CampusBoard = () => {
 
       {/* CREATE ANNOUNCEMENT MODAL */}
       {isPostModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-rose-100 dark:border-rose-950 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-rose-100 dark:border-rose-950 animate-slide-up max-h-[90dvh] overflow-y-auto">
             
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">
@@ -600,8 +600,8 @@ export const CampusBoard = () => {
 
       {/* EDIT ANNOUNCEMENT MODAL */}
       {editingPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-rose-100 dark:border-rose-950 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-rose-100 dark:border-rose-950 animate-slide-up max-h-[90dvh] overflow-y-auto">
             
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">

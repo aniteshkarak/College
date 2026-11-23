@@ -9,8 +9,8 @@ export const PremiumModal = () => {
   if (!isPremiumModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-amber-200 dark:border-amber-900/50 animate-slide-up relative overflow-hidden max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-8 shadow-2xl border border-amber-200 dark:border-amber-900/50 animate-slide-up relative overflow-hidden max-h-[90dvh] overflow-y-auto">
         
         {/* Glow backdrop */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-amber-400/20 to-rose-400/20 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />

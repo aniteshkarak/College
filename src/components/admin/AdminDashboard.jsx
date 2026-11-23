@@ -544,7 +544,7 @@ export const AdminDashboard = () => {
           </button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="font-display font-extrabold text-2xl text-slate-900 dark:text-white tracking-tight">
+              <h1 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 dark:text-white tracking-tight">
                 Collage Story Admin & Verification Portal
               </h1>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
@@ -593,7 +593,7 @@ export const AdminDashboard = () => {
           </button>
 
           {/* Tab Switcher */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto w-full md:w-auto scrollbar-none">
             {[
               { id: 'verifications', label: `Queue (${pendingApps + underReviewApps + resubmittedApps})` },
               { id: 'overview', label: 'Platform Metrics' },

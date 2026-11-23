@@ -26,7 +26,7 @@ export const BottomNav = () => {
   ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-2 py-1 shadow-lg">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-1 sm:px-2 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-lg select-none touch-manipulation">
       <div className="flex items-center justify-around">
         {tabs.map((tab) => {
           const isActive = currentView === tab.id;
@@ -34,7 +34,7 @@ export const BottomNav = () => {
             <button
               key={tab.id}
               onClick={() => navigateTo(tab.id)}
-              className={`relative flex flex-col items-center justify-center py-1.5 px-2.5 rounded-2xl transition-all ${
+              className={`relative flex flex-col items-center justify-center py-1 sm:py-1.5 px-1.5 sm:px-2.5 rounded-2xl transition-all ${
                 isActive
                   ? 'text-rose-600 dark:text-rose-400 font-bold scale-105'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'

@@ -310,19 +310,19 @@ export const AuthModal = ({ isOpen, onClose }) => {
   const uploadedPicsCount = [formData.photo_1, formData.photo_2, formData.photo_3].filter(Boolean).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/70 backdrop-blur-md animate-fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl border border-rose-100 dark:border-rose-950/40 animate-slide-up max-h-[94vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl border border-rose-100 dark:border-rose-950/40 animate-slide-up max-h-[92dvh] overflow-y-auto">
         
         {/* Header Tabs */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => {
                 setActiveTab('login');
                 setApplicantStatusView(null);
                 setCorrectionTarget(null);
               }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
                 activeTab === 'login'
                   ? 'bg-rose-500 text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
@@ -336,13 +336,14 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 setApplicantStatusView(null);
                 setCorrectionTarget(null);
               }}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
                 activeTab === 'register'
                   ? 'bg-rose-500 text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Apply to Join (72h Review)
+              <span className="hidden sm:inline">Apply to Join (72h Review)</span>
+              <span className="sm:hidden">Apply (72h)</span>
             </button>
           </div>
 
@@ -434,7 +435,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
             </div>
 
             {/* Review Target & Deadline Information */}
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
               <div>
                 <span className="text-slate-400 block text-[10px]">TARGET REVIEW TIME</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">Up to 72 Hours</span>
@@ -622,7 +623,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   {ageError && <p className="text-[11px] text-rose-500 font-bold mt-1">{ageError}</p>}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Email Address
@@ -651,7 +652,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       City
@@ -722,7 +723,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Degree / Course
@@ -751,7 +752,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Current Academic Year
@@ -1385,7 +1386,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Preferred Distance

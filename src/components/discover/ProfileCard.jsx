@@ -60,7 +60,7 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
   };
 
   return (
-    <div className="relative w-full max-w-sm mx-auto h-[calc(100vh-11rem)] min-h-[500px] max-h-[640px] rounded-3xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800 text-white select-none transition-all">
+    <div className="relative w-full max-w-sm mx-auto h-[calc(100dvh-9.5rem)] min-h-[440px] max-h-[620px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl bg-slate-900 border border-slate-800 text-white select-none transition-all">
       
       {/* Background Image Carousel */}
       <div className="relative w-full h-full">
@@ -235,24 +235,24 @@ export const ProfileCard = ({ profile, onLike, onPass }) => {
         </div>
 
         {/* Action Controls (Pass / Like) */}
-        <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-6 z-20">
+        <div className="absolute bottom-2.5 sm:bottom-4 left-0 right-0 flex items-center justify-center gap-4 sm:gap-6 z-20">
           
           {/* Pass Button */}
           <button
             onClick={() => onPass(profile)}
-            className="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-lg border border-white/20 text-white flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all"
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-lg border border-white/20 text-white flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all"
             title="Pass (Kept strictly private)"
           >
-            <X className="w-7 h-7 stroke-[2.5]" />
+            <X className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5]" />
           </button>
 
           {/* Like Button */}
           <button
             onClick={() => onLike(profile)}
-            className="w-16 h-16 rounded-full bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 text-white flex items-center justify-center shadow-xl shadow-rose-600/40 hover:scale-110 active:scale-95 transition-all"
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 text-white flex items-center justify-center shadow-xl shadow-rose-600/40 hover:scale-110 active:scale-95 transition-all"
             title="Like Profile"
           >
-            <Heart className="w-8 h-8 fill-white stroke-none" />
+            <Heart className="w-7 h-7 sm:w-8 sm:h-8 fill-white stroke-none" />
           </button>
 
         </div>

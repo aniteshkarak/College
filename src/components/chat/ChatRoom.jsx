@@ -116,47 +116,47 @@ export const ChatRoom = ({ match, onBack }) => {
     <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-slate-950 overflow-hidden relative">
 
       {/* 1. NATIVE MESSENGER TOP BAR */}
-      <div className="flex items-center justify-between px-4 py-3 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 backdrop-blur-md z-20 shadow-xs shrink-0">
+      <div className="flex items-center justify-between px-2.5 sm:px-4 py-2 sm:py-3 bg-white/95 dark:bg-slate-900/95 border-b border-slate-200 dark:border-slate-800 backdrop-blur-md z-20 shadow-xs shrink-0">
 
         {/* Left: Back button & Partner Info (ONLY Name & Mood, Click to view full About profile) */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           {onBack && (
             <button
               onClick={onBack}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"
               title="Back to Chats list"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
 
           {/* Clickable Name & Avatar -> Opens About Person modal */}
           <button
             onClick={() => setShowAboutModal(true)}
-            className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-85 active:scale-98 transition-all group focus:outline-none"
+            className="flex items-center gap-2 sm:gap-2.5 min-w-0 text-left hover:opacity-85 active:scale-98 transition-all group focus:outline-none"
             title={`Click to view about ${match.user.display_name}`}
           >
             <div className="relative shrink-0">
               <img
                 src={resolvePhotoUrl(match.user.avatar_url || match.user.avatarUrl)}
                 alt={match.user.display_name}
-                className="w-10 h-10 rounded-2xl object-cover ring-2 ring-emerald-500/30 shadow-xs group-hover:ring-rose-500 transition-all"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl object-cover ring-2 ring-emerald-500/30 shadow-xs group-hover:ring-rose-500 transition-all"
               />
             </div>
 
-            <div className="min-w-0 flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white leading-none truncate max-w-[120px] sm:max-w-xs group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
+            <div className="min-w-0 flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-none truncate max-w-[80px] xs:max-w-[120px] sm:max-w-xs group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
                 {match.user.display_name}
               </h3>
 
               {/* Partner's live Mood badge */}
               {match.user.mood && (
                 <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 shrink-0 shadow-2xs"
+                  className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/40 shrink-0 shadow-2xs"
                   title={`${match.user.display_name}'s current campus mood`}
                 >
                   <span>{(() => { const raw = typeof match.user.mood === 'object' ? match.user.mood.label : match.user.mood; const matched = MOOD_OPTIONS.find((opt) => opt.label.toLowerCase() === String(raw || '').toLowerCase() || opt.id.toLowerCase() === String(raw || '').toLowerCase()); return matched?.emoji || '✨'; })()}</span>
-                  <span className="truncate max-w-[140px]">
+                  <span className="hidden sm:inline truncate max-w-[140px]">
                     {typeof match.user.mood === 'object' ? match.user.mood.label : match.user.mood}
                   </span>
                 </span>
@@ -166,16 +166,16 @@ export const ChatRoom = ({ match, onBack }) => {
         </div>
 
         {/* Right: Stage Trigger & Controls */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
 
           {/* THE "GO" BUTTON (Transition from Talking as Friend to Dating Stage) */}
           {currentStage === 'Friend' && (
             <button
               onClick={() => setShowGoModal(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 text-white rounded-full text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all animate-pulse-slow"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1 sm:py-1.5 bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 text-white rounded-full text-[11px] sm:text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all animate-pulse-slow"
               title="Click 'GO' to advance from Friend to Dating stage"
             >
-              <Zap className="w-3.5 h-3.5 fill-white" />
+              <Zap className="w-3.5 h-3.5 fill-white shrink-0" />
               <span>GO<span className="hidden sm:inline"> to Dating</span></span>
             </button>
           )}
@@ -183,10 +183,10 @@ export const ChatRoom = ({ match, onBack }) => {
           {currentStage === 'Dating' && (
             <button
               onClick={() => handleSendGoRequest(match.id, 'Relationship')}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-xs font-black shadow-md hover:brightness-110"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-[11px] sm:text-xs font-black shadow-md hover:brightness-110"
               title="Confirm mutual Relationship stage"
             >
-              <Heart className="w-3.5 h-3.5 fill-white" />
+              <Heart className="w-3.5 h-3.5 fill-white shrink-0" />
               <span><span className="hidden sm:inline">GO </span>Relationship</span>
             </button>
           )}
@@ -379,7 +379,7 @@ export const ChatRoom = ({ match, onBack }) => {
                       messageId={msg.id}
                     />
                   ) : (
-                    <p className="whitespace-pre-wrap font-sans">{msg.content}</p>
+                    <p className="whitespace-pre-wrap font-sans break-words [overflow-wrap:anywhere]">{msg.content}</p>
                   )}
 
                   {/* Timestamp & Real Messenger Double Checks */}
@@ -546,8 +546,8 @@ export const ChatRoom = ({ match, onBack }) => {
 
       {/* "GO" MODAL (Send stage progression request) */}
       {showGoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-rose-200 dark:border-rose-900 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-sm w-full p-5 sm:p-6 text-center shadow-2xl border border-rose-200 dark:border-rose-900 animate-slide-up max-h-[90dvh] overflow-y-auto">
             <div className="w-14 h-14 rounded-2xl gradient-brand-bg text-white flex items-center justify-center mx-auto mb-3 shadow-lg animate-bounce-soft">
               <Zap className="w-7 h-7 fill-white" />
             </div>
@@ -583,8 +583,8 @@ export const ChatRoom = ({ match, onBack }) => {
 
       {/* 1. ABOUT PERSON MODAL (Shown when clicking name/avatar in header) */}
       {showAboutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up max-h-[90dvh] flex flex-col">
             {/* Header image banner */}
             <div className="relative h-44 w-full bg-slate-800 shrink-0">
               <img
@@ -719,8 +719,8 @@ export const ChatRoom = ({ match, onBack }) => {
 
       {/* 2. TRACK CONNECTION STATUS MODAL (Under the 3-dot menu) */}
       {showTrackModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-950 text-rose-600 flex items-center justify-center">
@@ -833,8 +833,8 @@ export const ChatRoom = ({ match, onBack }) => {
 
       {/* 3. REFUSE GO REQUEST WITH EXPLANATION MODAL (Explanation sent via chat per requirement) */}
       {showRefuseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 dark:border-rose-900 animate-slide-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-rose-200 dark:border-rose-900 animate-slide-up max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 flex items-center justify-center">
