@@ -1,5 +1,5 @@
 /**
- * Response Serializers for Collégé
+ * Response Serializers for Collage Story
  * Enforces strict backend privacy controls.
  * Prevents accidental leakage of private contact details (email, mobile),
  * password hashes, identity verification documents, and administrative audit trails.

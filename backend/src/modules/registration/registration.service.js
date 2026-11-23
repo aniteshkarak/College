@@ -235,7 +235,7 @@ export const submitRegistrationApplication = async (data, files = {}) => {
     submittedAt,
     reviewDeadline,
     targetHours: 72,
-    message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.',
+    message: 'Your Collage Story application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.',
   };
 };
 

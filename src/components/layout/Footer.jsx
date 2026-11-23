@@ -19,11 +19,11 @@ export const Footer = () => {
                 C
               </div>
               <span className="font-display font-bold text-2xl text-white tracking-tight">
-                Collégé
+                Collage Story
               </span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              India's authentic college-oriented social and dating platform. Built to encourage meaningful conversations without rush or relationship pressure.
+              A platform for college students to meet, chat and build meaningful connections. Built to encourage genuine conversations without rush or relationship pressure.
             </p>
             <div className="flex items-center gap-2 text-xs text-rose-400 font-medium">
               <Heart className="w-3.5 h-3.5 fill-rose-400" />
@@ -42,7 +42,7 @@ export const Footer = () => {
               </li>
               <li>
                 <button onClick={() => navigateTo('about')} className="hover:text-rose-400 transition-colors">
-                  About Collégé
+                  About Collage Story
                 </button>
               </li>
               <li>
@@ -140,7 +140,7 @@ export const Footer = () => {
             </button>
           </div>
           <p className="text-center md:text-right max-w-xl text-slate-400">
-            A digital match or relationship status is not a legally binding or real-world commitment. Collégé complies with India's Digital Personal Data Protection Act, 2023. No video calling or location tracking.
+            A digital match or relationship status is not a legally binding or real-world commitment. Collage Story complies with India's Digital Personal Data Protection Act, 2023. No video calling or location tracking.
           </p>
         </div>
 

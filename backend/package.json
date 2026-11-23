@@ -1,7 +1,7 @@
 {
   "name": "college-backend",
   "version": "1.0.0",
-  "description": "Collégé - College-oriented Social Networking & Dating Platform Backend API",
+  "description": "Collage Story - College-oriented Social Networking & Dating Platform Backend API",
   "main": "src/server.js",
   "type": "module",
   "scripts": {

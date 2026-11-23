@@ -21,7 +21,7 @@ export const requireActiveAccount = (req, res, next) => {
         success: false,
         error: 'ACCOUNT_NOT_ACTIVE',
         accountStatus: user.accountStatus,
-        message: 'Your account is not active. Access to Collégé community features is restricted.',
+        message: 'Your account is not active. Access to Collage Story community features is restricted.',
         timestamp: new Date().toISOString(),
       });
     }

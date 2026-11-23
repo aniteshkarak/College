@@ -84,7 +84,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-display font-bold text-2xl tracking-tight text-slate-900 dark:text-white">
-                  Collégé
+                  Collage Story
                 </span>
                 <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-full tracking-wider">
                   India
@@ -140,7 +140,7 @@ export const Navbar = ({ onOpenMoodModal }) => {
             </button>
           )}
 
-          {/* Collégé Subscription Plan Button (₹49 / ₹99 / Free) */}
+          {/* Collage Story Membership Plan Button (₹49 / ₹99 / Free) */}
           {isAuthenticated && (
             <button
               onClick={() => setIsPremiumModalOpen(true)}

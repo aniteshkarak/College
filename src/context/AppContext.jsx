@@ -521,7 +521,7 @@ export const AppProvider = ({ children }) => {
           avatar_url: u.avatarUrl || u.avatar_url || u.photos?.[0]?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
           additional_photos: u.additionalPhotos || u.additional_photos || (u.photos?.slice(1) || []).map((p) => p.url),
           photos: u.photos || [],
-          bio: u.bio || u.profile?.bio || 'Verified college student on Collégé.',
+          bio: u.bio || u.profile?.bio || 'Verified college student on Collage Story.',
           interests: u.interests || u.profile?.interests || [],
           languages: u.languages || u.languagesSpoken || ['English'],
           mood: u.mood || u.currentMood || 'Looking for a conversation',
@@ -1545,7 +1545,7 @@ export const AppProvider = ({ children }) => {
           status: app.status || 'PENDING_REVIEW',
           student: app,
           applicationId: app.application_id || app.applicationId,
-          message: 'Your Collégé application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
+          message: 'Your Collage Story application has been successfully submitted. Our verification team is reviewing your information and documents. The review may take up to 72 hours. We will notify you once a decision has been made.'
         };
       }
       return {
@@ -1733,7 +1733,7 @@ export const AppProvider = ({ children }) => {
     setNotifications([]);
     setActiveChatMatch(null);
     setCurrentView('landing');
-    addToast('Logged out of Collégé.', 'info');
+    addToast('Logged out of Collage Story.', 'info');
   };
 
   const navigateTo = (view) => {
@@ -1743,7 +1743,7 @@ export const AppProvider = ({ children }) => {
     if (!isAuthenticated && !publicViews.includes(view)) {
       setIsAuthModalOpen(true);
       setAuthModalMode('login');
-      addToast('Please log in or create an account to enter Collégé.', 'info');
+      addToast('Please log in or create an account to enter Collage Story.', 'info');
       setCurrentView('landing');
       return;
     }

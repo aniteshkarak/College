@@ -18,19 +18,19 @@ export const AboutPage = () => {
         Our Story & Mission
       </span>
       <h1 className="font-display font-bold text-3xl sm:text-4xl text-slate-900 dark:text-white mb-4">
-        About Collégé
+        About Collage Story
       </h1>
       <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-8">
-        Collégé was created for college students and young adults across India who are tired of high-pressure dating apps and superficial swiping culture.
+        Collage Story was created for college students and young adults across India who are tired of high-pressure dating apps and superficial swiping culture.
       </p>
 
       <div className="space-y-6 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <h3 className="font-display font-bold text-base text-slate-900 dark:text-white mb-2">
-            Why Collégé is Different
+            Why Collage Story is Different
           </h3>
           <p className="mb-3">
-            On most mainstream dating apps, users feel rushed into defining a relationship or face uncomfortable video calls. Collégé takes a completely different path:
+            On most mainstream dating apps, users feel rushed into defining a relationship or face uncomfortable video calls. Collage Story takes a completely different path:
           </p>
           <ul className="list-disc pl-5 space-y-1.5 text-slate-600 dark:text-slate-400">
             <li><strong>Zero Pressure:</strong> You can choose Casual Connection (just talking), Dating Connection (exploring romance), or Serious Relationship (deep commitment).</li>
@@ -48,7 +48,7 @@ export const AboutPage = () => {
             Our initial focus begins in major college ecosystems in West Bengal—including Kharagpur, Kolkata, Midnapore, and neighboring university towns—before expanding to student hubs in Delhi, Mumbai, Bengaluru, Pune, Hyderabad, and across India.
           </p>
           <p>
-            Collégé is India-wide and welcomes adults aged 18+ from any college or university.
+            Collage Story is India-wide and welcomes adults aged 18+ from any college or university.
           </p>
         </div>
 

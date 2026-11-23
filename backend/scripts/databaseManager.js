@@ -39,7 +39,7 @@ export const REAL_COLLEGES = [
 ];
 
 async function main() {
-  console.log('=== Collégé Database Sanitization & Population ===');
+  console.log('=== Collage Story Database Sanitization & Population ===');
 
   // 1. Delete false / duplicate automated test data (timestamped test accounts)
   console.log('1. Cleaning false timestamped test records...');
@@ -135,14 +135,14 @@ async function main() {
     where: { email: 'admin@college.internal' },
     update: {
       passwordHash: leadReviewerHash,
-      fullName: 'Collégé Lead Reviewer',
+      fullName: 'Collage Story Lead Reviewer',
       roleName: 'ADMIN',
       isActive: true,
     },
     create: {
       email: 'admin@college.internal',
       passwordHash: leadReviewerHash,
-      fullName: 'Collégé Lead Reviewer',
+      fullName: 'Collage Story Lead Reviewer',
       roleName: 'ADMIN',
       isActive: true,
     },

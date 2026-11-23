@@ -94,7 +94,7 @@ export const PrivacyPolicyPage = () => {
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Collégé is committed to protecting the privacy, dignity and personal data of our student community. This Privacy Policy details our lawful data collection, strict verification safeguards, storage standards and your statutory privacy rights.
+            Collage Story is committed to protecting the privacy, dignity and personal data of our student community. This Privacy Policy details our lawful data collection, strict verification safeguards, storage standards and your statutory privacy rights.
           </p>
 
           <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800/80">
@@ -170,7 +170,7 @@ export const PrivacyPolicyPage = () => {
                 1. Our Privacy Commitment
               </h2>
             </div>
-            <p>At Collégé, we respect your privacy.</p>
+            <p>At Collage Story, we respect your privacy.</p>
             <p>
               We collect and process personal information only for specified purposes connected with registration, college verification, profile functionality, communication, safety and platform operations.
             </p>
@@ -263,7 +263,7 @@ export const PrivacyPolicyPage = () => {
                   <span>E. Communication Information</span>
                 </h3>
                 <ul className="list-disc pl-5 space-y-1 text-xs">
-                  <li>Messages exchanged through Collégé.</li>
+                  <li>Messages exchanged through Collage Story.</li>
                   <li>Voice-message metadata and stored audio.</li>
                   <li>Conversation and delivery information.</li>
                   <li>Reports and moderation information.</li>
@@ -352,7 +352,7 @@ export const PrivacyPolicyPage = () => {
                 4. How We Store Your Information
               </h2>
             </div>
-            <p>Collégé stores relevant information in its database and associated storage systems.</p>
+            <p>Collage Story stores relevant information in its database and associated storage systems.</p>
             <p className="font-semibold text-slate-900 dark:text-white">This may include:</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Name and contact details.</li>
@@ -416,7 +416,7 @@ export const PrivacyPolicyPage = () => {
               </h2>
             </div>
             <p>
-              Your approved profile may be visible to eligible Collégé users according to the platform's discovery and privacy settings.
+              Your approved profile may be visible to eligible Collage Story users according to the platform's discovery and privacy settings.
             </p>
             <p className="font-semibold text-slate-900 dark:text-white">
               Your email address, mobile number, password and private college verification documents are not intended to appear in public profiles.
@@ -561,7 +561,7 @@ export const PrivacyPolicyPage = () => {
               </h2>
             </div>
             <p className="font-semibold text-slate-900 dark:text-white">
-              Collégé may use cookies or similar technologies where necessary for:
+              Collage Story may use cookies or similar technologies where necessary for:
             </p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Login sessions.</li>
@@ -589,7 +589,7 @@ export const PrivacyPolicyPage = () => {
             <p>Such providers may process limited information necessary to provide their services.</p>
             <p>Their processing is subject to applicable contracts, security arrangements and privacy requirements.</p>
             <p className="text-xs text-slate-500">
-              Collégé is not responsible for the independent privacy practices of external websites you choose to visit.
+              Collage Story is not responsible for the independent privacy practices of external websites you choose to visit.
             </p>
           </section>
 
@@ -604,7 +604,7 @@ export const PrivacyPolicyPage = () => {
               </h2>
             </div>
             <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 text-xs font-semibold">
-              Collégé is intended exclusively for individuals aged 18 years or older.
+              Collage Story is intended exclusively for individuals aged 18 years or older.
             </div>
             <p>We do not knowingly permit individuals under 18 to register or use the platform.</p>
             <p>
@@ -637,7 +637,7 @@ export const PrivacyPolicyPage = () => {
               </h2>
             </div>
             <p>
-              For privacy questions, data correction requests, account deletion requests or complaints, contact the Collégé support team through the official support details published on the website.
+              For privacy questions, data correction requests, account deletion requests or complaints, contact the Collage Story support team through the official support details published on the website.
             </p>
             
             <div className="p-5 bg-gradient-to-r from-purple-50 via-slate-50 to-indigo-50 dark:from-purple-950/30 dark:via-slate-800 dark:to-indigo-950/30 rounded-2xl border border-purple-200 dark:border-purple-800/50 space-y-3 mt-4">
@@ -660,7 +660,7 @@ export const PrivacyPolicyPage = () => {
               </div>
               <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-300 pt-2 border-t border-purple-100 dark:border-purple-900/40">
                 <p className="flex items-center flex-wrap gap-1 font-medium">
-                  <span>Official Collégé Helpdesk & Legal Cell: contact</span>
+                  <span>Official Collage Story Helpdesk & Legal Cell: contact</span>
                   <button
                     type="button"
                     onClick={() => setIsAkitsModalOpen(true)}

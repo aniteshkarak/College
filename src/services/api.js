@@ -1,6 +1,6 @@
 /**
- * Collégé API Service
- * Connects React frontend directly to the Collégé Node.js/Express Backend.
+ * Collage Story API Service
+ * Connects React frontend directly to the Collage Story Node.js/Express Backend.
  * Standard Base URL: http://localhost:5000/api/v1
  */
 

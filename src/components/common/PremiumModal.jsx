@@ -22,7 +22,7 @@ export const PremiumModal = () => {
             </div>
             <div>
               <h3 className="font-display font-bold text-xl text-slate-900 dark:text-white">
-                Collégé Membership Plans
+                Collage Story Membership Plans
               </h3>
               <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
                 Transparent campus plans • 28-day billing cycles
@@ -181,7 +181,7 @@ export const PremiumModal = () => {
         <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300">
           <ShieldCheck className="w-4 h-4 shrink-0" />
           <span>
-            Collégé Safety Commitment: Reporting, blocking, unmatching, and DPDP privacy controls are ALWAYS 100% free for everyone.
+            Collage Story Safety Commitment: Reporting, blocking, unmatching, and DPDP privacy controls are ALWAYS 100% free for everyone.
           </span>
         </div>
 

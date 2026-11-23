@@ -90,7 +90,7 @@ export const TermsPage = () => {
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Please read these Terms carefully before registering with or using Collégé. These Terms define the mutual rights, responsibilities and rules governing student access, discovery, messaging and verification.
+            Please read these Terms carefully before registering with or using Collage Story. These Terms define the mutual rights, responsibilities and rules governing student access, discovery, messaging and verification.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-3 text-[11px] text-slate-400 border-t border-slate-800/80">
@@ -144,9 +144,9 @@ export const TermsPage = () => {
                 1. Introduction
               </h2>
             </div>
-            <p>Welcome to Collégé, a college-focused social networking and student connection platform.</p>
-            <p>These Terms & Conditions govern your access to and use of the Collégé website, applications, features and services.</p>
-            <p>By registering, accessing or using Collégé, you agree to these Terms & Conditions and our Privacy Policy.</p>
+            <p>Welcome to Collage Story, a college-focused social networking and student connection platform.</p>
+            <p>These Terms & Conditions govern your access to and use of the Collage Story website, applications, features and services.</p>
+            <p>By registering, accessing or using Collage Story, you agree to these Terms & Conditions and our Privacy Policy.</p>
             <p className="font-semibold text-slate-900 dark:text-white">
               If you do not agree, please do not use the platform.
             </p>
@@ -168,7 +168,7 @@ export const TermsPage = () => {
               <li>You must use your own account.</li>
               <li>You must not impersonate another student.</li>
               <li>You must not create accounts using fake or misleading identities.</li>
-              <li>Collégé may request college verification documents to establish eligibility.</li>
+              <li>Collage Story may request college verification documents to establish eligibility.</li>
             </ul>
             <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -193,7 +193,7 @@ export const TermsPage = () => {
               Submitting registration does not automatically create an active student account.
             </p>
             <p>
-              Your application will initially remain pending until an authorized Collégé administrator reviews it.
+              Your application will initially remain pending until an authorized Collage Story administrator reviews it.
             </p>
             <p className="font-semibold text-slate-900 dark:text-white">The administrator may:</p>
             <ul className="list-disc pl-5 space-y-1">
@@ -205,7 +205,7 @@ export const TermsPage = () => {
               Only approved accounts can access protected student features.
             </p>
             <p className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-900/30 text-xs">
-              Collégé does not require OTP verification for its standard registration approval and login workflow. Users must protect their login credentials.
+              Collage Story does not require OTP verification for its standard registration approval and login workflow. Users must protect their login credentials.
             </p>
           </section>
 
@@ -225,7 +225,7 @@ export const TermsPage = () => {
               <li>Providing accurate information.</li>
               <li>Maintaining the security of your account.</li>
               <li>Reporting suspected unauthorized account access.</li>
-              <li>Using Collégé responsibly.</li>
+              <li>Using Collage Story responsibly.</li>
             </ul>
             <p className="text-xs font-semibold text-rose-600 dark:text-rose-400">
               You must not share your account or allow another person to impersonate you.
@@ -273,7 +273,7 @@ export const TermsPage = () => {
                 6. Discovery, Likes and Matching
               </h2>
             </div>
-            <p>Collégé provides student discovery and connection features.</p>
+            <p>Collage Story provides student discovery and connection features.</p>
             <p>Users may discover other eligible profiles based on available preferences.</p>
             <p>Sending a like does not automatically establish a match.</p>
             <p className="font-semibold text-purple-600 dark:text-purple-400">
@@ -303,7 +303,7 @@ export const TermsPage = () => {
               <li>Use messages for spam, fraud or unlawful activities.</li>
             </ul>
             <p>
-              Collégé may investigate reports of misuse and restrict accounts where appropriate.
+              Collage Story may investigate reports of misuse and restrict accounts where appropriate.
             </p>
           </section>
 
@@ -348,7 +348,7 @@ export const TermsPage = () => {
             </p>
             <p>Reports may be reviewed by authorized administrators.</p>
             <p>
-              Collégé may investigate reports and take appropriate action, including content removal, account suspension or account termination.
+              Collage Story may investigate reports and take appropriate action, including content removal, account suspension or account termination.
             </p>
             <p className="font-semibold text-rose-600 dark:text-rose-400">
               Do not misuse the reporting system to harass or falsely accuse other users.
@@ -414,13 +414,13 @@ export const TermsPage = () => {
               You retain ownership of content you create and upload, subject to applicable law and any rights of other people.
             </p>
             <p>
-              By uploading content, you give Collégé a limited permission to host, store, process and display that content as necessary to operate the services and according to your privacy and visibility settings.
+              By uploading content, you give Collage Story a limited permission to host, store, process and display that content as necessary to operate the services and according to your privacy and visibility settings.
             </p>
             <p className="font-semibold text-slate-900 dark:text-white">
               This permission is not a transfer of ownership.
             </p>
             <p>
-              Collégé does not claim ownership of your personal photographs or messages.
+              Collage Story does not claim ownership of your personal photographs or messages.
             </p>
           </section>
 
@@ -434,7 +434,7 @@ export const TermsPage = () => {
                 12. Account Suspension and Termination
               </h2>
             </div>
-            <p className="font-semibold text-slate-900 dark:text-white">Collégé may restrict, suspend or terminate accounts for:</p>
+            <p className="font-semibold text-slate-900 dark:text-white">Collage Story may restrict, suspend or terminate accounts for:</p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Violations of these Terms.</li>
               <li>Fake or misleading registration information.</li>
@@ -458,7 +458,7 @@ export const TermsPage = () => {
                 13. Service Availability
               </h2>
             </div>
-            <p>Collégé aims to provide reliable services but cannot guarantee uninterrupted availability.</p>
+            <p>Collage Story aims to provide reliable services but cannot guarantee uninterrupted availability.</p>
             <p>Maintenance, technical failures, internet connectivity, hosting problems or security incidents may temporarily affect services.</p>
             <p>We may update, modify or discontinue features where reasonably necessary.</p>
           </section>
@@ -473,11 +473,11 @@ export const TermsPage = () => {
                 14. Limitation of Responsibility
               </h2>
             </div>
-            <p>Collégé provides a platform for student interaction and connections.</p>
+            <p>Collage Story provides a platform for student interaction and connections.</p>
             <p>We do not guarantee that every profile, statement or interaction between users is genuine or accurate.</p>
             <p>Users are responsible for exercising caution when interacting with other people.</p>
             <p>
-              To the extent permitted by applicable law, Collégé is not responsible for indirect losses arising from user interactions, third-party conduct or temporary service interruptions.
+              To the extent permitted by applicable law, Collage Story is not responsible for indirect losses arising from user interactions, third-party conduct or temporary service interruptions.
             </p>
             <p className="font-semibold text-slate-900 dark:text-white">
               Nothing in these Terms excludes liability that cannot legally be excluded.
@@ -494,7 +494,7 @@ export const TermsPage = () => {
                 15. Changes to Terms
               </h2>
             </div>
-            <p>Collégé may update these Terms when its features, services or legal requirements change.</p>
+            <p>Collage Story may update these Terms when its features, services or legal requirements change.</p>
             <p>Updated Terms will be published on this page with a revised effective date.</p>
             <p>
               Continued use after applicable changes take effect will be subject to the updated Terms, as permitted by law.
@@ -528,11 +528,11 @@ export const TermsPage = () => {
               </h2>
             </div>
             <p>
-              For questions, complaints or account-related concerns, contact the Collégé support team through the official contact details published on the website.
+              For questions, complaints or account-related concerns, contact the Collage Story support team through the official contact details published on the website.
             </p>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2 mt-4 text-xs">
               <p className="font-bold text-slate-900 dark:text-white flex items-center flex-wrap gap-1">
-                <span>Official Collégé Helpdesk & Legal Cell: contact</span>
+                <span>Official Collage Story Helpdesk & Legal Cell: contact</span>
                 <button
                   type="button"
                   onClick={() => setIsAkitsModalOpen(true)}

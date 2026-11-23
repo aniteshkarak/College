@@ -167,7 +167,7 @@ export const AkitsModal = ({ isOpen, onClose }) => {
       link: null,
     },
     {
-      name: 'Collégé',
+      name: 'Collage Story',
       category: 'Campus Social & Discovery Platform',
       description:
         'College-first student networking and discovery platform featuring campus verification, real-time messaging, and interactive games.',

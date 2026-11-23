@@ -1,8 +1,8 @@
-# Collégé Backend API
+# Collage Story Backend API
 
-Collégé is an 18+ college-oriented social networking and dating platform for verified adult students across India.
+Collage Story is an 18+ college-oriented social networking and dating platform for verified adult students across India.
 
-This is the **MAIN Collégé backend** built in **JavaScript ES Modules (Node.js + Express.js)** using **PostgreSQL, Prisma ORM, Redis, BullMQ, Multer, Sharp, and Nodemailer**.
+This is the **MAIN Collage Story backend** built in **JavaScript ES Modules (Node.js + Express.js)** using **PostgreSQL, Prisma ORM, Redis, BullMQ, Multer, Sharp, and Nodemailer**.
 
 ---
 
@@ -113,7 +113,7 @@ backend/
 - Validates minimum resolution threshold (100x100px).
 
 ### 3. Nodemailer Transactional Emails
-Includes 10 responsive Collégé-branded HTML templates:
+Includes 10 responsive Collage Story-branded HTML templates:
 1. Registration Confirmation
 2. Email OTP Verification
 3. Application Submission Confirmation (72-Hour Review SLA)

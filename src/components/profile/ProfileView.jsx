@@ -248,7 +248,7 @@ export const ProfileView = () => {
               <span>Verified Photographs ({allUserPhotos.length} / 3)</span>
             </h3>
             <p className="text-[11px] text-slate-500">
-              All photos are human-verified and visible to active students on Collégé.
+              All photos are human-verified and visible to active students on Collage Story.
             </p>
           </div>
           <button

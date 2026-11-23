@@ -9,7 +9,7 @@ import prisma from '../src/config/prisma.js';
 import redis from '../src/config/redis.js';
 import config from '../src/config/env.js';
 
-describe('Collégé Discovery & Profile Privacy Test Suite (17 Comprehensive Tests)', () => {
+describe('Collage Story Discovery & Profile Privacy Test Suite (17 Comprehensive Tests)', () => {
   const timestamp = Date.now();
   const testPassword = 'DiscoverySecurePass2026!';
   let passwordHash;

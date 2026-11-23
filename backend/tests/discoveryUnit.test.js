@@ -5,7 +5,7 @@ import { serializePublicProfile, serializePrivateAccount } from '../src/utils/se
 import { mapGenderPreference } from '../src/modules/discovery/discovery.service.js';
 import { requireActiveAccount } from '../src/middleware/activeAccountGuard.js';
 
-describe('Collégé Discovery & Privacy Unit Tests', () => {
+describe('Collage Story Discovery & Privacy Unit Tests', () => {
   const mockUser = {
     id: 'usr-uuid-1234',
     email: 'private.student@campus.edu',

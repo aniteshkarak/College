@@ -13,7 +13,7 @@ import socketService, {
 import { storageService } from '../src/services/storageService.js';
 import { parseUserAgent, getUserSessions, revokeUserSession, logoutUser } from '../src/modules/auth/auth.service.js';
 
-describe('Collégé Multi-Device Real-Time Messaging & Voice Notes (15 Scenarios)', () => {
+describe('Collage Story Multi-Device Real-Time Messaging & Voice Notes (15 Scenarios)', () => {
 
   // Mock Socket generator
   const createMockSocket = (userId, deviceId, deviceType = 'web', sessionId = null) => {

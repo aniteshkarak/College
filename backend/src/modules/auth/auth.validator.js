@@ -15,7 +15,7 @@ export const registerSchema = z.object({
         age--;
       }
       return age >= 18;
-    }, 'You must be at least 18 years old to join Collégé'),
+    }, 'You must be at least 18 years old to join Collage Story'),
   collegeName: z.string().min(2, 'College name is required'),
   course: z.string().optional(),
   gender: z.enum(['Male', 'Female', 'Non-Binary', 'Other']),

@@ -71,7 +71,7 @@ export const EditProfile = () => {
     }
 
     if (calculatedAge < 18) {
-      setAgeError('You must be at least 18 years old to join Collégé (PRD Section 4.1).');
+      setAgeError('You must be at least 18 years old to join Collage Story (PRD Section 4.1).');
     } else {
       setAgeError('');
     }
@@ -186,7 +186,7 @@ export const EditProfile = () => {
     if (isSaving) return;
 
     if (formData.age < 18) {
-      addToast('Cannot save: Must be 18+ to use Collégé.', 'error');
+      addToast('Cannot save: Must be 18+ to use Collage Story.', 'error');
       return;
     }
     if (!formData.interests || formData.interests.length === 0) {

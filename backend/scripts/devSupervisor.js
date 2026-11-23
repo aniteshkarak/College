@@ -1,5 +1,5 @@
 /**
- * Collégé Backend Development Supervisor & Process Guard
+ * Collage Story Backend Development Supervisor & Process Guard
  *
  * Checks for zombie processes on port 5000, validates environment,
  * monitors backend health, and auto-restarts the server if needed.
@@ -39,7 +39,7 @@ function checkHealth(callback) {
 }
 
 function startBackend() {
-  console.log(`[SUPERVISOR] Starting Collégé Backend on port ${PORT}...`);
+  console.log(`[SUPERVISOR] Starting Collage Story Backend on port ${PORT}...`);
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: BACKEND_ROOT,
     stdio: 'inherit',
@@ -57,7 +57,7 @@ function startBackend() {
 // First check if a healthy server is already running
 checkHealth((err, isAlive, data) => {
   if (isAlive) {
-    console.log(`[SUPERVISOR] A healthy Collégé Backend is ALREADY running on port ${PORT}.`);
+    console.log(`[SUPERVISOR] A healthy Collage Story Backend is ALREADY running on port ${PORT}.`);
     console.log(`[SUPERVISOR] Status:`, data);
     process.exit(0);
   } else {

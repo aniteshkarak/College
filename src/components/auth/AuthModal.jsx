@@ -145,7 +145,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
     }
 
     if (calculatedAge < 18) {
-      setAgeError('Must be at least 18 years old to apply under Indian DPDP Act & Collégé safety terms.');
+      setAgeError('Must be at least 18 years old to apply under Indian DPDP Act & Collage Story safety terms.');
     } else {
       setAgeError('');
     }
@@ -481,7 +481,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 }}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md"
               >
-                Activate Account & Enter Collégé 🎓
+                Activate Account & Enter Collage Story 🎓
               </button>
             )}
 
@@ -500,10 +500,10 @@ export const AuthModal = ({ isOpen, onClose }) => {
           <div className="my-5 space-y-4">
             <div>
               <h2 className="font-display font-bold text-xl text-slate-900 dark:text-white">
-                Log In to Collégé
+                Log In to Collage Story
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                Only manually verified, approved student accounts have access to Collégé.
+                Only manually verified, approved student accounts have access to Collage Story.
               </p>
             </div>
 
@@ -1681,9 +1681,9 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 {viewingLegalDoc === 'terms' ? (
                   <div className="space-y-4">
                     <div className="p-3.5 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800/40 text-xs">
-                      <strong>Summary of Terms:</strong> By registering with Collégé, you confirm that you are at least 18 years old, agree to genuine account representation, understand that connections require mutual acceptance, and agree not to engage in harassment, fake identities, or unlawful activity.
+                      <strong>Summary of Terms:</strong> By registering with Collage Story, you confirm that you are at least 18 years old, agree to genuine account representation, understand that connections require mutual acceptance, and agree not to engage in harassment, fake identities, or unlawful activity.
                     </div>
-                    <p><strong>1. Introduction:</strong> Welcome to Collégé. These Terms govern your access to and use of our platform, features and services. Agreement is mandatory for use.</p>
+                    <p><strong>1. Introduction:</strong> Welcome to Collage Story. These Terms govern your access to and use of our platform, features and services. Agreement is mandatory for use.</p>
                     <p><strong>2. Eligibility:</strong> You must be at least 18 years of age. Genuine representation is strictly required. Underage accounts are prohibited.</p>
                     <p><strong>3. Registration & Verification:</strong> Requires 3 personal photographs, valid college verification document, and profile data. Submissions undergo manual human administrator review before activation.</p>
                     <p><strong>4. Account Responsibility:</strong> You are strictly responsible for maintaining credential secrecy and platform compliance.</p>
@@ -1693,7 +1693,7 @@ export const AuthModal = ({ isOpen, onClose }) => {
                     <p><strong>8. Campus Board:</strong> Announcements must be genuine, non-spam and respectful to the campus community.</p>
                     <p><strong>9. Blocking & Reporting:</strong> Any user can report or block accounts. Misuse of reporting is prohibited.</p>
                     <p><strong>10. Prohibited Activities:</strong> Hacking, scraping, fake identities, spam and harassment are strictly barred.</p>
-                    <p><strong>11. User Content:</strong> You retain ownership of your content, granting Collégé a limited operating license.</p>
+                    <p><strong>11. User Content:</strong> You retain ownership of your content, granting Collage Story a limited operating license.</p>
                     <p><strong>12. Suspension:</strong> Violations may result in account restriction, suspension or termination.</p>
                     <p><strong>13. Service Availability:</strong> Provided without uninterrupted availability guarantees.</p>
                     <p><strong>14. Limitation:</strong> Users interact at their own discretion. Caution is advised.</p>

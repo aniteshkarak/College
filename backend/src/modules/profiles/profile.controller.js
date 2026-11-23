@@ -13,7 +13,7 @@ const updateProfileSchema = z.object({
   full_name: z.string().min(2).max(100).optional(),
   dateOfBirth: z.string().optional(),
   date_of_birth: z.string().optional(),
-  age: z.number().int().min(18, 'You must be at least 18 years old to join Collégé.').max(100).optional(),
+  age: z.number().int().min(18, 'You must be at least 18 years old to join Collage Story.').max(100).optional(),
   gender: z.string().optional(),
   bio: z.string().max(500, 'Bio cannot exceed 500 characters').optional(),
   collegeName: z.string().max(150).optional(),
@@ -130,7 +130,7 @@ export const updateMyProfile = async (req, res) => {
         calculatedAge--;
       }
       if (calculatedAge < 18) {
-        return error(res, 'You must be at least 18 years old to join Collégé (PRD Section 4.1).', 400);
+        return error(res, 'You must be at least 18 years old to join Collage Story (PRD Section 4.1).', 400);
       }
     }
 

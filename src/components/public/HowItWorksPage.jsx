@@ -58,7 +58,7 @@ export const HowItWorksPage = () => {
           Simple, Safe & Transparent
         </span>
         <h1 className="font-display font-bold text-3xl sm:text-4xl text-slate-900 dark:text-white mb-3">
-          How Collégé Works
+          How Collage Story Works
         </h1>
         <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
           From your first campus icebreaker to mutual relationship confirmation.

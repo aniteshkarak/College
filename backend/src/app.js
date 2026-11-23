@@ -72,7 +72,7 @@ app.use(passport.initialize());
 // Root Welcome Endpoint (Unrestricted)
 app.get('/', (_req, res) => {
   return res.json({
-    name: 'Collégé Backend API',
+    name: 'Collage Story Backend API',
     tagline: 'Meet. Chat. Connect.',
     version: '1.0.0',
     verificationPolicy: '100% Manual Human Verification (Up to 72 Hours)',
@@ -176,7 +176,7 @@ const placeholderSvg = Buffer.from(
     <rect width="600" height="600" fill="#0f172a"/>
     <circle cx="300" cy="240" r="100" fill="#e11d48" opacity="0.85"/>
     <path d="M150 490 C150 380 450 380 450 490 Z" fill="#e11d48" opacity="0.85"/>
-    <text x="300" y="545" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">Collégé Student</text>
+    <text x="300" y="545" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">Collage Story Student</text>
   </svg>`
 );
 app.use(['/api/v1/photos', '/api/v1/thumbnails', '/api/v1/discovery-photos'], (_req, res) => {
@@ -189,7 +189,7 @@ app.use(['/api/v1/photos', '/api/v1/thumbnails', '/api/v1/discovery-photos'], (_
 
 // 404 Route Not Found
 app.use((_req, res) => {
-  return error(res, 'Requested endpoint not found on Collégé API', 404);
+  return error(res, 'Requested endpoint not found on Collage Story API', 404);
 });
 
 // Global Error Handler

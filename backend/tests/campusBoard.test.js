@@ -11,7 +11,7 @@ import {
 } from '../src/modules/campus/campus.service.js';
 import { requireActiveAccount } from '../src/middleware/activeAccountGuard.js';
 
-describe('Collégé Campus Board — 15 Scenario Test Suite', () => {
+describe('Collage Story Campus Board — 15 Scenario Test Suite', () => {
 
   // Mock Database Store
   const createMockDb = () => {

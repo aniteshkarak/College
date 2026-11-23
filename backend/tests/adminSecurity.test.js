@@ -12,7 +12,7 @@ import redis from '../src/config/redis.js';
 import config from '../src/config/env.js';
 import { STORAGE_PATHS } from '../src/config/storage.js';
 
-describe('Collégé Admin Authentication & Security Audit Test Suite', () => {
+describe('Collage Story Admin Authentication & Security Audit Test Suite', () => {
   const timestamp = Date.now();
   const testPassword = 'AuditAdminPassword2026!';
   let passwordHash;

@@ -97,7 +97,7 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
             <ShieldAlert className="w-8 h-8" />
           </div>
           <h2 className="font-display font-extrabold text-2xl text-slate-900 dark:text-white tracking-tight">
-            Collégé Admin Portal
+            Collage Story Admin Portal
           </h2>
           <p className="text-xs text-slate-500 max-w-xs mx-auto">
             Authorized Campus Reviewers & Security Administrators Only.
@@ -228,7 +228,7 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
             className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white font-semibold inline-flex items-center gap-1 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Return to Collégé Website (User Login / Register)</span>
+            <span>Return to Collage Story Website (User Login / Register)</span>
           </button>
         </div>
 

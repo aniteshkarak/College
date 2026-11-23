@@ -61,7 +61,7 @@ export const fullRegistrationSchema = z.object({
   photo3: z.any().optional(),
 
   // STEP 5: About Me and Connection Preferences
-  bio: z.string().optional().default('Student at Collégé.'),
+  bio: z.string().optional().default('Student at Collage Story.'),
   interests: arrayOrString(['Music', 'Travelling']),
   hobbies: arrayOrString(['Reading']),
   personality: z.string().optional(),

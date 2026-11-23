@@ -1,4 +1,4 @@
-# Collégé (Frontend Web & PWA)
+# Collage Story (Frontend Web & PWA)
 
 > **Meet. Chat. Connect.**  
 > India's authentic, pressure-free college-oriented social and dating platform.

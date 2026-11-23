@@ -48,7 +48,7 @@ httpServer.on('error', (err) => {
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   logger.info(`===================================================`);
-  logger.info(`🚀 Collégé Backend API Server running on port ${PORT}`);
+  logger.info(`🚀 Collage Story Backend API Server running on port ${PORT}`);
   logger.info(`📡 Health Check URL: http://localhost:${PORT}/api/v1/health`);
   logger.info(`🌐 Environment: ${config.nodeEnv}`);
   logger.info(`⚡ Real-time Socket.IO: Ready`);

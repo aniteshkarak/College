@@ -8,7 +8,7 @@ import { stdin as input, stdout as output } from 'node:process';
 const rl = readline.createInterface({ input, output });
 
 try {
-  console.log('\n=== Collégé Super Admin Setup ===\n');
+  console.log('\n=== Collage Story Super Admin Setup ===\n');
 
   const email = (await rl.question('Super Admin email: '))
     .trim()

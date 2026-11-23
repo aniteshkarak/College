@@ -21,7 +21,7 @@ export const SafetyGuidelinesPage = () => {
         Community Safety Guidelines
       </h1>
       <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-8">
-        Your safety, comfort, and peace of mind come before everything else on Collégé. Here is how we protect our community.
+        Your safety, comfort, and peace of mind come before everything else on Collage Story. Here is how we protect our community.
       </p>
 
       <div className="space-y-6 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
@@ -34,7 +34,7 @@ export const SafetyGuidelinesPage = () => {
             </h3>
           </div>
           <p>
-            Collégé strictly disables video calls and video messaging. You will never receive unsolicited video calls. Furthermore, your exact live GPS location is never shared with other users—only your self-reported campus city and approximate distance band.
+            Collage Story strictly disables video calls and video messaging. You will never receive unsolicited video calls. Furthermore, your exact live GPS location is never shared with other users—only your self-reported campus city and approximate distance band.
           </p>
         </div>
 

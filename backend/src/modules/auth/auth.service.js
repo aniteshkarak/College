@@ -261,7 +261,7 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
     refreshToken,
     sessionId: session?.id || null,
     expiresIn: config.jwt.expiresIn,
-    message: 'Login successful! Welcome to Collégé.',
+    message: 'Login successful! Welcome to Collage Story.',
   };
 };
 

@@ -8,7 +8,7 @@ import app from '../src/app.js';
 import prisma from '../src/config/prisma.js';
 import redis from '../src/config/redis.js';
 
-describe('Collégé Full-Stack End-to-End User Journey Test Suite', () => {
+describe('Collage Story Full-Stack End-to-End User Journey Test Suite', () => {
   const timestamp = Date.now();
   const testPassword = 'CampusStudent2026!';
   const adminPassword = 'SuperAdminSecurePass2026!';

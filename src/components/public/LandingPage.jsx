@@ -91,7 +91,7 @@ export const LandingPage = () => {
             onClick={() => navigateTo('how-it-works')}
             className="w-full sm:w-auto px-6 py-4 rounded-2xl font-bold text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xs"
           >
-            <span>How Collégé Works</span>
+            <span>How Collage Story Works</span>
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </button>
         </div>
@@ -153,7 +153,7 @@ export const LandingPage = () => {
               One App. Three Mutual Intentions.
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-              Unlike traditional dating apps that push users into rapid romance, Collégé respects where you are in life.
+              Unlike traditional dating apps that push users into rapid romance, Collage Story respects where you are in life.
             </p>
           </div>
 
@@ -191,7 +191,7 @@ export const LandingPage = () => {
           
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 rounded-full text-xs font-semibold mb-3">
-              <Gamepad2 className="w-3.5 h-3.5" /> Collégé Signature Feature
+              <Gamepad2 className="w-3.5 h-3.5" /> Collage Story Signature Feature
             </div>
             <h2 className="font-display font-bold text-3xl sm:text-4xl text-slate-900 dark:text-white mb-4 leading-tight">
               Say Goodbye to Boring "Hey, What's Up?" Small Talk.

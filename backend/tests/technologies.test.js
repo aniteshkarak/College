@@ -20,7 +20,7 @@ after(async () => {
   } catch {}
 });
 
-describe('Collégé Technology Integration Test Suite (Multer, Sharp, Nodemailer)', () => {
+describe('Collage Story Technology Integration Test Suite (Multer, Sharp, Nodemailer)', () => {
 
   // -------------------------------------------------------------
   // A. SHARP IMAGE PROCESSING TESTS
@@ -174,7 +174,7 @@ describe('Collégé Technology Integration Test Suite (Multer, Sharp, Nodemailer
     });
     assert.ok(res.delivered !== undefined);
     assert.equal(res.to, 'student@college.internal');
-    assert.match(res.subject, /Welcome to Collégé/i);
+    assert.match(res.subject, /Welcome to Collage Story/i);
   });
 
   test('Nodemailer: 2. Email OTP Verification email', async () => {
@@ -228,7 +228,7 @@ describe('Collégé Technology Integration Test Suite (Multer, Sharp, Nodemailer
       reason: 'College ID document was illegible and could not verify enrollment year.',
     });
     assert.equal(res.to, 'student@college.internal');
-    assert.match(res.subject, /Update Regarding Collégé Application/i);
+    assert.match(res.subject, /Update Regarding Collage Story Application/i);
   });
 
   test('Nodemailer: 7. Correction Request Email with fields and instructions', async () => {
@@ -260,7 +260,7 @@ describe('Collégé Technology Integration Test Suite (Multer, Sharp, Nodemailer
       resetToken: 'test_token_123',
     });
     assert.equal(res.to, 'student@college.internal');
-    assert.match(res.subject, /Reset Your Collégé Password/i);
+    assert.match(res.subject, /Reset Your Collage Story Password/i);
   });
 
   test('Nodemailer: 10. Important Security Alert email', async () => {
@@ -313,7 +313,7 @@ describe('Collégé Technology Integration Test Suite (Multer, Sharp, Nodemailer
         const swaggerSpec = (await import('../src/config/swagger.js')).default;
         assert.ok(swaggerSpec.openapi, 'Swagger spec must have OpenAPI version');
         assert.equal(swaggerSpec.openapi, '3.0.0');
-        assert.ok(swaggerSpec.info.title.includes('Collégé'));
+        assert.ok(swaggerSpec.info.title.includes('Collage Story'));
       } else {
         throw err;
       }

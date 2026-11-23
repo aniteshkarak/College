@@ -9,7 +9,7 @@ import {
 } from '../src/modules/auth/auth.validator.js';
 import { serializePublicProfile, serializePrivateAccount } from '../src/utils/serializers.js';
 
-describe('Collégé Authentication & Password Recovery Validators', () => {
+describe('Collage Story Authentication & Password Recovery Validators', () => {
   test('loginSchema: Accepts valid email or phone with password', () => {
     const valid1 = loginSchema.safeParse({ identifier: 'student@college.edu', password: 'SecretPassword123' });
     assert.strictEqual(valid1.success, true);
@@ -68,7 +68,7 @@ describe('Collégé Authentication & Password Recovery Validators', () => {
   });
 });
 
-describe('Collégé Privacy & Serializer Isolation', () => {
+describe('Collage Story Privacy & Serializer Isolation', () => {
   const dummyUser = {
     id: 'user_uuid_101',
     displayName: 'Priya S.',
@@ -139,7 +139,7 @@ describe('Collégé Privacy & Serializer Isolation', () => {
   });
 });
 
-describe('Collégé Two-Way Block & Conversation Invalidation Rules', () => {
+describe('Collage Story Two-Way Block & Conversation Invalidation Rules', () => {
   test('Two-way block check identifies blocked state in either direction', () => {
     const blockedPairs = [
       { blockerId: 'user_A', blockedId: 'user_B' },
@@ -176,7 +176,7 @@ describe('Collégé Two-Way Block & Conversation Invalidation Rules', () => {
   });
 });
 
-describe('Collégé Safety Reports & Moderation Rules', () => {
+describe('Collage Story Safety Reports & Moderation Rules', () => {
   const ALLOWED_CATEGORIES = [
     'Harassment',
     'Inappropriate content',

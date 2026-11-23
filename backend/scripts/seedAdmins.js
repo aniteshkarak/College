@@ -51,14 +51,14 @@ async function seedAdmins() {
     where: { email: 'admin@college.internal' },
     update: {
       passwordHash: platformAdminHash,
-      fullName: 'Collégé Lead Reviewer',
+      fullName: 'Collage Story Lead Reviewer',
       roleName: 'ADMIN',
       isActive: true,
     },
     create: {
       email: 'admin@college.internal',
       passwordHash: platformAdminHash,
-      fullName: 'Collégé Lead Reviewer',
+      fullName: 'Collage Story Lead Reviewer',
       roleName: 'ADMIN',
       isActive: true,
     },

@@ -119,7 +119,7 @@ export const SettingsView = () => {
             Settings & Preferences
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Personalize your Collégé experience, privacy, and account settings.
+            Personalize your Collage Story experience, privacy, and account settings.
           </p>
         </div>
       </div>
@@ -210,7 +210,7 @@ export const SettingsView = () => {
                 <Globe className="w-3.5 h-3.5 text-blue-500" /> Language / भाषा
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Select your preferred interface language for Collégé.
+                Select your preferred interface language for Collage Story.
               </p>
             </div>
           </div>
@@ -565,7 +565,7 @@ export const SettingsView = () => {
               onClick={() => navigateTo('privacy')}
               className="text-xs text-rose-500 hover:underline inline-flex items-center gap-1"
             >
-              Read full Collégé Privacy Policy & Data Rights &rarr;
+              Read full Collage Story Privacy Policy & Data Rights &rarr;
             </button>
           </div>
         </div>
@@ -585,7 +585,7 @@ export const SettingsView = () => {
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span>Sign Out of Collégé</span>
+            <span>Sign Out of Collage Story</span>
           </button>
         </div>
 
@@ -618,7 +618,7 @@ export const SettingsView = () => {
               <Trash2 className="w-6 h-6" />
             </div>
             <h3 className="font-bold text-base text-slate-900 dark:text-white mb-2">
-              Permanently Delete Collégé Account?
+              Permanently Delete Collage Story Account?
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
               This action is immediate and non-reversible. In accordance with DPDP Act 2023, all your active likes, chats, voice notes and photos will be erased.

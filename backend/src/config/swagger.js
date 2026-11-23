@@ -4,10 +4,10 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Collégé API – Meet. Chat. Connect.',
+      title: 'Collage Story API – Meet. Chat. Connect.',
       version: '1.0.0',
       description: `
-Collégé is an 18+ college-exclusive social networking and dating platform for verified adult students across India.
+Collage Story is an 18+ college-exclusive social networking and dating platform for verified adult students across India.
 
 ### Core Features:
 - **100% Manual Admin Verification (72-Hour Review SLA)**
@@ -18,7 +18,7 @@ Collégé is an 18+ college-exclusive social networking and dating platform for 
 - **Strict Gatekeeping**: Only approved accounts can access discovery, match requests, and chat.
       `,
       contact: {
-        name: 'Collégé Engineering Team',
+        name: 'Collage Story Engineering Team',
         email: 'dev@college.internal',
       },
     },

@@ -1,4 +1,4 @@
-// Collégé Platform Configuration & Static Options Service
+// Collage Story Platform Configuration & Static Options Service
 // Clean production state: False/mock records deleted so all users, matches,
 // conversations, announcements, and verifications are loaded dynamically from the PostgreSQL database.
 

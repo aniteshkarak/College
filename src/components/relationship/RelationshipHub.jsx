@@ -59,7 +59,7 @@ export const RelationshipHub = () => {
           Relationship Mode & Centre
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
-          On Collégé, relationship status is never automatic. A digital match is not a commitment—an official status happens only when both people mutually, independently, and deliberately confirm it.
+          On Collage Story, relationship status is never automatic. A digital match is not a commitment—an official status happens only when both people mutually, independently, and deliberately confirm it.
         </p>
       </div>
 
@@ -241,7 +241,7 @@ export const RelationshipHub = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-rose-100 dark:border-rose-950">
             <h3 className="font-bold text-base text-slate-900 dark:text-white mb-2">
-              End Relationship on Collégé?
+              End Relationship on Collage Story?
             </h3>
             <p className="text-xs text-slate-500 mb-6">
               Either person can independently end the platform relationship. Your profile status will revert to single/open.
@@ -270,7 +270,7 @@ export const RelationshipHub = () => {
       {/* PRD Legal Clarification Box */}
       <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 leading-relaxed">
         <p className="font-semibold text-slate-700 dark:text-slate-300 mb-1">
-          Collégé Product Principle (PRD 4.9 & 16):
+          Collage Story Product Principle (PRD 4.9 & 16):
         </p>
         <p>
           "A match is not a commitment. A conversation is not a promise. A relationship happens only when both people freely choose it. The platform must never imply that a digital status represents a legally binding or real-world commitment."

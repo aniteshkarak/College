@@ -30,6 +30,6 @@ test('Health Check API returns correct schema and service definitions', async ()
 test('Root Endpoint returns API metadata', async () => {
   const res = await request(app).get('/');
   assert.equal(res.status, 200);
-  assert.equal(res.body.name, 'Collégé Backend API');
+  assert.equal(res.body.name, 'Collage Story Backend API');
   assert.equal(res.body.status, 'Running');
 });

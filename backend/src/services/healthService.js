@@ -6,7 +6,7 @@ export const getLivenessStatus = () => {
     status: 'UP',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
-    service: 'Collégé Backend API',
+    service: 'Collage Story Backend API',
     mode: 'live',
   };
 };
@@ -72,7 +72,7 @@ export const getHealthStatus = async () => {
       },
     },
     version: '1.0.0',
-    app: 'Collégé Backend API',
+    app: 'Collage Story Backend API',
   };
 };
 
