@@ -288,8 +288,8 @@ export const emailService = {
    */
   sendPasswordResetEmail: async ({ email, resetToken, resetUrl }) => {
     const subject = 'Reset Your Collage Story Password';
-    const url = resetUrl || `http://localhost:5173/?resetToken=${resetToken}`;
-    const text = `Hello,\n\nA password reset request was received for your Collage Story account. Click the link below to set a new password:\n${url}\n\nThis link will expire in 1 hour. If you did not make this request, please ignore this email.`;
+    const url = resetUrl || `http://localhost:3000/?resetToken=${resetToken}`;
+    const text = `Hello,\n\nA password reset request was received for your Collage Story account. Click the link below to set a new password:\n${url}\n\nThis single-use link will expire in 15 minutes. For your security, it cannot be reused.\n\nIf you did not make this request, please ignore this email or contact support@collagestory.in if you suspect unauthorized activity. Your account remains secure.\n\nBest regards,\nCollage Story Security Team`;
     const html = `
       ${emailHeader('Password Reset Request 🔑', '#4f46e5')}
       <p style="color: #334155; font-size: 14px; line-height: 1.6;">Hello,</p>
@@ -297,7 +297,11 @@ export const emailService = {
       <div style="text-align: center; margin: 24px 0;">
         <a href="${url}" style="background: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 700; padding: 12px 24px; border-radius: 10px; font-size: 14px; display: inline-block;">Reset Password</a>
       </div>
-      <p style="color: #64748b; font-size: 12px;">This link will expire in 1 hour. If you did not request a password reset, your account remains secure and no action is required.</p>
+      <div style="background: #f8fafc; border-left: 4px solid #6366f1; border-radius: 8px; padding: 12px 16px; margin: 16px 0;">
+        <p style="margin: 0; color: #4338ca; font-size: 12px; font-weight: 600;">Security Information:</p>
+        <p style="margin: 4px 0 0; color: #475569; font-size: 12px; line-height: 1.5;">This link will expire in <strong>15 minutes</strong> and can only be used once. If you did not request a password reset, your account remains secure and no action is required.</p>
+      </div>
+      <p style="color: #64748b; font-size: 12px;">Need help? Reach out to <a href="mailto:support@collagestory.in" style="color: #4f46e5;">support@collagestory.in</a>.</p>
       ${emailFooter()}
     `;
     return dispatchEmail({ to: email, subject, html, text });

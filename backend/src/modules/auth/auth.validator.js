@@ -58,12 +58,22 @@ export const forgotPasswordSchema = z.object({
   email: z.string().email('A valid email address is required'),
 });
 
+const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+
 export const resetPasswordSchema = z.object({
   token: z.string().min(10, 'Reset token is required'),
   newPassword: z
     .string()
     .min(8, 'New password must be at least 8 characters long')
-    .max(100, 'Password cannot exceed 100 characters'),
+    .max(100, 'Password cannot exceed 100 characters')
+    .regex(
+      passwordStrengthRegex,
+      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+    ),
+  confirmPassword: z.string().optional(),
+}).refine((data) => !data.confirmPassword || data.newPassword === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
 });
 
 export const changePasswordSchema = z.object({
@@ -71,7 +81,15 @@ export const changePasswordSchema = z.object({
   newPassword: z
     .string()
     .min(8, 'New password must be at least 8 characters long')
-    .max(100, 'Password cannot exceed 100 characters'),
+    .max(100, 'Password cannot exceed 100 characters')
+    .regex(
+      passwordStrengthRegex,
+      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+    ),
+  confirmPassword: z.string().optional(),
+}).refine((data) => !data.confirmPassword || data.newPassword === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
 });
 
 export const refreshTokenSchema = z.object({

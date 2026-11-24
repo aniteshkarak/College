@@ -172,6 +172,14 @@ async function request(endpoint, options = {}) {
     }
   }
 
+  // Inject active session identifier if present
+  try {
+    const activeSessionId = localStorage.getItem('college_session_id');
+    if (activeSessionId && !headers['x-session-id']) {
+      headers['x-session-id'] = activeSessionId;
+    }
+  } catch (_) {}
+
   // Set Content-Type only if body is NOT FormData
   if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
@@ -301,6 +309,11 @@ export const api = {
         const token = res.data.token || res.data.accessToken;
         if (token) setStoredToken(token);
         if (res.data.user) setStoredUser(res.data.user);
+        if (res.data.sessionId) {
+          try {
+            localStorage.setItem('college_session_id', res.data.sessionId);
+          } catch (_) {}
+        }
       }
       return res;
     },
@@ -308,6 +321,9 @@ export const api = {
     logout: () => {
       clearStoredToken();
       setStoredUser(null);
+      try {
+        localStorage.removeItem('college_session_id');
+      } catch (_) {}
       return request('/auth/logout', { method: 'POST' }).catch(() => ({ success: true }));
     },
 
@@ -352,6 +368,11 @@ export const api = {
 
     revokeSession: (sessionId) =>
       request(`/auth/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      }),
+
+    revokeOtherSessions: () =>
+      request('/auth/sessions/others', {
         method: 'DELETE',
       }),
 

@@ -481,19 +481,64 @@ export const notifyConversationBlocked = (conversationId, user1Id, user2Id) => {
 export const disconnectSessionSockets = (userId, sessionId) => {
   if (!ioInstance || !sessionId) return;
 
+  try {
+    ioInstance.to(`session:${sessionId}`).emit('session_revoked', {
+      sessionId,
+      message: 'This device session has been revoked.',
+    });
+    ioInstance.in(`session:${sessionId}`).disconnectSockets(true);
+  } catch (_) {}
+
   const userSockets = userSocketsMap.get(userId);
   if (!userSockets) return;
 
-  for (const socket of userSockets) {
+  for (const socket of Array.from(userSockets)) {
     if (socket.sessionId === sessionId) {
-      socket.emit('session_revoked', { sessionId, message: 'This device session has been revoked.' });
-      socket.disconnect(true);
+      try {
+        socket.emit('session_revoked', { sessionId, message: 'This device session has been revoked.' });
+        socket.disconnect(true);
+      } catch (_) {}
       userSockets.delete(socket);
     }
   }
 
   if (userSockets.size === 0) {
     userSocketsMap.delete(userId);
+  }
+};
+
+/**
+ * Disconnect all sessions for a user, or all sessions except a specific one
+ */
+export const disconnectAllUserSessions = (userId, exceptSessionId = null) => {
+  if (!ioInstance || !userId) return;
+
+  const userSockets = userSocketsMap.get(userId);
+  if (userSockets) {
+    for (const socket of Array.from(userSockets)) {
+      if (!exceptSessionId || socket.sessionId !== exceptSessionId) {
+        try {
+          socket.emit('session_revoked', {
+            sessionId: socket.sessionId,
+            message: 'This session has been revoked or signed out.',
+          });
+          socket.disconnect(true);
+        } catch (_) {}
+        userSockets.delete(socket);
+      }
+    }
+    if (userSockets.size === 0) {
+      userSocketsMap.delete(userId);
+    }
+  }
+
+  if (!exceptSessionId) {
+    try {
+      ioInstance.to(`user:${userId}`).to(`user_${userId}`).emit('session_revoked', {
+        message: 'All sessions have been revoked. Please log in again.',
+      });
+      ioInstance.in(`user:${userId}`).disconnectSockets(true);
+    } catch (_) {}
   }
 };
 
@@ -576,23 +621,23 @@ export const closeSocketServer = async () => {
   if (ioInstance) {
     try {
       ioInstance.close();
-    } catch (e) {}
+    } catch (e) { }
     ioInstance = null;
   }
   if (pubClientInstance) {
     try {
       pubClientInstance.removeAllListeners();
-      pubClientInstance.on('error', () => {});
+      pubClientInstance.on('error', () => { });
       pubClientInstance.disconnect();
-    } catch (e) {}
+    } catch (e) { }
     pubClientInstance = null;
   }
   if (subClientInstance) {
     try {
       subClientInstance.removeAllListeners();
-      subClientInstance.on('error', () => {});
+      subClientInstance.on('error', () => { });
       subClientInstance.disconnect();
-    } catch (e) {}
+    } catch (e) { }
     subClientInstance = null;
   }
 };
@@ -606,6 +651,7 @@ export default {
   emitUnreadCount,
   notifyConversationBlocked,
   disconnectSessionSockets,
+  disconnectAllUserSessions,
   disconnectUserSockets,
   getActiveSocketCount,
   getCachedMessageByIdempotency,

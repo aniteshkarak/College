@@ -27,6 +27,7 @@ router.post('/refresh', authController.refresh);
 router.post('/resubmit-verification/:userId', authController.resubmitVerification);
 router.get('/me', requireAuth, authController.getMe);
 router.get('/sessions', requireAuth, authController.getSessions);
+router.delete('/sessions/others', requireAuth, authController.revokeOtherSessions);
 router.delete('/sessions/:sessionId', requireAuth, authController.revokeSession);
 
 export default router;

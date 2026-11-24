@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ALL_INTENTIONS } from '../../services/mockData';
+import api from '../../services/api';
 import {
   ShieldCheck,
   Sparkles,
@@ -24,6 +25,9 @@ import {
   Camera,
   Trash2,
   Eye,
+  EyeOff,
+  KeyRound,
+  ShieldAlert,
   FileText
 } from 'lucide-react';
 
@@ -44,19 +48,115 @@ const PRESET_IDS = [
 export const AuthModal = ({ isOpen, onClose }) => {
   const {
     authModalMode,
+    setAuthModalMode,
+    resetPasswordToken,
     loginWithCredentials,
     registerStudent,
     resubmitVerification,
     addToast
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState(authModalMode || 'login'); // 'login' | 'register'
+  const [activeTab, setActiveTab] = useState(authModalMode || 'login'); // 'login' | 'register' | 'forgot-password' | 'reset-password'
   const [step, setStep] = useState(1);
+
+  // Synchronize activeTab with context authModalMode
+  useEffect(() => {
+    if (authModalMode) {
+      setActiveTab(authModalMode);
+    }
+  }, [authModalMode]);
 
   // Login form state
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [applicantStatusView, setApplicantStatusView] = useState(null); // when applicant checks status or logs in while pending
+
+  // Forgot Password state
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotResult, setForgotResult] = useState(null);
+
+  // Reset Password state
+  const [resetTokenVal, setResetTokenVal] = useState(resetPasswordToken || '');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetCompleted, setResetCompleted] = useState(false);
+
+  useEffect(() => {
+    if (resetPasswordToken) {
+      setResetTokenVal(resetPasswordToken);
+      setActiveTab('reset-password');
+    }
+  }, [resetPasswordToken]);
+
+  const hasMinLength = resetNewPassword.length >= 8;
+  const hasUppercase = /[A-Z]/.test(resetNewPassword);
+  const hasLowercase = /[a-z]/.test(resetNewPassword);
+  const hasNumber = /\d/.test(resetNewPassword);
+  const passwordsMatch = resetNewPassword && resetNewPassword === resetConfirmPassword;
+  const isResetValid =
+    hasMinLength &&
+    hasUppercase &&
+    hasLowercase &&
+    hasNumber &&
+    passwordsMatch &&
+    resetTokenVal.trim().length > 0;
+
+  const handleForgotPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail || !forgotEmail.includes('@')) {
+      addToast('Please enter a valid email address.', 'warning');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotResult(null);
+    try {
+      const res = await api.auth.forgotPassword(forgotEmail.trim());
+      setForgotResult({
+        success: true,
+        message: res?.message || 'If an account matches this email, a password reset link has been dispatched.',
+      });
+      addToast('Password recovery request submitted.', 'success');
+    } catch (err) {
+      // Return generic success even on network/client handling to preserve account privacy
+      setForgotResult({
+        success: true,
+        message: 'If an account matches this email, a password reset link has been dispatched.',
+      });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!isResetValid) {
+      addToast('Please meet all password requirements before continuing.', 'warning');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const res = await api.auth.resetPassword({
+        token: resetTokenVal.trim(),
+        newPassword: resetNewPassword,
+      });
+
+      if (res?.success) {
+        setResetCompleted(true);
+        addToast('Password reset successful! Please log in with your new password.', 'success');
+      } else {
+        addToast(res?.message || 'Failed to reset password.', 'error');
+      }
+    } catch (err) {
+      addToast(err.message || 'Failed to reset password. The link may have expired or is invalid.', 'error');
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   // Registration Multi-Step State (Steps 1 to 6)
   // Photo & Verification ID fields start EMPTY so user must enter/upload them
@@ -309,6 +409,8 @@ export const AuthModal = ({ isOpen, onClose }) => {
   const allThreePicsEntered = Boolean(formData.photo_1 && formData.photo_2 && formData.photo_3);
   const uploadedPicsCount = [formData.photo_1, formData.photo_2, formData.photo_3].filter(Boolean).length;
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-md animate-fade-in">
       <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl border border-rose-100 dark:border-rose-950/40 animate-slide-up max-h-[92dvh] overflow-y-auto">
@@ -321,20 +423,26 @@ export const AuthModal = ({ isOpen, onClose }) => {
                 setActiveTab('login');
                 setApplicantStatusView(null);
                 setCorrectionTarget(null);
+                setForgotResult(null);
               }}
               className={`px-3 sm:px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'login'
+                activeTab === 'login' || activeTab === 'forgot-password' || activeTab === 'reset-password'
                   ? 'bg-rose-500 text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              Log In
+              {activeTab === 'forgot-password'
+                ? 'Account Recovery'
+                : activeTab === 'reset-password'
+                ? 'Reset Password'
+                : 'Log In'}
             </button>
             <button
               onClick={() => {
                 setActiveTab('register');
                 setApplicantStatusView(null);
                 setCorrectionTarget(null);
+                setForgotResult(null);
               }}
               className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
                 activeTab === 'register'
@@ -494,9 +602,281 @@ export const AuthModal = ({ isOpen, onClose }) => {
               Back to Login
             </button>
           </div>
+        ) : activeTab === 'forgot-password' ? (
+          /* ====================================================================== */
+          /* 2. FORGOT PASSWORD TAB (15-MINUTE SINGLE-USE TOKEN RECOVERY) */
+          /* ====================================================================== */
+          <div className="my-5 space-y-4 animate-fade-in">
+            <div className="text-center sm:text-left">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 flex items-center justify-center text-rose-500 mb-3 mx-auto sm:mx-0">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <h2 className="font-display font-bold text-xl text-slate-900 dark:text-white">
+                Password Recovery
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                Enter your registered college or personal email address. We will dispatch a cryptographically secure, single-use recovery link valid for <strong>15 minutes</strong>.
+              </p>
+            </div>
+
+            {forgotResult ? (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 text-xs space-y-2">
+                <div className="flex items-center gap-2 font-bold text-sm text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <span>Recovery Request Dispatched</span>
+                </div>
+                <p className="leading-relaxed opacity-95">
+                  {forgotResult.message}
+                </p>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-300/80 pt-1">
+                  If an account exists, check your inbox and spam folder. For account privacy, we do not disclose account existence.
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('login');
+                      setForgotResult(null);
+                    }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-xs"
+                  >
+                    Return to Log In
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Registered Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="student@college.edu or name@gmail.com"
+                      className="w-full p-2.5 pl-9 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
+                  <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-rose-500" />
+                    Security Guarantee:
+                  </p>
+                  <p>
+                    Recovery links expire after 15 minutes and can only be used once. Resetting your password immediately invalidates all active sessions across all devices.
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('login')}
+                    className="w-1/3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="flex-1 py-2.5 gradient-brand-bg text-white font-bold rounded-xl shadow-md hover:brightness-105 transition-all flex items-center justify-center gap-2"
+                  >
+                    {forgotLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Dispatching Link...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Send Recovery Link</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        ) : activeTab === 'reset-password' ? (
+          /* ====================================================================== */
+          /* 3. RESET PASSWORD TAB (ARGON2ID HASHING & IMMEDIATE REVOCATION) */
+          /* ====================================================================== */
+          <div className="my-5 space-y-4 animate-fade-in">
+            <div className="text-center sm:text-left">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900/60 flex items-center justify-center text-indigo-500 mb-3 mx-auto sm:mx-0">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h2 className="font-display font-bold text-xl text-slate-900 dark:text-white">
+                Set New Password
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                Choose a strong new password for your Collage Story student account. All previous device sessions will be signed out.
+              </p>
+            </div>
+
+            {resetCompleted ? (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 text-xs space-y-2.5 text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <h3 className="font-bold text-sm text-emerald-800 dark:text-emerald-200">
+                  Password Updated Successfully
+                </h3>
+                <p className="leading-relaxed opacity-90 max-w-sm mx-auto">
+                  Your password has been changed and all previous device sessions have been revoked. Please sign in with your new password.
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('login');
+                      setResetCompleted(false);
+                      setResetNewPassword('');
+                      setResetConfirmPassword('');
+                    }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-xs"
+                  >
+                    Log In Now
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5 text-xs">
+                {/* Reset Token Input (Hidden if token provided in URL, editable if manual entry) */}
+                {!resetPasswordToken && (
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Reset Token
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={resetTokenVal}
+                      onChange={(e) => setResetTokenVal(e.target.value)}
+                      placeholder="Paste recovery token from your email"
+                      className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono text-xs text-slate-900 dark:text-white"
+                    />
+                  </div>
+                )}
+
+                {/* New Password */}
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      value={resetNewPassword}
+                      onChange={(e) => setResetNewPassword(e.target.value)}
+                      placeholder="At least 8 characters with upper, lower & digit"
+                      className="w-full p-2.5 pl-9 pr-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm New Password */}
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      value={resetConfirmPassword}
+                      onChange={(e) => setResetConfirmPassword(e.target.value)}
+                      placeholder="Repeat new password"
+                      className="w-full p-2.5 pl-9 pr-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    />
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password Strength Requirements Checklist */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5 text-[11px]">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Password Requirements:
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>8+ characters</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${hasUppercase ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Uppercase letter (A-Z)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${hasLowercase ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Lowercase letter (a-z)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>At least 1 digit (0-9)</span>
+                    </div>
+                  </div>
+                  {resetConfirmPassword && (
+                    <div className={`flex items-center gap-1.5 pt-1 border-t border-slate-200 dark:border-slate-700 ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-rose-500 font-semibold'}`}>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{passwordsMatch ? 'Passwords match ✓' : 'Passwords do not match'}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('login')}
+                    className="w-1/3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!isResetValid || resetLoading}
+                    className="flex-1 py-2.5 gradient-brand-bg text-white font-bold rounded-xl shadow-md hover:brightness-105 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resetLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Updating Password...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Update Password</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         ) : activeTab === 'login' ? (
           /* ====================================================================== */
-          /* 2. LOG IN TAB (GATED ACCESS WITH STATUS NOTICES) */
+          /* 4. LOG IN TAB (GATED ACCESS WITH STATUS NOTICES) */
           /* ====================================================================== */
           <div className="my-5 space-y-4">
             <div>
@@ -527,9 +907,21 @@ export const AuthModal = ({ isOpen, onClose }) => {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Password
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('forgot-password');
+                      setForgotResult(null);
+                    }}
+                    className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 hover:underline cursor-pointer"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type="password"

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PrivacyRequestModal } from '../public/PrivacyRequestModal';
+import api from '../../services/api';
 import {
   ShieldCheck,
   Bell,
@@ -20,7 +21,11 @@ import {
   LogOut,
   Sparkles,
   RefreshCw,
-  HelpCircle
+  HelpCircle,
+  Smartphone,
+  Monitor,
+  KeyRound,
+  Shield
 } from 'lucide-react';
 
 export const SettingsView = () => {
@@ -35,12 +40,70 @@ export const SettingsView = () => {
     updatePreferences,
     playSoundEffect,
     discoveryFilters,
-    updateDiscoveryPreferences
+    updateDiscoveryPreferences,
+    activeSessions,
+    refreshSessions,
+    handleRevokeSession,
+    handleRevokeOtherSessions
   } = useApp();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [isSavingDiscovery, setIsSavingDiscovery] = useState(false);
+  const [isRevokingOthers, setIsRevokingOthers] = useState(false);
+
+  // Password Change State
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+
+  useEffect(() => {
+    if (refreshSessions) {
+      refreshSessions();
+    }
+  }, []);
+
+  const handleRevokeAllOtherDevices = async () => {
+    setIsRevokingOthers(true);
+    try {
+      await handleRevokeOtherSessions();
+    } finally {
+      setIsRevokingOthers(false);
+    }
+  };
+
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+      addToast('New password must contain at least 8 characters, an uppercase letter, a lowercase letter, and a number.', 'warning');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      addToast('New passwords do not match.', 'warning');
+      return;
+    }
+
+    setPasswordChangeLoading(true);
+    try {
+      const res = await api.auth.changePassword(currentPassword, newPassword);
+      if (res?.success) {
+        addToast('Password changed successfully! All other active sessions have been signed out.', 'success');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowPasswordSection(false);
+        refreshSessions();
+      } else {
+        addToast(res?.message || 'Failed to change password.', 'error');
+      }
+    } catch (err) {
+      addToast(err.message || 'Failed to change password.', 'error');
+    } finally {
+      setPasswordChangeLoading(false);
+    }
+  };
 
   // Local state for discovery preferences before saving
   const [localDiscovery, setLocalDiscovery] = useState({
@@ -570,23 +633,225 @@ export const SettingsView = () => {
           </div>
         </div>
 
-        {/* 7. SESSION MANAGEMENT & LOGOUT */}
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-slate-500" /> Session Security & Shared Device Protection
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-            Signing out clears your authenticated session and in-memory tokens. Shared devices are protected from unauthorized profile or chat access.
-          </p>
+        {/* 7. ACTIVE SESSIONS & ACCOUNT SECURITY */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-rose-500" /> Active Device Sessions & Security
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Control active logins across phones, tablets and browsers. Revoke unfamiliar devices instantly.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={refreshSessions}
+              className="self-start sm:self-auto px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-500 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+              title="Refresh active sessions"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Refresh</span>
+            </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out of Collage Story</span>
-          </button>
+          {/* Sessions List */}
+          <div className="space-y-3">
+            {activeSessions && activeSessions.length > 0 ? (
+              activeSessions.map((session) => {
+                const isMobile = session.deviceType === 'Mobile';
+                return (
+                  <div
+                    key={session.id}
+                    className={`p-3.5 rounded-2xl border transition-all ${
+                      session.isCurrentSession
+                        ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60'
+                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            session.isCurrentSession
+                              ? 'bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-300'
+                              : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          {isMobile ? <Smartphone className="w-4 h-4" /> : <Laptop className="w-4 h-4" />}
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                              {session.browser || 'Browser'} on {session.os || 'Device'}
+                            </span>
+                            {session.isCurrentSession && (
+                              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full border border-emerald-300 dark:border-emerald-800">
+                                This Device
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            IP: <span className="font-mono">{session.ipAddress || '127.0.0.1'}</span> • Signed in{' '}
+                            {new Date(session.createdAt || Date.now()).toLocaleDateString('en-IN', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                            Last Active:{' '}
+                            {new Date(session.lastActivityAt || session.createdAt || Date.now()).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {!session.isCurrentSession && (
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeSession(session.id)}
+                          className="px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950 rounded-lg border border-rose-200 dark:border-rose-900/60 transition-colors shrink-0 cursor-pointer"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/60 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-300 flex items-center justify-center">
+                    <Laptop className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Current Web Session</span>
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full">
+                        Active
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Authenticated Student Account</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons: Revoke All Others & Change Password */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={handleRevokeAllOtherDevices}
+              disabled={isRevokingOthers}
+              className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isRevokingOthers ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Revoking Other Devices...</span>
+                </>
+              ) : (
+                <>
+                  <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Log Out of All Other Devices</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowPasswordSection(!showPasswordSection)}
+              className="py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
+              <span>{showPasswordSection ? 'Hide Password Form' : 'Change Account Password'}</span>
+            </button>
+          </div>
+
+          {/* Change Password Inline Form */}
+          {showPasswordSection && (
+            <form onSubmit={handleChangePasswordSubmit} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3 animate-fade-in text-xs">
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Lock className="w-4 h-4 text-rose-500" /> Change Password
+              </h4>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  New Password (min 8 chars, 1 uppercase, 1 lowercase, 1 number)
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New strong password"
+                  className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordSection(false)}
+                  className="w-1/3 py-2 bg-slate-200 dark:bg-slate-700 rounded-xl font-semibold text-slate-700 dark:text-slate-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={passwordChangeLoading}
+                  className="flex-1 py-2 gradient-brand-bg text-white font-bold rounded-xl shadow-xs hover:brightness-105 cursor-pointer"
+                >
+                  {passwordChangeLoading ? 'Updating Password...' : 'Save New Password'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Standard Sign Out Button */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out of Current Device</span>
+            </button>
+          </div>
         </div>
 
         {/* 8. DANGER ZONE: DELETE ACCOUNT */}

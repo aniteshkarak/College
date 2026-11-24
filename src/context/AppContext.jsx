@@ -196,7 +196,28 @@ export const AppProvider = ({ children }) => {
   });
   const [previousView, setPreviousView] = useState('landing');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status'
+  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'register' | 'status' | 'forgot-password' | 'reset-password'
+  const [resetPasswordToken, setResetPasswordToken] = useState(null);
+
+  // Check URL parameters for password reset links or direct modal routes on initial load
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = searchParams.get('resetToken') || searchParams.get('token');
+      const hash = window.location.hash;
+      const isResetRoute = hash === '#reset-password' || hash.startsWith('#reset-password') || window.location.pathname === '/reset-password';
+      if (tokenFromUrl || isResetRoute) {
+        if (tokenFromUrl) {
+          setResetPasswordToken(tokenFromUrl);
+        }
+        setAuthModalMode('reset-password');
+        setIsAuthModalOpen(true);
+      } else if (hash === '#forgot-password' || window.location.pathname === '/forgot-password') {
+        setAuthModalMode('forgot-password');
+        setIsAuthModalOpen(true);
+      }
+    } catch (_) {}
+  }, []);
 
   // Automatically keep browser localStorage college_user synchronized whenever currentUser updates
   useEffect(() => {
@@ -728,6 +749,16 @@ export const AppProvider = ({ children }) => {
       addToast('Device session revoked successfully.', 'success');
     } catch (err) {
       addToast(err.message || 'Failed to revoke session', 'error');
+    }
+  };
+
+  const handleRevokeOtherSessions = async () => {
+    try {
+      await api.auth.revokeOtherSessions();
+      setActiveSessions((prev) => prev.filter((s) => s.isCurrentSession));
+      addToast('All other device sessions have been revoked.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to revoke other sessions', 'error');
     }
   };
 
@@ -1919,6 +1950,9 @@ export const AppProvider = ({ children }) => {
         activeSessions,
         refreshSessions,
         handleRevokeSession,
+        handleRevokeOtherSessions,
+        resetPasswordToken,
+        setResetPasswordToken,
         logout
       }}
     >

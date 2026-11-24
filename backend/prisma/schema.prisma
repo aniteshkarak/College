@@ -129,6 +129,7 @@ model User {
   photos                UserPhoto[]
   consents              UserConsent[]
   sessions              UserSession[]
+  passwordResetTokens   PasswordResetToken[]
 
   // Platform features (Strictly accessible only when accountStatus == ACTIVE)
   sentRequests          MatchRequest[]       @relation("SentRequests")
@@ -330,10 +331,32 @@ model UserSession {
   tokenHash             String
   ipAddress             String?
   userAgent             String?
+  deviceId              String?
+  lastActivityAt        DateTime  @default(now())
   expiresAt             DateTime
   createdAt             DateTime  @default(now())
 
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model PasswordResetToken {
+  id                    String    @id @default(uuid())
+  userId                String
+  tokenHash             String    @unique
+  expiresAt             DateTime
+  usedAt                DateTime?
+  ipAddress             String?
+  userAgent             String?
+  createdAt             DateTime  @default(now())
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
 }
 
 // -------------------------------------------------------------

@@ -69,6 +69,7 @@ passport.use(
 
         const sanitized = {
           id: user.id,
+          sessionId: jwtPayload.sessionId || null,
           email: user.email,
           mobileNumber: user.mobileNumber,
           fullName: user.fullName,

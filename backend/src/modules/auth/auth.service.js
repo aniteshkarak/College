@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import prisma from '../../config/prisma.js';
 import config from '../../config/env.js';
 import emailService from '../../services/emailService.js';
+import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
+import socketService from '../../services/socketService.js';
 import { serializePrivateAccount } from '../../utils/serializers.js';
 import logger from '../../utils/logger.js';
 
@@ -230,12 +232,6 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
   }
 
   // User is APPROVED: Issue Access Token + Refresh Token
-  const token = jwt.sign(
-    { sub: user.id, email: user.email, role: user.role },
-    config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn, issuer: 'college-api', audience: 'college-mobile-web' }
-  );
-
   const refreshToken = crypto.randomBytes(40).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
@@ -247,12 +243,20 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
       tokenHash,
       ipAddress: reqMeta.ip || null,
       userAgent: reqMeta.userAgent || null,
+      deviceId: reqMeta.deviceId || null,
+      lastActivityAt: new Date(),
       expiresAt,
     },
   }).catch((err) => {
     logger.warn(`Session record failed: ${err.message}`);
     return null;
   });
+
+  const token = jwt.sign(
+    { sub: user.id, email: user.email, role: user.role, sessionId: session?.id || null },
+    config.jwt.secret,
+    { expiresIn: config.jwt.expiresIn, issuer: 'college-api', audience: 'college-mobile-web' }
+  );
 
   return {
     status: 'APPROVED',
@@ -265,30 +269,48 @@ export const loginUser = async (identifier, password, reqMeta = {}) => {
   };
 };
 
-export const requestPasswordReset = async (email) => {
+export const requestPasswordReset = async (email, reqMeta = {}) => {
   const cleanEmail = (email || '').toLowerCase().trim();
   const user = await prisma.user.findUnique({
     where: { email: cleanEmail },
   });
 
   // Always return generic success to prevent email enumeration
-  if (!user) {
+  if (!user || user.accountStatus === 'SUSPENDED') {
     return {
       success: true,
       message: 'If an account matches this email, a password reset link has been dispatched.',
     };
   }
 
-  // Create single-use password reset token (1 hour)
-  const resetToken = jwt.sign(
-    { sub: user.id, email: user.email, type: 'pwd_reset' },
-    config.jwt.secret,
-    { expiresIn: '1h', issuer: 'college-api', audience: 'college-pwd-reset' }
-  );
+  // Generate cryptographically secure random token (32 bytes = 64 hex characters)
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes expiration
+
+  // Invalidate any existing unused reset tokens for this user
+  await prisma.passwordResetToken.deleteMany({
+    where: { userId: user.id, usedAt: null },
+  }).catch(() => {});
+
+  // Persist token hash with short expiration
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+      ipAddress: reqMeta.ip || null,
+      userAgent: reqMeta.userAgent || null,
+    },
+  });
+
+  const frontendUrl = config.frontendUrl || 'http://localhost:3000';
+  const resetUrl = `${frontendUrl}/?resetToken=${rawToken}`;
 
   emailService.sendPasswordResetEmail({
     email: user.email,
-    resetToken,
+    resetToken: rawToken,
+    resetUrl,
   }).catch((err) => logger.warn(`Password reset email failed: ${err.message}`));
 
   return {
@@ -297,32 +319,48 @@ export const requestPasswordReset = async (email) => {
   };
 };
 
-export const resetPassword = async (token, newPassword) => {
-  let decoded;
-  try {
-    decoded = jwt.verify(token, config.jwt.secret, {
-      issuer: 'college-api',
-      audience: 'college-pwd-reset',
-    });
-  } catch (err) {
+export const resetPassword = async (rawToken, newPassword) => {
+  if (!rawToken || typeof rawToken !== 'string') {
+    const error = new Error('Invalid or missing password reset token.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(rawToken.trim()).digest('hex');
+
+  // Check token in database
+  const tokenRecord = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!tokenRecord) {
     const error = new Error('Invalid or expired password reset token.');
     error.statusCode = 400;
     throw error;
   }
 
-  if (decoded.type !== 'pwd_reset' || !decoded.sub) {
-    const error = new Error('Invalid password reset token payload.');
+  if (tokenRecord.usedAt !== null) {
+    const error = new Error('Password reset token has already been used. Please request a new link.');
     error.statusCode = 400;
     throw error;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.sub },
-  });
+  if (new Date(tokenRecord.expiresAt) < new Date()) {
+    const error = new Error('Password reset token has expired. Please request a new link.');
+    error.statusCode = 400;
+    throw error;
+  }
 
-  if (!user) {
+  if (!tokenRecord.user) {
     const error = new Error('User account not found.');
     error.statusCode = 404;
+    throw error;
+  }
+
+  if (tokenRecord.user.accountStatus === 'SUSPENDED') {
+    const error = new Error('This account is suspended. Please contact platform administration.');
+    error.statusCode = 403;
     throw error;
   }
 
@@ -332,17 +370,53 @@ export const resetPassword = async (token, newPassword) => {
     timeCost: 3,
   });
 
-  // Update password and invalidate previous active sessions
+  // Concurrency-safe atomic transaction
   await prisma.$transaction(async (tx) => {
+    // Atomically mark token as used - only succeeds if usedAt is still null
+    const updated = await tx.passwordResetToken.updateMany({
+      where: {
+        id: tokenRecord.id,
+        usedAt: null,
+      },
+      data: {
+        usedAt: new Date(),
+      },
+    });
+
+    if (updated.count === 0) {
+      const err = new Error('Password reset token has already been used.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Update user password hash
     await tx.user.update({
-      where: { id: user.id },
+      where: { id: tokenRecord.userId },
       data: { passwordHash },
     });
 
+    // Invalidate all active user sessions according to account security policy
     await tx.userSession.deleteMany({
-      where: { userId: user.id },
+      where: { userId: tokenRecord.userId },
     });
   });
+
+  // Disconnect all real-time socket connections for this user immediately
+  socketService.disconnectAllUserSessions(tokenRecord.userId);
+
+  // Security notification & email alert
+  emailService.sendSecurityAlert({
+    email: tokenRecord.user.email,
+    alertType: 'Password Reset Completed',
+    details: 'Your account password was successfully reset. All active sessions across all devices have been signed out for security.',
+  }).catch(() => {});
+
+  notificationService.createNotification({
+    recipientId: tokenRecord.userId,
+    type: NOTIFICATION_TYPES.ADMIN_NOTICE,
+    title: 'Password Reset Successful',
+    message: 'Your account password has been updated. All previous sessions were signed out.',
+  }).catch(() => {});
 
   return {
     success: true,
@@ -350,7 +424,7 @@ export const resetPassword = async (token, newPassword) => {
   };
 };
 
-export const changePassword = async (userId, currentPassword, newPassword) => {
+export const changePassword = async (userId, currentPassword, newPassword, currentSessionId = null) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
@@ -358,6 +432,12 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
   if (!user) {
     const error = new Error('User not found.');
     error.statusCode = 404;
+    throw error;
+  }
+
+  if (user.accountStatus === 'SUSPENDED') {
+    const error = new Error('This account is suspended.');
+    error.statusCode = 403;
     throw error;
   }
 
@@ -374,14 +454,46 @@ export const changePassword = async (userId, currentPassword, newPassword) => {
     timeCost: 3,
   });
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    // Invalidate all other active sessions
+    if (currentSessionId) {
+      await tx.userSession.deleteMany({
+        where: {
+          userId,
+          id: { not: currentSessionId },
+        },
+      });
+    } else {
+      await tx.userSession.deleteMany({
+        where: { userId },
+      });
+    }
   });
+
+  // Cut off other sessions' real-time connections
+  socketService.disconnectAllUserSessions(userId, currentSessionId);
+
+  emailService.sendSecurityAlert({
+    email: user.email,
+    alertType: 'Password Changed',
+    details: 'Your Collage Story account password was changed. If you did not make this change, please contact support immediately.',
+  }).catch(() => {});
+
+  notificationService.createNotification({
+    recipientId: userId,
+    type: NOTIFICATION_TYPES.ADMIN_NOTICE,
+    title: 'Password Changed',
+    message: 'Your account password was changed successfully.',
+  }).catch(() => {});
 
   return {
     success: true,
-    message: 'Password changed successfully.',
+    message: 'Password changed successfully. All other active sessions have been signed out.',
   };
 };
 
@@ -455,7 +567,7 @@ export const getUserSessions = async (userId, currentSessionId = null) => {
       userId,
       expiresAt: { gt: new Date() },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: { lastActivityAt: 'desc' },
   });
 
   return sessions.map((s) => {
@@ -468,6 +580,7 @@ export const getUserSessions = async (userId, currentSessionId = null) => {
       userAgent: s.userAgent,
       ipAddress: s.ipAddress,
       createdAt: s.createdAt,
+      lastActivityAt: s.lastActivityAt,
       expiresAt: s.expiresAt,
       isCurrentSession: currentSessionId ? s.id === currentSessionId : false,
     };
@@ -489,7 +602,31 @@ export const revokeUserSession = async (userId, sessionId) => {
     where: { id: sessionId },
   });
 
+  socketService.disconnectSessionSockets(userId, sessionId);
+
   return { success: true, sessionId };
+};
+
+export const revokeAllOtherSessions = async (userId, currentSessionId = null) => {
+  if (currentSessionId) {
+    await prisma.userSession.deleteMany({
+      where: {
+        userId,
+        id: { not: currentSessionId },
+      },
+    });
+  } else {
+    await prisma.userSession.deleteMany({
+      where: { userId },
+    });
+  }
+
+  socketService.disconnectAllUserSessions(userId, currentSessionId);
+
+  return {
+    success: true,
+    message: 'All other active sessions have been signed out.',
+  };
 };
 
 export const logoutUser = async (userId, rawRefreshToken, sessionId = null) => {
@@ -522,5 +659,6 @@ export default {
   logoutUser,
   getUserSessions,
   revokeUserSession,
+  revokeAllOtherSessions,
   parseUserAgent,
 };

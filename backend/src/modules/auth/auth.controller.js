@@ -138,7 +138,12 @@ export const forgotPassword = async (req, res) => {
       return error(res, 'A valid email address is required', 400, parseResult.error.issues);
     }
 
-    const result = await authService.requestPasswordReset(parseResult.data.email);
+    const reqMeta = {
+      ip: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+
+    const result = await authService.requestPasswordReset(parseResult.data.email, reqMeta);
     return success(res, result, result.message);
   } catch (err) {
     return error(res, err.message, 500);
@@ -168,7 +173,8 @@ export const changePassword = async (req, res) => {
     }
 
     const { currentPassword, newPassword } = parseResult.data;
-    const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
+    const currentSessionId = req.headers['x-session-id'] || req.user?.sessionId || null;
+    const result = await authService.changePassword(req.user.id, currentPassword, newPassword, currentSessionId);
     return success(res, result, result.message);
   } catch (err) {
     return error(res, err.message, err.statusCode || 500);
@@ -200,7 +206,7 @@ export const refresh = async (req, res) => {
 
 export const logout = async (req, res) => {
   const rawRefreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
-  const sessionId = req.body?.sessionId || req.headers['x-session-id'] || null;
+  const sessionId = req.body?.sessionId || req.headers['x-session-id'] || req.user?.sessionId || null;
   const userId = req.user?.id;
 
   if (userId) {
@@ -216,7 +222,7 @@ export const logout = async (req, res) => {
 
 export const getSessions = async (req, res) => {
   try {
-    const currentSessionId = req.headers['x-session-id'] || null;
+    const currentSessionId = req.headers['x-session-id'] || req.user?.sessionId || null;
     const sessions = await authService.getUserSessions(req.user.id, currentSessionId);
     return success(res, { sessions }, 'Active sessions retrieved');
   } catch (err) {
@@ -228,10 +234,19 @@ export const revokeSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const result = await authService.revokeUserSession(req.user.id, sessionId);
-    socketService.disconnectSessionSockets(req.user.id, sessionId);
     return success(res, result, 'Session revoked successfully');
   } catch (err) {
     return error(res, err.message, err.statusCode || 500);
+  }
+};
+
+export const revokeOtherSessions = async (req, res) => {
+  try {
+    const currentSessionId = req.headers['x-session-id'] || req.user?.sessionId || null;
+    const result = await authService.revokeAllOtherSessions(req.user.id, currentSessionId);
+    return success(res, result, result.message);
+  } catch (err) {
+    return error(res, err.message, 500);
   }
 };
 
@@ -263,6 +278,7 @@ export default {
   logout,
   getSessions,
   revokeSession,
+  revokeOtherSessions,
   resubmitVerification,
   forgotPassword,
   resetPassword,
