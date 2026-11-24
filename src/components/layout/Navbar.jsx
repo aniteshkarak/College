@@ -202,9 +202,13 @@ export const Navbar = ({ onOpenMoodModal }) => {
             onClick={() => navigateTo(isAuthenticated ? 'matches' : 'landing')}
             className="flex items-center gap-1.5 sm:gap-2 group text-left focus:outline-none"
           >
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-md shadow-rose-500/20 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full bg-white dark:bg-slate-900 rounded-[14px] flex items-center justify-center">
-                <span className="font-display font-bold text-lg sm:text-xl gradient-brand-text">C</span>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-md shadow-rose-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <div className="w-full h-full bg-white rounded-[10px] sm:rounded-[14px] p-0.5 flex items-center justify-center overflow-hidden">
+                <img
+                  src="/logo.png"
+                  alt="Collage Story Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
             </div>
             <div>

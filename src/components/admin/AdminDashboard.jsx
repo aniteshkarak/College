@@ -542,6 +542,15 @@ export const AdminDashboard = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-md shrink-0 hidden sm:flex">
+            <div className="w-full h-full bg-white rounded-[10px] p-0.5 flex items-center justify-center overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="Collage Story Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
+          </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 dark:text-white tracking-tight">

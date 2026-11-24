@@ -93,8 +93,14 @@ export const AdminLogin = ({ onLoginSuccess, onCancel }) => {
         
         {/* Header Icon & Brand */}
         <div className="text-center space-y-2">
-          <div className="inline-flex p-3 rounded-2xl bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 shadow-inner">
-            <ShieldAlert className="w-8 h-8" />
+          <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-lg shadow-rose-500/20">
+            <div className="w-full h-full bg-white rounded-[14px] p-1 flex items-center justify-center overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="Collage Story Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
           </div>
           <h2 className="font-display font-extrabold text-2xl text-slate-900 dark:text-white tracking-tight">
             Collage Story Admin Portal

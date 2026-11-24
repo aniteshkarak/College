@@ -61,8 +61,12 @@ export const LandingPage = () => {
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-to-tr from-rose-500/20 via-orange-500/15 to-transparent rounded-full blur-3xl pointer-events-none" />
 
         {/* Launch Pill */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-semibold mb-6 shadow-xs animate-slide-up">
-          <GraduationCap className="w-4 h-4" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-semibold mb-6 shadow-xs animate-slide-up">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-rose-600 to-orange-500 p-0.5 shrink-0 flex items-center justify-center">
+            <div className="w-full h-full bg-white rounded-[3px] p-0.5 flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="Collage Story" className="w-full h-full object-contain" />
+            </div>
+          </div>
           <span>Now Live in Kharagpur, Kolkata & Midnapore Campuses</span>
         </div>
 

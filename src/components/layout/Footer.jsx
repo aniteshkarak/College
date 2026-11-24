@@ -15,8 +15,14 @@ export const Footer = () => {
           {/* Brand info */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-9 h-9 rounded-xl gradient-brand-bg flex items-center justify-center text-white font-display font-bold text-xl shadow-md">
-                C
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-md shrink-0">
+                <div className="w-full h-full bg-white rounded-[10px] p-0.5 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/logo.png"
+                    alt="Collage Story Logo"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
               </div>
               <span className="font-display font-bold text-2xl text-white tracking-tight">
                 Collage Story

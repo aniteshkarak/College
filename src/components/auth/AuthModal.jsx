@@ -879,13 +879,24 @@ export const AuthModal = ({ isOpen, onClose }) => {
           /* 4. LOG IN TAB (GATED ACCESS WITH STATUS NOTICES) */
           /* ====================================================================== */
           <div className="my-5 space-y-4">
-            <div>
-              <h2 className="font-display font-bold text-xl text-slate-900 dark:text-white">
-                Log In to Collage Story
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Only manually verified, approved student accounts have access to Collage Story.
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-orange-500 p-0.5 shadow-md shrink-0">
+                <div className="w-full h-full bg-white rounded-[10px] p-0.5 flex items-center justify-center overflow-hidden">
+                  <img
+                    src="/logo.png"
+                    alt="Collage Story Logo"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              </div>
+              <div>
+                <h2 className="font-display font-bold text-xl text-slate-900 dark:text-white">
+                  Log In to Collage Story
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Only manually verified, approved student accounts have access to Collage Story.
+                </p>
+              </div>
             </div>
 
             <form onSubmit={handleLoginSubmit} className="space-y-3.5 text-xs">
