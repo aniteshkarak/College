@@ -414,6 +414,8 @@ export const AppProvider = ({ children }) => {
 
   // Campus Board Announcements (College exclusive)
   const [announcements, setAnnouncements] = useState(INITIAL_CAMPUS_ANNOUNCEMENTS);
+  const [campusEvents, setCampusEvents] = useState([]);
+  const [savedPosts, setSavedPosts] = useState([]);
   const [boardInfo, setBoardInfo] = useState(null);
   const [dailyAllowance, setDailyAllowance] = useState({
     usedToday: 0,
@@ -1061,6 +1063,52 @@ export const AppProvider = ({ children }) => {
       }
     });
 
+    // Campus Board Real-Time Sync
+    socket.on('new_campus_post', (post) => {
+      setAnnouncements((prev) => [post, ...(prev || []).filter((p) => p.id !== post.id)]);
+    });
+
+    socket.on('post_like_updated', (data) => {
+      setAnnouncements((prev) =>
+        (prev || []).map((p) => {
+          if (p.id === data.postId) {
+            const isSelf = data.userId === currentUser?.id;
+            return {
+              ...p,
+              upvotes: data.likesCount,
+              likesCount: data.likesCount,
+              likes_count: data.likesCount,
+              ...(isSelf ? { isLiked: data.isLiked, is_liked: data.isLiked } : {}),
+            };
+          }
+          return p;
+        })
+      );
+    });
+
+    socket.on('new_post_comment', (data) => {
+      setAnnouncements((prev) =>
+        (prev || []).map((p) => {
+          if (p.id === data.postId) {
+            const currentComments = p.comments || [];
+            const exists = currentComments.some((c) => c.id === data.comment?.id);
+            const nextComments = exists ? currentComments : [...currentComments, data.comment];
+            return {
+              ...p,
+              comments: nextComments,
+              commentsCount: (p.commentsCount || 0) + (exists ? 0 : 1),
+              comments_count: (p.comments_count || 0) + (exists ? 0 : 1),
+            };
+          }
+          return p;
+        })
+      );
+    });
+
+    socket.on('new_campus_event', (event) => {
+      setCampusEvents((prev) => [event, ...(prev || []).filter((e) => e.id !== event.id)]);
+    });
+
     // Handle session revoked
     socket.on('session_revoked', () => {
       addToast('This device session was revoked.', 'error');
@@ -1321,7 +1369,8 @@ export const AppProvider = ({ children }) => {
       const formData = new FormData();
       formData.append('title', annData.title);
       formData.append('content', annData.content);
-      formData.append('category', annData.category || 'Campus Event');
+      formData.append('category', annData.category || 'General');
+      if (annData.postType) formData.append('postType', annData.postType);
       if (annData.isUrgent) formData.append('isUrgent', 'true');
       formData.append('image', imageFile);
       payload = formData;
@@ -1329,20 +1378,23 @@ export const AppProvider = ({ children }) => {
       payload = {
         title: annData.title,
         content: annData.content,
-        category: annData.category || 'Campus Event',
+        category: annData.category || 'General',
+        postType: annData.postType || 'POST',
         isUrgent: Boolean(annData.isUrgent),
+        imageUrl: annData.imageUrl || undefined,
       };
     }
 
     try {
       const res = await api.campus.createAnnouncement(payload);
-      if (res?.data?.announcement) {
-        setAnnouncements((prev) => [res.data.announcement, ...prev]);
+      const newPost = res?.data?.post || res?.data?.announcement;
+      if (newPost) {
+        setAnnouncements((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)]);
       }
       if (res?.data?.allowance) {
         setDailyAllowance(res.data.allowance);
       }
-      addToast(res?.message || `Announcement broadcast to ${currentUser?.college_name || 'your college'} Campus Board! 📢`, 'success');
+      addToast(res?.message || `Post broadcast to ${currentUser?.college_name || 'your college'} Campus Board! 📢`, 'success');
       return res;
     } catch (err) {
       console.warn('Create announcement API error:', err.message);
@@ -1358,16 +1410,17 @@ export const AppProvider = ({ children }) => {
   const handleUpdateAnnouncement = async (id, updateData) => {
     try {
       const res = await api.campus.updateAnnouncement(id, updateData);
-      if (res?.data?.announcement) {
+      const updated = res?.data?.post || res?.data?.announcement;
+      if (updated) {
         setAnnouncements((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, ...res.data.announcement } : a))
+          prev.map((a) => (a.id === id ? { ...a, ...updated } : a))
         );
       }
-      addToast('Announcement updated successfully.', 'success');
+      addToast('Post updated successfully.', 'success');
       return res;
     } catch (err) {
       console.warn('Update announcement API error:', err.message);
-      addToast(err.message || 'Could not update announcement', 'error');
+      addToast(err.message || 'Could not update post', 'error');
       throw err;
     }
   };
@@ -1379,25 +1432,79 @@ export const AppProvider = ({ children }) => {
       if (res?.data?.allowance) {
         setDailyAllowance(res.data.allowance);
       }
-      addToast('Announcement deleted from Campus Board.', 'info');
+      addToast('Post deleted from Campus Board.', 'info');
       return res;
     } catch (err) {
       console.warn('Delete announcement API error:', err.message);
-      addToast(err.message || 'Could not delete announcement', 'error');
+      addToast(err.message || 'Could not delete post', 'error');
       throw err;
     }
   };
 
-  const handleUpvoteAnnouncement = async (annId) => {
+  const handleToggleLikePost = async (postId) => {
+    // Optimistic toggle
     setAnnouncements((prev) =>
-      prev.map((a) => (a.id === annId ? { ...a, upvotes: (a.upvotes || 0) + 1 } : a))
+      prev.map((a) => {
+        if (a.id === postId) {
+          const nextIsLiked = !a.isLiked;
+          const delta = nextIsLiked ? 1 : -1;
+          const nextCount = Math.max(0, (a.likesCount ?? a.upvotes ?? 0) + delta);
+          return {
+            ...a,
+            isLiked: nextIsLiked,
+            is_liked: nextIsLiked,
+            upvotes: nextCount,
+            likesCount: nextCount,
+            likes_count: nextCount,
+          };
+        }
+        return a;
+      })
     );
+
     try {
-      await api.campus.upvote(annId);
-      addToast('Upvoted campus announcement!', 'info');
+      const res = await api.campus.likePost(postId);
+      if (res?.data) {
+        setAnnouncements((prev) =>
+          prev.map((a) =>
+            a.id === postId
+              ? {
+                  ...a,
+                  isLiked: res.data.isLiked,
+                  is_liked: res.data.isLiked,
+                  upvotes: res.data.likesCount,
+                  likesCount: res.data.likesCount,
+                  likes_count: res.data.likesCount,
+                }
+              : a
+          )
+        );
+      }
+      return res;
     } catch (err) {
-      console.warn('Upvote API error:', err.message);
+      console.warn('Like post error:', err.message);
+      addToast(err.message || 'Could not like post', 'error');
     }
+  };
+
+  const handleToggleSavePost = async (postId) => {
+    try {
+      setAnnouncements((prev) =>
+        prev.map((a) => (a.id === postId ? { ...a, isSaved: !a.isSaved, is_saved: !a.isSaved } : a))
+      );
+      const res = await api.campus.toggleSavePost(postId);
+      if (res?.data) {
+        addToast(res.data.isSaved ? 'Post saved to bookmarks! 🔖' : 'Removed from bookmarks.', 'info');
+      }
+      return res;
+    } catch (err) {
+      console.warn('Toggle save post error:', err.message);
+      addToast(err.message || 'Could not save post', 'error');
+    }
+  };
+
+  const handleUpvoteAnnouncement = async (annId) => {
+    return handleToggleLikePost(annId);
   };
 
   // SUBSCRIPTION UPGRADE (Free -> Pro 49 -> Unlimited 99 per 28 days)
@@ -1897,6 +2004,10 @@ export const AppProvider = ({ children }) => {
         handleSendGoRequest,
         handleRespondToGoRequest,
         announcements,
+        campusEvents,
+        setCampusEvents,
+        savedPosts,
+        setSavedPosts,
         boardInfo,
         dailyAllowance,
         refreshCampusBoard,
@@ -1904,6 +2015,8 @@ export const AppProvider = ({ children }) => {
         handleUpdateAnnouncement,
         handleDeleteAnnouncement,
         handleUpvoteAnnouncement,
+        handleToggleLikePost,
+        handleToggleSavePost,
         currentPlanConfig,
         handleUpgradePlan,
         currentMood,

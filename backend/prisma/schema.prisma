@@ -138,6 +138,10 @@ model User {
   matchesAsUser2        Match[]              @relation("User2Matches")
   sentMessages          Message[]
   announcements         CampusAnnouncement[]
+  postLikes             PostLike[]
+  postComments          PostComment[]
+  savedPosts            SavedPost[]
+  campusEvents          CampusEvent[]
   reportsFiled          Report[]             @relation("Reporter")
   reportsReceived       Report[]             @relation("ReportedUser")
   blocksInitiated       UserBlock[]          @relation("BlocksInitiated")
@@ -432,19 +436,93 @@ model Message {
 }
 
 model CampusAnnouncement {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   collegeName String
   title       String
   content     String
-  category    String   @default("General")
-  isUrgent    Boolean  @default(false)
-  upvotes     Int      @default(0)
+  category    String         @default("General")
+  postType    String         @default("POST") // POST | ANNOUNCEMENT | EVENT | QUESTION | STUDY
+  isUrgent    Boolean        @default(false)
+  isOfficial  Boolean        @default(false)
+  imageUrl    String?
+  upvotes     Int            @default(0)
   authorId    String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @default(now()) @updatedAt
 
-  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes       PostLike[]
+  comments    PostComment[]
+  savedBy     SavedPost[]
 
   @@index([collegeName])
+  @@index([postType])
+  @@index([createdAt])
+}
+
+model PostLike {
+  id          String             @id @default(uuid())
+  postId      String
+  userId      String
+  createdAt   DateTime           @default(now())
+
+  post        CampusAnnouncement @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model PostComment {
+  id          String             @id @default(uuid())
+  postId      String
+  authorId    String
+  content     String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  post        CampusAnnouncement @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author      User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model SavedPost {
+  id          String             @id @default(uuid())
+  postId      String
+  userId      String
+  createdAt   DateTime           @default(now())
+
+  post        CampusAnnouncement @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+  @@index([postId])
+}
+
+model CampusEvent {
+  id          String    @id @default(uuid())
+  collegeName String
+  title       String
+  description String
+  category    String    @default("Workshop") // Festival | Technical | Workshop | Cultural | Sports | Meetup
+  eventDate   DateTime
+  location    String
+  organizer   String
+  posterUrl   String?
+  isOfficial  Boolean   @default(false)
+  authorId    String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([collegeName])
+  @@index([eventDate])
 }
 
 model Report {

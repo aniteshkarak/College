@@ -683,7 +683,7 @@ export const api = {
       }),
   },
 
-  // Campus Board (College-Exclusive Announcements)
+  // Campus Board (College-Exclusive Community Platform)
   campus: {
     getBoard: () => request('/campus/board'),
     getAnnouncements: (params = {}) => {
@@ -691,10 +691,12 @@ export const api = {
       if (params.page) sp.set('page', params.page);
       if (params.limit) sp.set('limit', params.limit);
       if (params.category && params.category !== 'All') sp.set('category', params.category);
+      if (params.postType && params.postType !== 'ALL') sp.set('postType', params.postType);
       if (params.search) sp.set('search', params.search);
       const q = sp.toString();
       return request(`/campus/announcements${q ? `?${q}` : ''}`);
     },
+    getPost: (id) => request(`/campus/posts/${encodeURIComponent(id)}`),
     createAnnouncement: (formDataOrJson) => {
       let body;
       let headers = {};
@@ -720,8 +722,80 @@ export const api = {
       }),
     getUsage: () => request('/campus/usage'),
     upvote: (id) =>
-      request(`/campus/announcements/${encodeURIComponent(id)}/upvote`, {
+      request(`/campus/announcements/${encodeURIComponent(id)}/like`, {
         method: 'POST',
+      }),
+    likePost: (id) =>
+      request(`/campus/posts/${encodeURIComponent(id)}/like`, {
+        method: 'POST',
+      }),
+    getComments: (id, params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.page) sp.set('page', params.page);
+      if (params.limit) sp.set('limit', params.limit);
+      const q = sp.toString();
+      return request(`/campus/posts/${encodeURIComponent(id)}/comments${q ? `?${q}` : ''}`);
+    },
+    createComment: (id, content) =>
+      request(`/campus/posts/${encodeURIComponent(id)}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      }),
+    updateComment: (commentId, content) =>
+      request(`/campus/comments/${encodeURIComponent(commentId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content }),
+      }),
+    deleteComment: (commentId) =>
+      request(`/campus/comments/${encodeURIComponent(commentId)}`, {
+        method: 'DELETE',
+      }),
+    toggleSavePost: (id) =>
+      request(`/campus/posts/${encodeURIComponent(id)}/save`, {
+        method: 'POST',
+      }),
+    getSavedPosts: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.page) sp.set('page', params.page);
+      const q = sp.toString();
+      return request(`/campus/saved-posts${q ? `?${q}` : ''}`);
+    },
+    getEvents: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.page) sp.set('page', params.page);
+      if (params.limit) sp.set('limit', params.limit);
+      if (params.category && params.category !== 'All') sp.set('category', params.category);
+      if (params.search) sp.set('search', params.search);
+      const q = sp.toString();
+      return request(`/campus/events${q ? `?${q}` : ''}`);
+    },
+    createEvent: (formDataOrJson) => {
+      let body;
+      let headers = {};
+      if (formDataOrJson instanceof FormData) {
+        body = formDataOrJson;
+      } else {
+        body = JSON.stringify(formDataOrJson);
+      }
+      return request('/campus/events', {
+        method: 'POST',
+        headers,
+        body,
+      });
+    },
+    deleteEvent: (id) =>
+      request(`/campus/events/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }),
+    reportPost: (id, data) =>
+      request(`/campus/posts/${encodeURIComponent(id)}/report`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    reportComment: (id, data) =>
+      request(`/campus/comments/${encodeURIComponent(id)}/report`, {
+        method: 'POST',
+        body: JSON.stringify(data),
       }),
   },
 

@@ -165,6 +165,10 @@ export const initSocketServer = async (httpServer, app) => {
     socket.join(`user:${user.id}`);
     socket.join(`user_${user.id}`);
 
+    if (user.collegeName) {
+      socket.join(`college:${user.collegeName.trim().toLowerCase()}`);
+    }
+
     if (socket.sessionId) {
       socket.join(`session:${socket.sessionId}`);
     }
@@ -226,6 +230,19 @@ export const initSocketServer = async (httpServer, app) => {
       if (conversationId) {
         socket.leave(`conversation:${conversationId}`);
         socket.leave(`conv_${conversationId}`);
+      }
+    });
+
+    // 2b. Campus Board: Join / Leave Post Room for comments & live updates
+    socket.on('join_post', (postId) => {
+      if (postId) {
+        socket.join(`post:${postId}`);
+      }
+    });
+
+    socket.on('leave_post', (postId) => {
+      if (postId) {
+        socket.leave(`post:${postId}`);
       }
     });
 
@@ -487,7 +504,7 @@ export const disconnectSessionSockets = (userId, sessionId) => {
       message: 'This device session has been revoked.',
     });
     ioInstance.in(`session:${sessionId}`).disconnectSockets(true);
-  } catch (_) {}
+  } catch (_) { }
 
   const userSockets = userSocketsMap.get(userId);
   if (!userSockets) return;
@@ -497,7 +514,7 @@ export const disconnectSessionSockets = (userId, sessionId) => {
       try {
         socket.emit('session_revoked', { sessionId, message: 'This device session has been revoked.' });
         socket.disconnect(true);
-      } catch (_) {}
+      } catch (_) { }
       userSockets.delete(socket);
     }
   }
@@ -523,7 +540,7 @@ export const disconnectAllUserSessions = (userId, exceptSessionId = null) => {
             message: 'This session has been revoked or signed out.',
           });
           socket.disconnect(true);
-        } catch (_) {}
+        } catch (_) { }
         userSockets.delete(socket);
       }
     }
@@ -538,7 +555,7 @@ export const disconnectAllUserSessions = (userId, exceptSessionId = null) => {
         message: 'All sessions have been revoked. Please log in again.',
       });
       ioInstance.in(`user:${userId}`).disconnectSockets(true);
-    } catch (_) {}
+    } catch (_) { }
   }
 };
 
@@ -615,6 +632,35 @@ export const emitUnreadCount = (recipientId, unreadCount) => {
   ioInstance.to(`user:${recipientId}`).to(`user_${recipientId}`).emit('unread_notification_count', { count: unreadCount, unreadCount });
 };
 
+/**
+ * Campus Board Real-Time Broadcasts
+ */
+export const broadcastCampusPost = (collegeName, post) => {
+  if (!ioInstance || !collegeName) return;
+  ioInstance.to(`college:${collegeName.trim().toLowerCase()}`).emit('new_campus_post', post);
+};
+
+export const broadcastPostComment = (collegeName, postId, comment) => {
+  if (!ioInstance) return;
+  if (collegeName) {
+    ioInstance.to(`college:${collegeName.trim().toLowerCase()}`).emit('new_post_comment', { postId, comment });
+  }
+  ioInstance.to(`post:${postId}`).emit('new_post_comment', { postId, comment });
+};
+
+export const broadcastPostLike = (collegeName, postId, data) => {
+  if (!ioInstance) return;
+  if (collegeName) {
+    ioInstance.to(`college:${collegeName.trim().toLowerCase()}`).emit('post_like_updated', { postId, ...data });
+  }
+  ioInstance.to(`post:${postId}`).emit('post_like_updated', { postId, ...data });
+};
+
+export const broadcastCampusEvent = (collegeName, event) => {
+  if (!ioInstance || !collegeName) return;
+  ioInstance.to(`college:${collegeName.trim().toLowerCase()}`).emit('new_campus_event', event);
+};
+
 export const getIo = () => ioInstance;
 
 export const closeSocketServer = async () => {
@@ -649,6 +695,10 @@ export default {
   broadcastMoodUpdate,
   emitNotification,
   emitUnreadCount,
+  broadcastCampusPost,
+  broadcastPostComment,
+  broadcastPostLike,
+  broadcastCampusEvent,
   notifyConversationBlocked,
   disconnectSessionSockets,
   disconnectAllUserSessions,
