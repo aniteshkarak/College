@@ -1,64 +1,76 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/authMiddleware.js';
-import prisma from '../../config/prisma.js';
+import notificationService from '../../services/notificationService.js';
 import { success, error } from '../../utils/response.js';
 
 const router = Router();
 
-// 1. Get user notifications
+/**
+ * 1. GET /api/v1/notifications
+ * Retrieve paginated notifications for authenticated user
+ * Query parameters: page (number), limit (number), isRead (boolean), type (string)
+ */
 router.get('/', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
+    const { page, limit, isRead, type } = req.query;
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId: currentUserId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    let parsedIsRead;
+    if (isRead === 'true' || isRead === true) parsedIsRead = true;
+    else if (isRead === 'false' || isRead === false) parsedIsRead = false;
 
-    const unreadCount = await prisma.notification.count({
-      where: { userId: currentUserId, isRead: false },
+    const result = await notificationService.getNotifications(currentUserId, {
+      page: parseInt(page, 10) || 1,
+      limit: parseInt(limit, 10) || 20,
+      isRead: parsedIsRead,
+      type: typeof type === 'string' ? type.trim() : undefined,
     });
 
     return success(
       res,
       {
-        notifications: notifications.map((n) => ({
-          id: n.id,
-          type: n.type,
-          title: n.title,
-          body: n.body,
-          data: n.data,
-          read: n.isRead,
-          createdAt: n.createdAt,
-        })),
-        unreadCount,
+        notifications: result.notifications,
+        unreadCount: result.unreadCount,
+        pagination: result.pagination,
       },
-      'User notifications'
+      'User notifications retrieved'
     );
   } catch (err) {
     return error(res, err.message, 500);
   }
 });
 
-// 2. Mark single notification as read
+/**
+ * 2. GET /api/v1/notifications/unread-count
+ * Retrieve current unread notifications count for authenticated user
+ */
+router.get('/unread-count', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const unreadCount = await notificationService.getUnreadCount(currentUserId);
+    return success(res, { unreadCount }, 'Unread notifications count');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+/**
+ * 3. PATCH /api/v1/notifications/:id/read
+ * Mark single notification as read
+ */
 router.patch('/:id/read', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { id } = req.params;
 
-    const notification = await prisma.notification.findFirst({
-      where: { id, userId: currentUserId },
-    });
-
-    if (!notification) {
-      return error(res, 'Notification not found', 404);
+    if (!id || typeof id !== 'string') {
+      return error(res, 'Valid notification ID is required', 400);
     }
 
-    const updated = await prisma.notification.update({
-      where: { id },
-      data: { isRead: true },
-    });
+    const updated = await notificationService.markNotificationAsRead(currentUserId, id);
+    if (!updated) {
+      return error(res, 'Notification not found or unauthorized', 404);
+    }
 
     return success(res, { notification: updated }, 'Notification marked as read');
   } catch (err) {
@@ -66,17 +78,50 @@ router.patch('/:id/read', requireAuth, async (req, res) => {
   }
 });
 
-// 3. Mark all notifications as read
+/**
+ * 4. PATCH /api/v1/notifications/read-all
+ * Mark all notifications as read for authenticated user
+ */
+router.patch('/read-all', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const result = await notificationService.markAllAsRead(currentUserId);
+    return success(res, result, 'All notifications marked as read');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// Alias for backwards compatibility
 router.post('/mark-all-read', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
+    const result = await notificationService.markAllAsRead(currentUserId);
+    return success(res, result, 'All notifications marked as read');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
 
-    await prisma.notification.updateMany({
-      where: { userId: currentUserId, isRead: false },
-      data: { isRead: true },
-    });
+/**
+ * 5. DELETE /api/v1/notifications/:id
+ * Delete single notification belonging to authenticated user
+ */
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { id } = req.params;
 
-    return success(res, null, 'All notifications marked as read');
+    if (!id || typeof id !== 'string') {
+      return error(res, 'Valid notification ID is required', 400);
+    }
+
+    const deleted = await notificationService.deleteNotification(currentUserId, id);
+    if (!deleted) {
+      return error(res, 'Notification not found or unauthorized', 404);
+    }
+
+    return success(res, deleted, 'Notification deleted successfully');
   } catch (err) {
     return error(res, err.message, 500);
   }

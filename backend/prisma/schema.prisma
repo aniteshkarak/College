@@ -141,7 +141,8 @@ model User {
   reportsReceived       Report[]             @relation("ReportedUser")
   blocksInitiated       UserBlock[]          @relation("BlocksInitiated")
   blocksReceived        UserBlock[]          @relation("BlocksReceived")
-  notifications         Notification[]
+  notifications         Notification[]       @relation("RecipientNotifications")
+  actedNotifications    Notification[]       @relation("ActorNotifications")
 }
 
 // -------------------------------------------------------------
@@ -437,22 +438,27 @@ model Report {
 }
 
 // -------------------------------------------------------------
-// 12. NOTIFICATIONS (In-app notification system)
+// 12. NOTIFICATIONS (In-app real-time notification system)
 // -------------------------------------------------------------
 model Notification {
-  id          String   @id @default(uuid())
-  userId      String
-  type        String   // APPLICATION_SUBMITTED | APPLICATION_APPROVED | APPLICATION_REJECTED | CORRECTION_REQUESTED | LIKE | MATCH | TEXT_MESSAGE | VOICE_MESSAGE | CAMPUS
-  title       String
-  body        String
-  data        Json?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id              String    @id @default(uuid())
+  recipientId     String    @map("userId")
+  actorId         String?
+  type            String    // NEW_LIKE | LIKE_ACCEPTED | NEW_MESSAGE | NEW_VOICE_MESSAGE | CAMPUS_ANNOUNCEMENT | ADMIN_NOTICE | REPORT_UPDATE | PROFILE_UPDATE
+  title           String
+  message         String    @map("body")
+  relatedEntityId String?
+  data            Json?
+  isRead          Boolean   @default(false)
+  readAt          DateTime?
+  createdAt       DateTime  @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipient       User      @relation("RecipientNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor           User?     @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: SetNull)
 
-  @@index([userId, isRead])
-  @@index([userId, createdAt])
+  @@index([recipientId, isRead])
+  @@index([recipientId, createdAt])
+  @@index([recipientId, type])
 }
 
 // -------------------------------------------------------------

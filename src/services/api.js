@@ -634,14 +634,22 @@ export const api = {
 
   // Notifications
   notifications: {
-    getAll: () => request('/notifications'),
+    getAll: (params) => {
+      const q = params ? `?${new URLSearchParams(params).toString()}` : '';
+      return request(`/notifications${q}`);
+    },
+    getUnreadCount: () => request('/notifications/unread-count'),
     markRead: (id) =>
       request(`/notifications/${encodeURIComponent(id)}/read`, {
         method: 'PATCH',
       }),
     markAllRead: () =>
-      request('/notifications/mark-all-read', {
-        method: 'POST',
+      request('/notifications/read-all', {
+        method: 'PATCH',
+      }),
+    delete: (id) =>
+      request(`/notifications/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
       }),
   },
 

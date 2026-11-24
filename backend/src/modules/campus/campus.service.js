@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import imageService from '../../services/imageService.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
+import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
 
 export const MAX_DAILY_ANNOUNCEMENTS = 5;
 
@@ -315,6 +316,41 @@ export const campusService = {
 
       return created;
     });
+
+    // Notify verified students in the same college asynchronously
+    (async () => {
+      try {
+        const peers = await prisma.education.findMany({
+          where: {
+            collegeName: { equals: collegeName, mode: 'insensitive' },
+            userId: { not: user.id },
+            user: { accountStatus: 'ACTIVE', verificationStatus: 'APPROVED' },
+          },
+          select: { userId: true },
+          take: 200,
+        });
+
+        const CHUNK_SIZE = 25;
+        for (let i = 0; i < peers.length; i += CHUNK_SIZE) {
+          const chunk = peers.slice(i, i + CHUNK_SIZE);
+          await Promise.all(
+            chunk.map((peer) =>
+              notificationService.createNotification({
+                recipientId: peer.userId,
+                actorId: user.id,
+                type: NOTIFICATION_TYPES.CAMPUS_ANNOUNCEMENT,
+                title: `New announcement in ${collegeName}`,
+                message: data.title?.trim() || 'A new announcement has been posted.',
+                relatedEntityId: announcement.id,
+                data: { announcementId: announcement.id, collegeName },
+              }).catch(() => {})
+            )
+          );
+        }
+      } catch (err) {
+        // Notification failure should not impact announcement creation
+      }
+    })();
 
     const allowance = await getDailyAllowance(user.id);
     return {

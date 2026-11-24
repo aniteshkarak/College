@@ -4,6 +4,7 @@ import applicationsController from './applications.controller.js';
 import prisma from '../../config/prisma.js';
 import { success, error } from '../../utils/response.js';
 import socketService from '../../services/socketService.js';
+import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
 
 import adminAuthRoutes from './auth/adminAuth.routes.js';
 import {
@@ -250,6 +251,18 @@ router.post('/reports/:id/resolve', requireAdminAuth, requireSupportOrSuperAdmin
       return r;
     });
 
+    if (report.reporterId) {
+      notificationService.createNotification({
+        recipientId: report.reporterId,
+        actorId: null,
+        type: NOTIFICATION_TYPES.REPORT_UPDATE,
+        title: 'Report Update',
+        message: `Your report status has been updated: Resolved (${resolutionNotes || 'Action taken.'})`,
+        relatedEntityId: report.id,
+        data: { reportId: report.id, status: 'RESOLVED' },
+      }).catch(() => {});
+    }
+
     return success(res, { report: updated }, 'Report resolved successfully');
   } catch (err) {
     return error(res, err.message, 500);
@@ -291,7 +304,67 @@ router.post('/reports/:id/dismiss', requireAdminAuth, requireSupportOrSuperAdmin
       return r;
     });
 
+    if (report.reporterId) {
+      notificationService.createNotification({
+        recipientId: report.reporterId,
+        actorId: null,
+        type: NOTIFICATION_TYPES.REPORT_UPDATE,
+        title: 'Report Update',
+        message: `Your report status has been updated: Dismissed (${dismissReason || 'Reviewed and dismissed.'})`,
+        relatedEntityId: report.id,
+        data: { reportId: report.id, status: 'DISMISSED' },
+      }).catch(() => {});
+    }
+
     return success(res, { report: updated }, 'Report dismissed successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+});
+
+// Broadcast Admin Notice to students
+router.post('/broadcast-notice', requireAdminAuth, requireAdminRoles('SUPER_ADMIN', 'ADMIN'), async (req, res) => {
+  try {
+    const { title, message, targetCollege } = req.body || {};
+    if (!title || typeof title !== 'string' || !title.trim() || title.trim().length > 200) {
+      return error(res, 'Title is required (string, max 200 characters)', 400);
+    }
+    if (!message || typeof message !== 'string' || !message.trim() || message.trim().length > 2000) {
+      return error(res, 'Message is required (string, max 2000 characters)', 400);
+    }
+
+    const where = { accountStatus: 'ACTIVE' };
+    if (targetCollege && typeof targetCollege === 'string' && targetCollege.trim()) {
+      where.education = { collegeName: { equals: targetCollege.trim(), mode: 'insensitive' } };
+    }
+
+    const recipients = await prisma.user.findMany({
+      where,
+      select: { id: true },
+      take: 1000,
+    });
+
+    // Asynchronously dispatch notifications in background chunks so main thread isn't blocked
+    setImmediate(async () => {
+      const CHUNK_SIZE = 25;
+      for (let i = 0; i < recipients.length; i += CHUNK_SIZE) {
+        const chunk = recipients.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map((r) =>
+            notificationService.createNotification({
+              recipientId: r.id,
+              actorId: null,
+              type: NOTIFICATION_TYPES.ADMIN_NOTICE,
+              title: title.trim(),
+              message: message.trim(),
+              data: { broadcastBy: req.admin.id },
+            }).catch(() => {})
+          )
+        );
+      }
+    });
+
+    return success(res, { recipientCount: recipients.length }, 'Admin notice broadcast successfully');
   } catch (err) {
     return error(res, err.message, 500);
   }

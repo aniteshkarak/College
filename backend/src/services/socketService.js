@@ -8,6 +8,8 @@ import prisma from '../config/prisma.js';
 
 // Global Socket.IO instance and multi-device connection registry
 let ioInstance = null;
+let pubClientInstance = null;
+let subClientInstance = null;
 
 // Registry: Map<userId, Set<socket>>
 const userSocketsMap = new Map();
@@ -79,11 +81,13 @@ export const initSocketServer = async (httpServer, app) => {
         enableOfflineQueue: false,
         retryStrategy: () => null,
       });
-      pubClient.on('error', () => {});
+      pubClient.on('error', () => { });
       const subClient = pubClient.duplicate();
-      subClient.on('error', () => {});
+      subClient.on('error', () => { });
 
       await Promise.all([pubClient.connect(), subClient.connect()]);
+      pubClientInstance = pubClient;
+      subClientInstance = subClient;
       io.adapter(createAdapter(pubClient, subClient));
       logger.info('⚡ Socket.IO Redis adapter attached for horizontal scaling across instances');
     } catch (err) {
@@ -547,13 +551,59 @@ export const broadcastMoodUpdate = (userId, mood, moodUpdatedAt = null) => {
   });
 };
 
+/**
+ * Emit real-time notification to all active devices of recipient
+ */
+export const emitNotification = (recipientId, notification, unreadCount = null) => {
+  if (!ioInstance || !recipientId) return;
+  ioInstance.to(`user:${recipientId}`).to(`user_${recipientId}`).emit('new_notification', notification);
+  if (typeof unreadCount === 'number') {
+    ioInstance.to(`user:${recipientId}`).to(`user_${recipientId}`).emit('unread_notification_count', { count: unreadCount, unreadCount });
+  }
+};
+
+/**
+ * Emit unread notification count update across all recipient devices
+ */
+export const emitUnreadCount = (recipientId, unreadCount) => {
+  if (!ioInstance || !recipientId) return;
+  ioInstance.to(`user:${recipientId}`).to(`user_${recipientId}`).emit('unread_notification_count', { count: unreadCount, unreadCount });
+};
+
 export const getIo = () => ioInstance;
+
+export const closeSocketServer = async () => {
+  if (ioInstance) {
+    try {
+      ioInstance.close();
+    } catch (e) {}
+    ioInstance = null;
+  }
+  if (pubClientInstance) {
+    try {
+      pubClientInstance.removeAllListeners();
+      pubClientInstance.on('error', () => {});
+      pubClientInstance.disconnect();
+    } catch (e) {}
+    pubClientInstance = null;
+  }
+  if (subClientInstance) {
+    try {
+      subClientInstance.removeAllListeners();
+      subClientInstance.on('error', () => {});
+      subClientInstance.disconnect();
+    } catch (e) {}
+    subClientInstance = null;
+  }
+};
 
 export default {
   initSocketServer,
   broadcastNewMessage,
   broadcastMessageRead,
   broadcastMoodUpdate,
+  emitNotification,
+  emitUnreadCount,
   notifyConversationBlocked,
   disconnectSessionSockets,
   disconnectUserSockets,

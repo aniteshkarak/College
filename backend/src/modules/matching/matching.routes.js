@@ -4,6 +4,7 @@ import prisma from '../../config/prisma.js';
 import { success, error } from '../../utils/response.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
 import socketService from '../../services/socketService.js';
+import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -239,18 +240,18 @@ router.post('/send-request', requireAuth, async (req, res) => {
         data: { sentRequestsCount: { increment: 1 } },
       });
 
-      // Create in-app notification for receiver
-      await tx.notification.create({
-        data: {
-          userId: receiverId,
-          type: 'LIKE',
-          title: 'New Like Received',
-          body: `${sender.displayName} sent you a match request! Check your Match Requests.`,
-          data: { senderId: sender.id, requestId: r.id },
-        },
-      });
-
       return r;
+    });
+
+    // Create real-time in-app notification for receiver with Socket.IO emission
+    await notificationService.createNotification({
+      recipientId: receiverId,
+      actorId: sender.id,
+      type: NOTIFICATION_TYPES.NEW_LIKE,
+      title: 'New Like Received',
+      message: `${sender.displayName} sent you a like request! Check your Match Requests.`,
+      relatedEntityId: newRequest.id,
+      data: { senderId: sender.id, requestId: newRequest.id },
     });
 
     return success(res, { request: newRequest }, 'Match request sent', 201);
@@ -365,18 +366,18 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
         },
       });
 
-      // Create notification for sender
-      await tx.notification.create({
-        data: {
-          userId: matchReq.senderId,
-          type: 'MATCH',
-          title: 'Mutual Match!',
-          body: `${currentUser.displayName} accepted your match request! You are now Mutual Friends.`,
-          data: { matchId: match.id, conversationId: conv.id },
-        },
-      });
-
       return { match, conversation: conv };
+    });
+
+    // Create real-time notification for sender with Socket.IO emission
+    await notificationService.createNotification({
+      recipientId: matchReq.senderId,
+      actorId: currentUserId,
+      type: NOTIFICATION_TYPES.LIKE_ACCEPTED,
+      title: 'Mutual Match!',
+      message: `${currentUser.displayName} accepted your match request! You are now Mutual Friends.`,
+      relatedEntityId: result.match.id,
+      data: { matchId: result.match.id, conversationId: result.conversation.id },
     });
 
     return success(res, result, 'Match accepted! You are now Mutual Friends.');

@@ -478,6 +478,7 @@ export const AppProvider = ({ children }) => {
 
   // Notifications & Modals
   const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
   const [blockTarget, setBlockTarget] = useState(null);
@@ -493,8 +494,26 @@ export const AppProvider = ({ children }) => {
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true, isRead: true })));
+    setUnreadNotificationsCount(0);
     api.notifications.markAllRead().catch((err) => console.warn('Sync markAllNotificationsRead:', err.message));
+  };
+
+  const markNotificationRead = (id) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true, isRead: true } : n))
+    );
+    setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+    api.notifications.markRead(id).catch((err) => console.warn('Sync markNotificationRead:', err.message));
+  };
+
+  const deleteNotification = (id) => {
+    const target = notifications.find((n) => n.id === id);
+    if (target && !target.read && !target.isRead) {
+      setUnreadNotificationsCount((prev) => Math.max(0, prev - 1));
+    }
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    api.notifications.delete(id).catch((err) => console.warn('Sync deleteNotification:', err.message));
   };
 
   // Load live data from PostgreSQL Backend whenever student is authenticated
@@ -627,22 +646,40 @@ export const AppProvider = ({ children }) => {
       })
       .catch((err) => console.warn('Could not load conversations:', err.message));
 
-    // 5. Fetch Notifications
+    // 5. Fetch Notifications & Unread Count
     api.notifications.getAll()
       .then((res) => {
         if (!isMounted) return;
         const notifs = res?.data?.notifications || [];
         const mapped = notifs.map((n) => ({
           id: n.id,
-          type: (n.type || 'system').toLowerCase(),
+          type: n.type || 'system',
+          rawType: n.type || 'system',
           title: n.title,
-          body: n.body,
+          body: n.message || n.body || '',
+          message: n.message || n.body || '',
+          relatedEntityId: n.relatedEntityId,
+          data: n.data,
           time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
-          read: n.read ?? n.isRead ?? false,
+          createdAt: n.createdAt,
+          read: n.isRead ?? n.read ?? false,
+          isRead: n.isRead ?? n.read ?? false,
+          actor: n.actor,
         }));
         setNotifications(mapped);
+        const unread = mapped.filter((n) => !n.read).length;
+        setUnreadNotificationsCount(unread);
       })
       .catch((err) => console.warn('Could not load notifications:', err.message));
+
+    api.notifications.getUnreadCount()
+      .then((res) => {
+        if (!isMounted) return;
+        if (typeof res?.data?.unreadCount === 'number') {
+          setUnreadNotificationsCount(res.data.unreadCount);
+        }
+      })
+      .catch(() => {});
 
     // 6. Fetch Campus Board Announcements & Daily Allowance
     api.campus.getAnnouncements()
@@ -958,6 +995,39 @@ export const AppProvider = ({ children }) => {
         }
         return prev;
       });
+    });
+
+    // Handle real-time incoming notifications
+    socket.on('new_notification', (notif) => {
+      const formatted = {
+        id: notif.id,
+        type: notif.type || 'system',
+        rawType: notif.type || 'system',
+        title: notif.title,
+        body: notif.message || notif.body || '',
+        message: notif.message || notif.body || '',
+        relatedEntityId: notif.relatedEntityId,
+        data: notif.data,
+        time: notif.createdAt ? new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now',
+        createdAt: notif.createdAt || new Date().toISOString(),
+        read: false,
+        isRead: false,
+        actor: notif.actor,
+      };
+      setNotifications((prev) => [formatted, ...prev.filter((n) => n.id !== notif.id)]);
+      setUnreadNotificationsCount((prev) => prev + 1);
+      playNotificationSound('notification');
+      if (notif.title) {
+        addToast(notif.title, 'info');
+      }
+    });
+
+    // Handle real-time unread notification count synchronization
+    socket.on('unread_notification_count', (payload) => {
+      const count = typeof payload?.count === 'number' ? payload.count : payload?.unreadCount;
+      if (typeof count === 'number') {
+        setUnreadNotificationsCount(count);
+      }
     });
 
     // Handle session revoked
@@ -1814,7 +1884,10 @@ export const AppProvider = ({ children }) => {
         adminReports,
         adminAuditLogs,
         notifications,
+        unreadNotificationsCount,
         markAllNotificationsRead,
+        markNotificationRead,
+        deleteNotification,
         isPremiumModalOpen,
         setIsPremiumModalOpen,
         reportTarget,

@@ -95,10 +95,10 @@ describe('Collage Story Full-Stack End-to-End User Journey Test Suite', () => {
 
   after(async () => {
     // Graceful teardown
-    await prisma.$disconnect().catch(() => {});
+    await prisma.$disconnect().catch(() => { });
     try {
       redis.disconnect();
-    } catch {}
+    } catch { }
   });
 
   // =========================================================================
@@ -372,7 +372,7 @@ describe('Collage Story Full-Stack End-to-End User Journey Test Suite', () => {
       .set('Authorization', `Bearer ${studentBToken}`);
 
     assert.equal(notifRes.status, 200);
-    const likeNotif = notifRes.body.data.notifications.find((n) => n.type === 'LIKE' || n.type === 'MATCH_REQUEST');
+    const likeNotif = notifRes.body.data.notifications.find((n) => n.type === 'NEW_LIKE' || n.type === 'LIKE' || n.type === 'MATCH_REQUEST');
     assert.ok(likeNotif, 'Student B should have a LIKE / MATCH_REQUEST notification');
   });
 
@@ -508,7 +508,7 @@ describe('Collage Story Full-Stack End-to-End User Journey Test Suite', () => {
     assert.ok(dbConversation.messages.length >= 2);
 
     const dbNotifications = await prisma.notification.findMany({
-      where: { userId: { in: [studentAUser.id, studentBUser.id] } },
+      where: { recipientId: { in: [studentAUser.id, studentBUser.id] } },
     });
     assert.ok(dbNotifications.length >= 2);
   });

@@ -6,6 +6,7 @@ import { audioUpload } from '../../middleware/uploadMiddleware.js';
 import { success, error } from '../../utils/response.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
 import socketService from '../../services/socketService.js';
+import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -311,18 +312,20 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
         data: { updatedAt: new Date() },
       });
 
-      // In-app notification for recipient
-      await tx.notification.create({
-        data: {
-          userId: recipientId,
-          type: 'TEXT_MESSAGE',
-          title: `New message from ${req.user.displayName}`,
-          body: parsed.data.content.length > 60 ? parsed.data.content.substring(0, 57) + '...' : parsed.data.content,
-          data: { conversationId: conversation.id, messageId: msg.id },
-        },
-      });
-
       return msg;
+    });
+
+    // In-app real-time notification for recipient with Socket.IO emission
+    await notificationService.createNotification({
+      recipientId,
+      actorId: currentUserId,
+      type: parsed.data.messageType === 'VOICE_NOTE' ? NOTIFICATION_TYPES.NEW_VOICE_MESSAGE : NOTIFICATION_TYPES.NEW_MESSAGE,
+      title: parsed.data.messageType === 'VOICE_NOTE' ? `Voice note from ${req.user.displayName}` : `New message from ${req.user.displayName}`,
+      message: parsed.data.messageType === 'VOICE_NOTE'
+        ? `Sent an audio voice message (${parsed.data.voiceDuration || 0}s).`
+        : (parsed.data.content.length > 80 ? parsed.data.content.substring(0, 77) + '...' : parsed.data.content),
+      relatedEntityId: conversation.id,
+      data: { conversationId: conversation.id, messageId: newMessage.id },
     });
 
     if (idempotencyKey) {
@@ -400,18 +403,18 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
           data: { updatedAt: new Date() },
         });
 
-        // In-app notification for recipient
-        await tx.notification.create({
-          data: {
-            userId: recipientId,
-            type: 'VOICE_MESSAGE',
-            title: `Voice note from ${req.user.displayName}`,
-            body: `Sent an audio voice message (${durationSeconds}s).`,
-            data: { conversationId: conversation.id, messageId: msg.id },
-          },
-        });
-
         return msg;
+      });
+
+      // In-app real-time notification for recipient with Socket.IO emission
+      await notificationService.createNotification({
+        recipientId,
+        actorId: currentUserId,
+        type: NOTIFICATION_TYPES.NEW_VOICE_MESSAGE,
+        title: `Voice note from ${req.user.displayName}`,
+        message: `Sent an audio voice message (${durationSeconds}s).`,
+        relatedEntityId: conversation.id,
+        data: { conversationId: conversation.id, messageId: newMessage.id, duration: durationSeconds },
       });
 
       // Broadcast voice message metadata to recipient and sender's other devices
