@@ -210,9 +210,15 @@ async function request(endpoint, options = {}) {
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const error = new Error(data?.message || `HTTP Error ${response.status}`);
+      let defaultMsg = `HTTP Error ${response.status}`;
+      if (response.status === 500) {
+        defaultMsg = 'Internal Server Error (500): The server encountered an issue processing your request. Please try again.';
+      } else if (response.status === 502 || response.status === 504) {
+        defaultMsg = 'Gateway / Proxy Error: Unable to reach backend service. Please ensure the backend is running.';
+      }
+      const error = new Error(data?.message || data?.error || defaultMsg);
       error.status = response.status;
-      error.code = data?.error || 'API_ERROR';
+      error.code = data?.error || data?.code || 'API_ERROR';
       error.details = data?.details || null;
       error.data = data;
       throw error;
