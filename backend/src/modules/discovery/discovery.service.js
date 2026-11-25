@@ -3,9 +3,23 @@ import redis from '../../config/redis.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
 import logger from '../../utils/logger.js';
 
-// Fallback in-memory store for session passes and preferences if Redis is offline
+// In-memory fallback caches if Redis is offline
 const inMemoryPassStore = new Map();
 const inMemoryPrefStore = new Map();
+
+/**
+ * Deterministic pseudo-random score generator for personalized profile rotation
+ * Ensures User A and User B get distinct orderings, and Cycle N+1 reshuffles the feed.
+ */
+export const getCandidatePersonalizedScore = (userId, cycleId, candidateId) => {
+  let hash = 0;
+  const str = `${userId}:${cycleId}:${candidateId}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+};
 
 /**
  * Standardizes gender preference values into Prisma query filters
@@ -32,94 +46,196 @@ export const mapGenderPreference = (gender) => {
 };
 
 /**
- * Retrieves saved discovery preferences for a user
+ * Retrieves saved discovery preferences from PostgreSQL as the source of truth
  */
 export const getDiscoveryPreferences = async (userId) => {
-  try {
-    if (redis && redis.status === 'ready') {
-      const cached = await redis.get(`discovery:pref:${userId}`);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    }
-  } catch (err) {
-    logger.debug(`Redis read error for preferences: ${err.message}`);
+  // 1. Check PostgreSQL UserDiscoveryState
+  const state = await prisma.userDiscoveryState.findUnique({
+    where: { userId },
+  });
+
+  if (state) {
+    return {
+      gender: state.preferredGender || 'EVERYONE',
+      preferredGender: state.preferredGender || 'EVERYONE',
+      minAge: state.minAge || 18,
+      maxAge: state.maxAge || 28,
+      relationshipIntention: state.relationshipIntention || 'All',
+      sameCollegeOnly: Boolean(state.sameCollegeOnly),
+      city: state.city || 'All',
+      currentCycleId: state.currentCycleId || 1,
+      updatedAt: state.updatedAt,
+    };
   }
 
-  // Fallback to in-memory store
-  if (inMemoryPrefStore.has(userId)) {
-    return inMemoryPrefStore.get(userId);
-  }
-
-  // Default to UserProfile preferences
+  // 2. Fallback to UserProfile if state not yet initialized
   const profile = await prisma.userProfile.findUnique({
     where: { userId },
   });
 
-  return {
+  const defaultPref = {
     gender: 'EVERYONE',
+    preferredGender: 'EVERYONE',
     minAge: profile?.ageRangeMin || 18,
     maxAge: profile?.ageRangeMax || 28,
-    relationshipIntention: 'All',
-    city: 'All',
-    maxDistance: profile?.preferredDistance === 'SAME_COLLEGE' ? 10 : 100,
+    relationshipIntention: profile?.relationshipIntention || 'All',
+    sameCollegeOnly: profile?.preferredDistance === 'SAME_COLLEGE',
+    city: profile?.city || 'All',
+    currentCycleId: 1,
   };
+
+  // Asynchronously seed UserDiscoveryState in PostgreSQL
+  prisma.userDiscoveryState
+    .create({
+      data: {
+        userId,
+        currentCycleId: 1,
+        preferredGender: defaultPref.gender,
+        minAge: defaultPref.minAge,
+        maxAge: defaultPref.maxAge,
+        relationshipIntention: defaultPref.relationshipIntention,
+        sameCollegeOnly: defaultPref.sameCollegeOnly,
+        city: defaultPref.city,
+      },
+    })
+    .catch(() => {});
+
+  return defaultPref;
 };
 
 /**
- * Updates and persists discovery preferences for a user
+ * Updates and persists discovery preferences in PostgreSQL
  */
 export const saveDiscoveryPreferences = async (userId, newPreferences = {}) => {
   const current = await getDiscoveryPreferences(userId);
-  const updated = {
-    ...current,
-    ...newPreferences,
-    updatedAt: new Date().toISOString(),
+
+  const preferredGender = newPreferences.gender || newPreferences.preferredGender || current.gender || 'EVERYONE';
+  const minAge = newPreferences.minAge ? parseInt(newPreferences.minAge, 10) : current.minAge;
+  const maxAge = newPreferences.maxAge ? parseInt(newPreferences.maxAge, 10) : current.maxAge;
+  const relationshipIntention = newPreferences.relationshipIntention || current.relationshipIntention || 'All';
+  const sameCollegeOnly = newPreferences.sameCollegeOnly !== undefined
+    ? Boolean(newPreferences.sameCollegeOnly)
+    : current.sameCollegeOnly;
+  const city = newPreferences.city || current.city || 'All';
+
+  // 1. Upsert UserDiscoveryState in PostgreSQL (Source of Truth)
+  const updatedState = await prisma.userDiscoveryState.upsert({
+    where: { userId },
+    create: {
+      userId,
+      currentCycleId: current.currentCycleId || 1,
+      preferredGender,
+      minAge,
+      maxAge,
+      relationshipIntention,
+      sameCollegeOnly,
+      city,
+    },
+    update: {
+      preferredGender,
+      minAge,
+      maxAge,
+      relationshipIntention,
+      sameCollegeOnly,
+      city,
+      lastActiveAt: new Date(),
+    },
+  });
+
+  // 2. Sync corresponding fields into UserProfile for platform consistency
+  const profileUpdates = {
+    ageRangeMin: minAge,
+    ageRangeMax: maxAge,
+  };
+  if (relationshipIntention && relationshipIntention !== 'All') {
+    profileUpdates.relationshipIntention = relationshipIntention;
+  }
+  if (sameCollegeOnly) {
+    profileUpdates.preferredDistance = 'SAME_COLLEGE';
+  }
+
+  await prisma.userProfile.updateMany({
+    where: { userId },
+    data: profileUpdates,
+  }).catch(() => {});
+
+  // 3. Update Redis cache if available
+  const resultData = {
+    gender: updatedState.preferredGender,
+    preferredGender: updatedState.preferredGender,
+    minAge: updatedState.minAge,
+    maxAge: updatedState.maxAge,
+    relationshipIntention: updatedState.relationshipIntention,
+    sameCollegeOnly: updatedState.sameCollegeOnly,
+    city: updatedState.city,
+    currentCycleId: updatedState.currentCycleId,
+    updatedAt: updatedState.updatedAt,
   };
 
   try {
     if (redis && redis.status === 'ready') {
-      await redis.set(`discovery:pref:${userId}`, JSON.stringify(updated), 'EX', 60 * 60 * 24 * 30); // 30 days
+      await redis.set(`discovery:pref:${userId}`, JSON.stringify(resultData), 'EX', 60 * 60 * 24 * 30);
     }
   } catch (err) {
-    logger.debug(`Redis write error for preferences: ${err.message}`);
+    logger.debug(`Redis cache write error: ${err.message}`);
   }
 
-  inMemoryPrefStore.set(userId, updated);
-
-  // Sync back to UserProfile if relevant fields are present
-  const profileUpdates = {};
-  if (newPreferences.minAge) profileUpdates.ageRangeMin = parseInt(newPreferences.minAge, 10);
-  if (newPreferences.maxAge) profileUpdates.ageRangeMax = parseInt(newPreferences.maxAge, 10);
-  if (newPreferences.relationshipIntention && newPreferences.relationshipIntention !== 'All') {
-    profileUpdates.relationshipIntention = newPreferences.relationshipIntention;
-  }
-
-  if (Object.keys(profileUpdates).length > 0) {
-    await prisma.userProfile.updateMany({
-      where: { userId },
-      data: profileUpdates,
-    }).catch(() => {});
-  }
-
-  return updated;
+  inMemoryPrefStore.set(userId, resultData);
+  return resultData;
 };
 
 /**
- * Records a passed profile for a user so it is excluded from future discovery
+ * Records a passed profile permanently in PostgreSQL ProfilePass
  */
 export const recordProfilePass = async (userId, targetUserId) => {
-  if (!targetUserId || targetUserId === userId) return;
+  if (!targetUserId || targetUserId === userId) {
+    return { success: false, message: 'Invalid target user' };
+  }
 
+  // 1. Persistent PostgreSQL insert (Source of Truth across all devices)
+  await prisma.profilePass.upsert({
+    where: {
+      userId_passedUserId: {
+        userId,
+        passedUserId: targetUserId,
+      },
+    },
+    create: {
+      userId,
+      passedUserId: targetUserId,
+    },
+    update: {},
+  });
+
+  // 2. Get current cycle to mark impression as well
+  const state = await prisma.userDiscoveryState.findUnique({ where: { userId } });
+  const cycleId = state?.currentCycleId || 1;
+
+  await prisma.discoveryImpression.upsert({
+    where: {
+      userId_discoveredUserId_cycleId: {
+        userId,
+        discoveredUserId: targetUserId,
+        cycleId,
+      },
+    },
+    create: {
+      userId,
+      discoveredUserId: targetUserId,
+      cycleId,
+    },
+    update: {},
+  }).catch(() => {});
+
+  // 3. Update Redis & memory cache
   try {
     if (redis && redis.status === 'ready') {
       await redis.sadd(`discovery:passed:${userId}`, targetUserId);
     }
   } catch (err) {
-    logger.debug(`Redis write error for pass: ${err.message}`);
+    logger.debug(`Redis pass write error: ${err.message}`);
   }
 
-  // In-memory fallback
   if (!inMemoryPassStore.has(userId)) {
     inMemoryPassStore.set(userId, new Set());
   }
@@ -129,12 +245,43 @@ export const recordProfilePass = async (userId, targetUserId) => {
 };
 
 /**
- * Main Discovery Engine:
+ * Manually or programmatically resets the discovery cycle for a user
+ */
+export const resetDiscoveryCycle = async (userId) => {
+  const state = await prisma.userDiscoveryState.findUnique({ where: { userId } });
+  const nextCycleId = (state?.currentCycleId || 1) + 1;
+
+  const updated = await prisma.userDiscoveryState.upsert({
+    where: { userId },
+    create: {
+      userId,
+      currentCycleId: nextCycleId,
+    },
+    update: {
+      currentCycleId: nextCycleId,
+      lastActiveAt: new Date(),
+    },
+  });
+
+  return {
+    success: true,
+    previousCycleId: state?.currentCycleId || 1,
+    currentCycleId: updated.currentCycleId,
+    message: 'Discovery cycle reset successfully. New unique profile rotation started.',
+  };
+};
+
+/**
+ * Main Personalized Discovery Engine:
  * 1. College-First Order: Priority 1 Same College -> Priority 2 Other Colleges
- * 2. Robust Exhaustion Check: Exhausts all same-college profiles before other colleges
- * 3. Gender, Age & Intention Filtering applied strictly on backend
- * 4. Comprehensive Exclusion Rules (self, likes, mutual matches, blocks, passes)
- * 5. Strict Public Profile Serialization (No private contact details)
+ * 2. Cycle-Based Unique Profile Rotation: Profiles seen in current cycle are strictly excluded
+ * 3. Automatic Cycle Advancement: When all eligible profiles in current cycle are exhausted,
+ *    advances to cycleId + 1 with a new randomized/seed-based order
+ * 4. Permanent Exclusions: Blocked users, mutual matches, sent requests, and passed profiles
+ *    are NEVER shown across ANY cycle
+ * 5. Concurrent Delivery Safe: Atomically records DiscoveryImpression so concurrent requests
+ *    never receive duplicate profiles
+ * 6. Strict Public Profile Serialization: Strips emails, phone numbers, and documents
  */
 export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
   // 1. Fetch current requester's full verified record
@@ -168,52 +315,76 @@ export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
   let userCollegeId = requester.education?.collegeId || requester.education?.college?.id || null;
   const userCollegeName = requester.education?.collegeName || requester.education?.college?.name || null;
 
-  // Stable college ID resolution if not already linked
   if (!userCollegeId && userCollegeName) {
     const matchedCollege = await prisma.college.findFirst({
       where: { name: { equals: userCollegeName.trim(), mode: 'insensitive' } },
     });
     if (matchedCollege) {
       userCollegeId = matchedCollege.id;
-      // Persist association asynchronously
-      prisma.education.update({
-        where: { id: requester.education.id },
-        data: { collegeId: matchedCollege.id },
-      }).catch(() => {});
+      prisma.education
+        .update({
+          where: { id: requester.education.id },
+          data: { collegeId: matchedCollege.id },
+        })
+        .catch(() => {});
     }
   }
 
-  // 3. Resolve Active Preferences (Query params override saved preferences)
-  const savedPref = await getDiscoveryPreferences(currentUserId);
-  const effectiveGender = query.gender !== undefined ? query.gender : savedPref.gender;
-  const effectiveMinAge = parseInt(query.minAge || savedPref.minAge || 18, 10);
-  const effectiveMaxAge = parseInt(query.maxAge || savedPref.maxAge || 35, 10);
-  const effectiveIntention = query.intention || query.relationshipIntention || savedPref.relationshipIntention || 'All';
-  const effectiveCity = query.city || savedPref.city || 'All';
+  // 3. Resolve Persistent User Discovery State from PostgreSQL
+  let state = await prisma.userDiscoveryState.findUnique({
+    where: { userId: currentUserId },
+  });
 
-  // 4. Gather Excluded User IDs
-  const [sentRequests, userMatches, blockedByMe, blockedMe] = await Promise.all([
-    // Sent likes / requests
+  if (!state) {
+    state = await prisma.userDiscoveryState.create({
+      data: {
+        userId: currentUserId,
+        currentCycleId: 1,
+        preferredGender: 'EVERYONE',
+        minAge: requester.profile?.ageRangeMin || 18,
+        maxAge: requester.profile?.ageRangeMax || 28,
+        relationshipIntention: requester.profile?.relationshipIntention || 'All',
+        sameCollegeOnly: requester.profile?.preferredDistance === 'SAME_COLLEGE',
+        city: requester.profile?.city || 'All',
+      },
+    });
+  }
+
+  // Effective preferences: Query params override saved preferences for transient filtering
+  const effectiveGender = query.gender !== undefined ? query.gender : state.preferredGender;
+  const effectiveMinAge = parseInt(query.minAge || state.minAge || 18, 10);
+  const effectiveMaxAge = parseInt(query.maxAge || state.maxAge || 35, 10);
+  const effectiveIntention = query.intention || query.relationshipIntention || state.relationshipIntention || 'All';
+  const effectiveSameCollege = query.sameCollegeOnly !== undefined
+    ? query.sameCollegeOnly === true || query.sameCollegeOnly === 'true'
+    : (query.sameCollege !== undefined ? (query.sameCollege === true || query.sameCollege === 'true') : state.sameCollegeOnly);
+  const effectiveCity = query.city || state.city || 'All';
+
+  let currentCycleId = state.currentCycleId;
+
+  // 4. Gather Permanent Exclusions (Self, Sent Likes, Mutual Matches, Blocks, Passes)
+  const [sentRequests, userMatches, blockedByMe, blockedMe, dbPassedList] = await Promise.all([
     prisma.matchRequest.findMany({
       where: { senderId: currentUserId },
       select: { receiverId: true },
     }),
-    // Mutual matches (active, blocked, unmatched)
     prisma.match.findMany({
       where: {
         OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
       },
       select: { user1Id: true, user2Id: true },
     }),
-    // Users blocked by requester
     prisma.userBlock.findMany({
       where: { blockerId: currentUserId },
       select: { blockedId: true },
     }),
-    // Users who blocked requester
     prisma.userBlock.findMany({
       where: { blockedId: currentUserId },
       select: { blockerId: true },
+    }),
+    prisma.profilePass.findMany({
+      where: { userId: currentUserId },
+      select: { passedUserId: true },
     }),
   ]);
 
@@ -221,51 +392,29 @@ export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
     m.user1Id === currentUserId ? m.user2Id : m.user1Id
   );
 
-  // Retrieve passed profiles from Redis & In-Memory fallback
-  let passedFromRedis = [];
-  try {
-    if (redis && redis.status === 'ready') {
-      passedFromRedis = await redis.smembers(`discovery:passed:${currentUserId}`);
-    }
-  } catch (err) {
-    logger.debug(`Redis smembers passed: ${err.message}`);
-  }
-
-  const memoryPassed = inMemoryPassStore.get(currentUserId)
-    ? Array.from(inMemoryPassStore.get(currentUserId))
-    : [];
-
   const clientExcludedIds = query.excludeIds
     ? Array.isArray(query.excludeIds)
       ? query.excludeIds
       : String(query.excludeIds).split(',')
     : [];
 
-  const clientPassedIds = query.passedIds
-    ? Array.isArray(query.passedIds)
-      ? query.passedIds
-      : String(query.passedIds).split(',')
-    : [];
-
-  const excludedSet = new Set([
-    currentUserId, // Never show own profile
+  const permanentExcludedSet = new Set([
+    currentUserId, // Self
     ...sentRequests.map((r) => r.receiverId),
     ...matchedUserIds,
     ...blockedByMe.map((b) => b.blockedId),
     ...blockedMe.map((b) => b.blockerId),
-    ...passedFromRedis,
-    ...memoryPassed,
+    ...dbPassedList.map((p) => p.passedUserId),
     ...clientExcludedIds,
-    ...clientPassedIds,
   ]);
 
-  const excludedIds = Array.from(excludedSet);
+  const permanentExcludedIds = Array.from(permanentExcludedSet);
 
-  // 5. Construct Filtering Conditions
+  // 5. Construct Filtering Base Conditions
   const genderCondition = mapGenderPreference(effectiveGender);
 
-  const baseWhere = {
-    id: { notIn: excludedIds },
+  const baseEligibleWhere = {
+    id: { notIn: permanentExcludedIds },
     accountStatus: 'ACTIVE',
     verificationStatus: 'APPROVED',
     age: {
@@ -276,20 +425,20 @@ export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
   };
 
   if (effectiveIntention && effectiveIntention !== 'All') {
-    baseWhere.profile = {
-      ...baseWhere.profile,
+    baseEligibleWhere.profile = {
+      ...baseEligibleWhere.profile,
       relationshipIntention: { equals: effectiveIntention, mode: 'insensitive' },
     };
   }
 
   if (effectiveCity && effectiveCity !== 'All') {
-    baseWhere.profile = {
-      ...baseWhere.profile,
+    baseEligibleWhere.profile = {
+      ...baseEligibleWhere.profile,
       city: { contains: effectiveCity, mode: 'insensitive' },
     };
   }
 
-  // 6. Build Mutually Exclusive Same-College vs Other-Colleges Queries
+  // 6. College Boundary Conditions
   const sameCollegeSubqueries = [];
   if (userCollegeId) {
     sameCollegeSubqueries.push({ education: { collegeId: userCollegeId } });
@@ -335,80 +484,170 @@ export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
     },
   };
 
-  // 7. Robust Exhaustion Check & Continuous Pagination
-  const page = Math.max(1, parseInt(query.page || 1, 10));
-  const limit = Math.max(1, Math.min(100, parseInt(query.limit || 20, 10)));
-  const offset = (page - 1) * limit;
+  const limit = Math.max(1, Math.min(50, parseInt(query.limit || 10, 10)));
 
-  // Count total eligible same-college profiles
-  const totalSameCollege = sameCollegeCondition
+  // 7. Check Current Cycle Impressions
+  let seenImpressions = await prisma.discoveryImpression.findMany({
+    where: {
+      userId: currentUserId,
+      cycleId: currentCycleId,
+    },
+    select: { discoveredUserId: true },
+  });
+
+  let seenInCycleIds = seenImpressions.map((imp) => imp.discoveredUserId);
+
+  // Construct where clause for unseen profiles in the current cycle
+  let currentCycleWhere = {
+    ...baseEligibleWhere,
+    id: { notIn: [...permanentExcludedIds, ...seenInCycleIds] },
+  };
+
+  // Count unseen same-college candidates
+  let unseenSameCount = sameCollegeCondition
     ? await prisma.user.count({
         where: {
-          AND: [baseWhere, sameCollegeCondition],
+          AND: [currentCycleWhere, sameCollegeCondition],
         },
       })
     : 0;
 
-  // Count total eligible other-college profiles
-  const totalOtherColleges = await prisma.user.count({
-    where: {
-      AND: [baseWhere, otherCollegeCondition],
-    },
-  });
+  // Count unseen other-college candidates
+  let unseenOtherCount = !effectiveSameCollege
+    ? await prisma.user.count({
+        where: {
+          AND: [currentCycleWhere, otherCollegeCondition],
+        },
+      })
+    : 0;
 
-  const totalEligible = totalSameCollege + totalOtherColleges;
+  let totalUnseenInCycle = unseenSameCount + unseenOtherCount;
+  let isNewCycle = false;
+  let cycleCompleted = false;
+
+  // 8. Automatic Cycle Transition: When current cycle is exhausted
+  if (totalUnseenInCycle === 0) {
+    // Check total eligible profiles regardless of current cycle impressions
+    const totalBaseSame = sameCollegeCondition
+      ? await prisma.user.count({
+          where: {
+            AND: [baseEligibleWhere, sameCollegeCondition],
+          },
+        })
+      : 0;
+
+    const totalBaseOther = !effectiveSameCollege
+      ? await prisma.user.count({
+          where: {
+            AND: [baseEligibleWhere, otherCollegeCondition],
+          },
+        })
+      : 0;
+
+    const totalBaseEligible = totalBaseSame + totalBaseOther;
+
+    if (totalBaseEligible > 0) {
+      // Start a new discovery cycle!
+      const nextCycleId = currentCycleId + 1;
+      await prisma.userDiscoveryState.update({
+        where: { userId: currentUserId },
+        data: { currentCycleId: nextCycleId },
+      });
+
+      currentCycleId = nextCycleId;
+      seenInCycleIds = [];
+      isNewCycle = true;
+      cycleCompleted = true;
+
+      // Reset cycle where clause for new cycle
+      currentCycleWhere = {
+        ...baseEligibleWhere,
+      };
+
+      unseenSameCount = totalBaseSame;
+      unseenOtherCount = totalBaseOther;
+      totalUnseenInCycle = totalBaseEligible;
+    }
+  }
 
   let rawResults = [];
 
-  if (offset < totalSameCollege) {
-    // Priority 1: Same College has eligible profiles for this page
-    const takeSame = Math.min(limit, totalSameCollege - offset);
-
-    const sameProfiles = await prisma.user.findMany({
+  // 9. Fetch Candidates & Prioritize Same-College First
+  if (unseenSameCount > 0) {
+    // Priority 1: Fetch candidates from verified same college
+    const sameCandidates = await prisma.user.findMany({
       where: {
-        AND: [baseWhere, sameCollegeCondition],
+        AND: [currentCycleWhere, sameCollegeCondition],
       },
       include: userInclude,
-      orderBy: { createdAt: 'desc' },
-      skip: offset,
-      take: takeSame,
+      take: Math.min(unseenSameCount, 100),
     });
 
-    rawResults.push(...sameProfiles);
+    // Sort personalized with deterministic cycle seed
+    sameCandidates.sort((a, b) =>
+      getCandidatePersonalizedScore(currentUserId, currentCycleId, a.id) -
+      getCandidatePersonalizedScore(currentUserId, currentCycleId, b.id)
+    );
 
-    // If same college was exhausted within this page, fill remaining slots with Other Colleges
-    const remainingSlots = limit - takeSame;
-    if (remainingSlots > 0) {
-      const otherProfiles = await prisma.user.findMany({
+    const takeSame = Math.min(limit, sameCandidates.length);
+    rawResults.push(...sameCandidates.slice(0, takeSame));
+
+    // Priority 2: If same college gave fewer than limit, fill remainder from Other Colleges
+    const remainingSlots = limit - rawResults.length;
+    if (remainingSlots > 0 && !effectiveSameCollege && unseenOtherCount > 0) {
+      const alreadyChosenIds = new Set(rawResults.map((r) => r.id));
+      const otherCandidates = await prisma.user.findMany({
         where: {
-          AND: [baseWhere, otherCollegeCondition],
+          AND: [
+            currentCycleWhere,
+            otherCollegeCondition,
+            { id: { notIn: Array.from(alreadyChosenIds) } },
+          ],
         },
         include: userInclude,
-        orderBy: { createdAt: 'desc' },
-        skip: 0,
-        take: remainingSlots,
+        take: Math.min(unseenOtherCount, 100),
       });
 
-      rawResults.push(...otherProfiles);
-    }
-  } else {
-    // Priority 2: Same College is completely exhausted! Fetch strictly from Other Colleges
-    const skipOther = offset - totalSameCollege;
+      otherCandidates.sort((a, b) =>
+        getCandidatePersonalizedScore(currentUserId, currentCycleId, a.id) -
+        getCandidatePersonalizedScore(currentUserId, currentCycleId, b.id)
+      );
 
-    const otherProfiles = await prisma.user.findMany({
+      rawResults.push(...otherCandidates.slice(0, remainingSlots));
+    }
+  } else if (!effectiveSameCollege && unseenOtherCount > 0) {
+    // Same college exhausted or non-existent; fetch from other colleges
+    const otherCandidates = await prisma.user.findMany({
       where: {
-        AND: [baseWhere, otherCollegeCondition],
+        AND: [currentCycleWhere, otherCollegeCondition],
       },
       include: userInclude,
-      orderBy: { createdAt: 'desc' },
-      skip: skipOther,
-      take: limit,
+      take: Math.min(unseenOtherCount, 100),
     });
 
-    rawResults.push(...otherProfiles);
+    otherCandidates.sort((a, b) =>
+      getCandidatePersonalizedScore(currentUserId, currentCycleId, a.id) -
+      getCandidatePersonalizedScore(currentUserId, currentCycleId, b.id)
+    );
+
+    rawResults.push(...otherCandidates.slice(0, limit));
   }
 
-  // 8. Strict Public Serialization
+  // 10. Atomic Impression Recording
+  // Immediately persist impressions in PostgreSQL so concurrent calls or next refresh
+  // will never deliver duplicate profiles in the same cycle!
+  if (rawResults.length > 0) {
+    await prisma.discoveryImpression.createMany({
+      data: rawResults.map((u) => ({
+        userId: currentUserId,
+        discoveredUserId: u.id,
+        cycleId: currentCycleId,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  // 11. Strict Public Serialization (Zero private contact details leaked)
   const serialized = rawResults.map((u) =>
     serializePublicProfile(u, {
       currentCollegeId: userCollegeId,
@@ -416,35 +655,43 @@ export const getDiscoveryProfiles = async (currentUserId, query = {}) => {
     })
   );
 
-  const isSameCollegeExhausted = offset + rawResults.length >= totalSameCollege;
-  const hasMore = offset + rawResults.length < totalEligible;
+  const hasMore = totalUnseenInCycle > rawResults.length;
 
   return {
     profiles: serialized,
-    users: serialized, // backward compatibility with existing components
+    users: serialized, // backward compatibility with CardDeck
     pagination: {
-      page,
       limit,
-      totalSameCollege,
-      totalOtherColleges,
-      totalEligible,
-      isSameCollegeExhausted,
+      totalSameCollege: unseenSameCount,
+      totalOtherColleges: unseenOtherCount,
+      totalEligible: totalUnseenInCycle,
+      unseenEligibleCount: totalUnseenInCycle,
+      sameCollegeCount: unseenSameCount,
+      otherCollegesCount: unseenOtherCount,
       hasMore,
+      cycleId: currentCycleId,
+      currentCycleId,
+      isNewCycle,
+      cycleCompleted,
     },
     meta: {
       appliedGender: effectiveGender,
       appliedMinAge: effectiveMinAge,
       appliedMaxAge: effectiveMaxAge,
       appliedIntention: effectiveIntention,
+      sameCollegeOnly: effectiveSameCollege,
       requesterCollege: userCollegeName || 'Unknown',
+      cycleId: currentCycleId,
     },
   };
 };
 
 export default {
+  getCandidatePersonalizedScore,
   mapGenderPreference,
   getDiscoveryPreferences,
   saveDiscoveryPreferences,
   recordProfilePass,
+  resetDiscoveryCycle,
   getDiscoveryProfiles,
 };

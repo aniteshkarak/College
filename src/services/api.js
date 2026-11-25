@@ -587,9 +587,11 @@ export const api = {
       if (params.minAge) searchParams.set('minAge', params.minAge);
       if (params.maxAge) searchParams.set('maxAge', params.maxAge);
       if (params.gender && params.gender !== 'All') searchParams.set('gender', params.gender);
+      if (params.preferredGender && params.preferredGender !== 'All') searchParams.set('preferredGender', params.preferredGender);
       if (params.city && params.city !== 'All') searchParams.set('city', params.city);
       if (params.page) searchParams.set('page', params.page);
       if (params.limit) searchParams.set('limit', params.limit);
+      if (params.sameCollegeOnly !== undefined) searchParams.set('sameCollegeOnly', params.sameCollegeOnly);
       if (params.intention && params.intention !== 'All') searchParams.set('intention', params.intention);
       const q = searchParams.toString();
       return request(`/discovery${q ? `?${q}` : ''}`);
@@ -604,6 +606,10 @@ export const api = {
       request('/discovery/pass', {
         method: 'POST',
         body: JSON.stringify({ targetUserId }),
+      }),
+    resetCycle: () =>
+      request('/discovery/cycle/reset', {
+        method: 'POST',
       }),
   },
 

@@ -10,6 +10,10 @@ export const CardDeck = () => {
     handleSendMatchRequest,
     handlePass,
     discoveryFilters,
+    discoveryCycleInfo,
+    isDiscoveryLoading,
+    refreshDiscoveryProfiles,
+    resetDiscoveryCycle,
     currentUser,
     currentPlanConfig,
     setIsPremiumModalOpen,
@@ -53,6 +57,11 @@ export const CardDeck = () => {
             {filteredProfiles.length} Profiles
           </span>
 
+          {/* Discovery Cycle Badge */}
+          <span className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 rounded-full text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+            Cycle #{discoveryCycleInfo?.currentCycleId || 1}
+          </span>
+
           {/* Sent Request Quota Indicator */}
           <button
             onClick={() => setIsPremiumModalOpen(true)}
@@ -66,13 +75,25 @@ export const CardDeck = () => {
           </button>
         </div>
 
-        <button
-          onClick={() => setIsFilterOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-300 rounded-full text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm transition-all"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-rose-500" />
-          <span>Filters</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Refresh Feed */}
+          <button
+            onClick={() => refreshDiscoveryProfiles?.()}
+            disabled={isDiscoveryLoading}
+            className="p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-300 rounded-full text-slate-700 dark:text-slate-200 shadow-sm transition-all"
+            title="Refresh Feed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-rose-500 ${isDiscoveryLoading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => setIsFilterOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-rose-300 rounded-full text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm transition-all"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-rose-500" />
+            <span>Filters</span>
+          </button>
+        </div>
       </div>
 
       {/* Profile Card Deck */}
@@ -99,8 +120,15 @@ export const CardDeck = () => {
           </p>
           <div className="flex flex-col gap-2.5 w-full max-w-xs">
             <button
+              onClick={() => resetDiscoveryCycle?.()}
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white gradient-brand-bg shadow-md hover:brightness-105 flex items-center justify-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Start New Discovery Cycle
+            </button>
+            <button
               onClick={() => navigateTo('matches')}
-              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white gradient-brand-bg shadow-md hover:brightness-105"
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40"
             >
               Check Incoming Likes
             </button>

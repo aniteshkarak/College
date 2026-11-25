@@ -16,4 +16,7 @@ router.put('/preferences', requireAuth, discoveryController.updatePreferences);
 // 4. Record a Passed Profile (Excludes from future discovery)
 router.post('/pass', requireAuth, discoveryController.passProfile);
 
+// 5. Reset Discovery Cycle (Advances to next cycle with new rotation)
+router.post('/cycle/reset', requireAuth, discoveryController.resetCycle);
+
 export default router;

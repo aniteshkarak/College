@@ -365,10 +365,84 @@ export const AppProvider = ({ children }) => {
       gender: 'All',
       city: 'All',
       intention: 'All',
+      sameCollegeOnly: false,
       maxDistance: 100,
       selectedInterests: []
     };
   });
+
+  const [discoveryCycleInfo, setDiscoveryCycleInfo] = useState({
+    currentCycleId: 1,
+    isNewCycle: false,
+    cycleCompleted: false,
+    unseenEligibleCount: 0,
+    sameCollegeCount: 0,
+    otherCollegesCount: 0,
+  });
+  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(false);
+
+  // Fetch live personalized discovery profiles from backend
+  const fetchDiscoveryProfiles = async (customParams = {}, resetFirst = false) => {
+    if (!isAuthenticated && !savedToken) return;
+    setIsDiscoveryLoading(true);
+    try {
+      if (resetFirst) {
+        await api.discovery.resetCycle().catch((err) => console.warn('Reset cycle sync:', err.message));
+      }
+
+      const activeFilters = { ...discoveryFilters, ...customParams };
+      const queryParams = {
+        gender: activeFilters.gender,
+        minAge: activeFilters.minAge,
+        maxAge: activeFilters.maxAge,
+        city: activeFilters.city,
+        intention: activeFilters.intention,
+        sameCollegeOnly: activeFilters.sameCollegeOnly !== undefined ? activeFilters.sameCollegeOnly : undefined,
+        limit: customParams.limit || 20,
+      };
+
+      const res = await api.discovery.getProfiles(queryParams);
+      const users = res?.data?.profiles || res?.data?.users || [];
+      const pagination = res?.data?.pagination || {};
+
+      setDiscoveryCycleInfo({
+        currentCycleId: pagination.currentCycleId || 1,
+        isNewCycle: Boolean(pagination.isNewCycle),
+        cycleCompleted: Boolean(pagination.cycleCompleted),
+        unseenEligibleCount: pagination.unseenEligibleCount ?? 0,
+        sameCollegeCount: pagination.sameCollegeCount ?? 0,
+        otherCollegesCount: pagination.otherCollegesCount ?? 0,
+      });
+
+      const mapped = users.map((u) => ({
+        id: u.id,
+        display_name: u.displayName || u.display_name || u.fullName,
+        age: u.age || u.profile?.age || 21,
+        gender: u.gender || u.profile?.gender || 'Student',
+        city: u.city || u.profile?.city || 'Campus',
+        state: u.state || u.profile?.state || '',
+        college_name: u.collegeName || u.college_name || u.education?.collegeName || 'Premier College',
+        is_same_college: Boolean(u.isSameCollege),
+        course: u.course || u.degreeName || u.education?.course || 'Degree Program',
+        relationship_intention: u.relationshipIntention || u.relationship_intention || 'Casual Connection',
+        avatar_url: u.avatarUrl || u.avatar_url || u.photos?.[0]?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
+        additional_photos: u.additionalPhotos || u.additional_photos || (u.photos?.slice(1) || []).map((p) => p.url),
+        photos: u.photos || [],
+        bio: u.bio || u.profile?.bio || 'Verified college student on Collage Story.',
+        interests: u.interests || u.profile?.interests || [],
+        languages: u.languages || u.languagesSpoken || ['English'],
+        mood: u.mood || u.currentMood || 'Looking for a conversation',
+        verified: true,
+      }));
+
+      setProfiles(mapped);
+      return mapped;
+    } catch (err) {
+      console.warn('Could not load discovery profiles:', err.message);
+    } finally {
+      setIsDiscoveryLoading(false);
+    }
+  };
 
   const updateDiscoveryPreferences = async (newFilters) => {
     const merged = { ...discoveryFilters, ...newFilters };
@@ -383,9 +457,11 @@ export const AppProvider = ({ children }) => {
         if (merged.maxAge) payload.maxAge = parseInt(merged.maxAge, 10);
         if (merged.intention) payload.relationshipIntention = merged.intention;
         if (merged.city) payload.city = merged.city;
+        if (merged.sameCollegeOnly !== undefined) payload.sameCollegeOnly = Boolean(merged.sameCollegeOnly);
         if (merged.maxDistance) payload.maxDistance = parseInt(merged.maxDistance, 10);
 
         await api.discovery.updatePreferences(payload);
+        fetchDiscoveryProfiles(merged);
       } catch (err) {
         console.warn('Failed to sync discovery preferences to server:', err.message);
       }
@@ -550,32 +626,7 @@ export const AppProvider = ({ children }) => {
     let isMounted = true;
 
     // 1. Fetch Discovery Profiles
-    api.discovery.getProfiles()
-      .then((res) => {
-        if (!isMounted) return;
-        const users = res?.data?.profiles || res?.data?.users || [];
-        const mapped = users.map((u) => ({
-          id: u.id,
-          display_name: u.displayName || u.display_name || u.fullName,
-          age: u.age || u.profile?.age || 21,
-          gender: u.gender || u.profile?.gender || 'Student',
-          city: u.city || u.profile?.city || 'Campus',
-          state: u.state || u.profile?.state || '',
-          college_name: u.collegeName || u.college_name || u.education?.collegeName || 'Premier College',
-          course: u.course || u.degreeName || u.education?.course || 'Degree Program',
-          relationship_intention: u.relationshipIntention || u.relationship_intention || 'Casual Connection',
-          avatar_url: u.avatarUrl || u.avatar_url || u.photos?.[0]?.url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
-          additional_photos: u.additionalPhotos || u.additional_photos || (u.photos?.slice(1) || []).map((p) => p.url),
-          photos: u.photos || [],
-          bio: u.bio || u.profile?.bio || 'Verified college student on Collage Story.',
-          interests: u.interests || u.profile?.interests || [],
-          languages: u.languages || u.languagesSpoken || ['English'],
-          mood: u.mood || u.currentMood || 'Looking for a conversation',
-          verified: true,
-        }));
-        setProfiles(mapped);
-      })
-      .catch((err) => console.warn('Could not load discovery profiles:', err.message));
+    fetchDiscoveryProfiles();
 
     // 2. Fetch Incoming Likes / Requests
     api.matching.getIncoming()
@@ -2211,6 +2262,11 @@ export const AppProvider = ({ children }) => {
         addToast,
         discoveryFilters,
         setDiscoveryFilters,
+        discoveryCycleInfo,
+        isDiscoveryLoading,
+        fetchDiscoveryProfiles,
+        refreshDiscoveryProfiles: () => fetchDiscoveryProfiles(),
+        resetDiscoveryCycle: () => fetchDiscoveryProfiles({}, true),
         handleBlockUser,
         handleUnblockUser,
         handleReportUser,

@@ -4,10 +4,12 @@ import { z } from 'zod';
 
 const preferencesSchema = z.object({
   gender: z.enum(['FEMALE', 'MALE', 'EVERYONE', 'Female', 'Male', 'All', 'Women', 'Men', 'everyone']).optional(),
+  preferredGender: z.enum(['FEMALE', 'MALE', 'EVERYONE', 'Female', 'Male', 'All', 'Women', 'Men', 'everyone']).optional(),
   minAge: z.number().int().min(18).max(100).optional(),
   maxAge: z.number().int().min(18).max(100).optional(),
   relationshipIntention: z.string().optional(),
   city: z.string().optional(),
+  sameCollegeOnly: z.boolean().optional(),
   maxDistance: z.number().optional(),
 });
 
@@ -80,9 +82,23 @@ export const passProfile = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/v1/discovery/cycle/reset
+ * Explicitly resets the discovery cycle and advances to next cycleId
+ */
+export const resetCycle = async (req, res) => {
+  try {
+    const result = await discoveryService.resetDiscoveryCycle(req.user.id);
+    return success(res, result, 'Discovery cycle reset successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+};
+
 export default {
   getProfiles,
   getPreferences,
   updatePreferences,
   passProfile,
+  resetCycle,
 };

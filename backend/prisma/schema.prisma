@@ -149,6 +149,13 @@ model User {
   notifications         Notification[]       @relation("RecipientNotifications")
   actedNotifications    Notification[]       @relation("ActorNotifications")
 
+  // Personalized Discovery Feed & Cycle Rotation
+  discoveryImpressions    DiscoveryImpression[] @relation("UserImpressions")
+  discoveredInImpressions DiscoveryImpression[] @relation("DiscoveredImpressions")
+  discoveryState          UserDiscoveryState?
+  profilePasses           ProfilePass[]         @relation("UserPasses")
+  passedByUsers           ProfilePass[]         @relation("PassedUsers")
+
   @@index([accountStatus, verificationStatus])
 }
 
@@ -673,4 +680,59 @@ model SystemErrorLog {
   @@index([component])
   @@index([createdAt])
 }
+
+// -------------------------------------------------------------
+// 17. DISCOVERY IMPRESSIONS & CYCLE ROTATION
+// -------------------------------------------------------------
+model DiscoveryImpression {
+  id               String   @id @default(uuid())
+  userId           String
+  discoveredUserId String
+  cycleId          Int      @default(1)
+  firstSeenAt      DateTime @default(now())
+
+  user             User     @relation("UserImpressions", fields: [userId], references: [id], onDelete: Cascade)
+  discoveredUser   User     @relation("DiscoveredImpressions", fields: [discoveredUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, discoveredUserId, cycleId])
+  @@index([userId, cycleId])
+  @@index([discoveredUserId])
+}
+
+// -------------------------------------------------------------
+// 18. USER DISCOVERY STATE & PERSISTENT PREFERENCES
+// -------------------------------------------------------------
+model UserDiscoveryState {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  currentCycleId        Int      @default(1)
+  preferredGender       String   @default("EVERYONE") // FEMALE | MALE | EVERYONE
+  minAge                Int      @default(18)
+  maxAge                Int      @default(28)
+  relationshipIntention String   @default("All")
+  sameCollegeOnly       Boolean  @default(false)
+  city                  String   @default("All")
+  lastActiveAt          DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// 19. PROFILE PASSES & DISMISSALS (Persistent PostgreSQL)
+// -------------------------------------------------------------
+model ProfilePass {
+  id           String   @id @default(uuid())
+  userId       String
+  passedUserId String
+  createdAt    DateTime @default(now())
+
+  user         User     @relation("UserPasses", fields: [userId], references: [id], onDelete: Cascade)
+  passedUser   User     @relation("PassedUsers", fields: [passedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, passedUserId])
+  @@index([userId])
+}
+
 

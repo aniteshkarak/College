@@ -4,7 +4,7 @@ import { ALL_INTERESTS, ALL_INTENTIONS } from '../../services/mockData';
 import { SlidersHorizontal, X, RotateCcw } from 'lucide-react';
 
 export const FilterModal = ({ isOpen, onClose }) => {
-  const { discoveryFilters, setDiscoveryFilters, addToast } = useApp();
+  const { discoveryFilters, setDiscoveryFilters, updateDiscoveryPreferences, addToast } = useApp();
 
   const [filters, setFilters] = useState(discoveryFilters);
 
@@ -26,7 +26,11 @@ export const FilterModal = ({ isOpen, onClose }) => {
   };
 
   const handleApply = () => {
-    setDiscoveryFilters(filters);
+    if (updateDiscoveryPreferences) {
+      updateDiscoveryPreferences(filters);
+    } else {
+      setDiscoveryFilters(filters);
+    }
     addToast('Discovery filters updated!', 'info');
     onClose();
   };
@@ -38,11 +42,16 @@ export const FilterModal = ({ isOpen, onClose }) => {
       gender: 'All',
       city: 'All',
       intention: 'All',
+      sameCollegeOnly: false,
       maxDistance: 100,
       selectedInterests: []
     };
     setFilters(defaultFilters);
-    setDiscoveryFilters(defaultFilters);
+    if (updateDiscoveryPreferences) {
+      updateDiscoveryPreferences(defaultFilters);
+    } else {
+      setDiscoveryFilters(defaultFilters);
+    }
     addToast('Filters reset to default', 'info');
   };
 
@@ -109,6 +118,23 @@ export const FilterModal = ({ isOpen, onClose }) => {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Same College Preference */}
+          <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+            <div>
+              <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">Same College Only</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">Prioritize students from your verified campus</div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(filters.sameCollegeOnly)}
+                onChange={(e) => setFilters({ ...filters, sameCollegeOnly: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500"></div>
+            </label>
           </div>
 
           {/* Age Range Slider */}
