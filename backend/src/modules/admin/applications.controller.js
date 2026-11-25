@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import storageService from '../../services/storageService.js';
 import emailService from '../../services/emailService.js';
+import analyticsService from '../../services/analyticsService.js';
 import { getReviewTimelineMetrics } from '../../utils/applicationUtils.js';
 import { success, error } from '../../utils/response.js';
 import { z } from 'zod';
@@ -516,6 +517,13 @@ export const approveApplication = async (req, res) => {
       displayName: application.displayName,
       applicationId: application.applicationId,
     }).catch(() => {});
+
+    analyticsService.trackEvent({
+      eventType: 'APPLICATION_APPROVED',
+      userId: result.user?.id || null,
+      collegeName: application.collegeName || null,
+      metadata: { applicationId: application.applicationId, adminId },
+    });
 
     return success(
       res,

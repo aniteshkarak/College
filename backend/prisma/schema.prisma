@@ -598,3 +598,79 @@ model UserBlock {
   @@index([blockerId])
   @@index([blockedId])
 }
+
+// -------------------------------------------------------------
+// 14. PLATFORM PRODUCT ANALYTICS EVENTS (Privacy-Conscious)
+// -------------------------------------------------------------
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  eventType   String   // REGISTRATION_COMPLETED | APPLICATION_APPROVED | LOGIN_SUCCESSFUL | PROFILE_COMPLETED | DISCOVERY_OPENED | LIKE_SENT | MATCH_ACCEPTED | CONVERSATION_STARTED | MESSAGE_SENT | VOICE_MESSAGE_SENT | POST_CREATED
+  userId      String?
+  collegeName String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([collegeName])
+}
+
+// -------------------------------------------------------------
+// 15. SYSTEM INCIDENTS & INCIDENT MANAGEMENT
+// -------------------------------------------------------------
+model SystemIncident {
+  id                 String              @id @default(uuid())
+  title              String
+  description        String
+  severity           String              // CRITICAL | HIGH | MEDIUM | LOW
+  status             String              @default("INVESTIGATING") // INVESTIGATING | IDENTIFIED | MONITORING | RESOLVED
+  component          String              // DATABASE | REDIS | SOCKET_IO | API | STORAGE | EMAIL | AUTH
+  errorCategory      String?
+  correlationId      String?
+  resolutionNotes    String?
+  resolvedAt         DateTime?
+  resolvedByAdminId  String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  auditLogs          IncidentAuditLog[]
+
+  @@index([status, severity])
+  @@index([createdAt])
+  @@index([component])
+}
+
+model IncidentAuditLog {
+  id          String         @id @default(uuid())
+  incidentId  String
+  adminId     String
+  adminName   String
+  action      String         // CREATED | UPDATED_STATUS | ADDED_NOTE | RESOLVED
+  details     String
+  createdAt   DateTime       @default(now())
+
+  incident    SystemIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+  @@index([createdAt])
+}
+
+// -------------------------------------------------------------
+// 16. STRUCTURED SYSTEM ERROR LOGS
+// -------------------------------------------------------------
+model SystemErrorLog {
+  id            String   @id @default(uuid())
+  severity      String   @default("ERROR") // ERROR | WARN | FATAL
+  component     String   // API | DATABASE | SOCKET_IO | MESSAGING | STORAGE | EMAIL | AUTH | BACKGROUND
+  category      String
+  message       String
+  correlationId String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([severity, createdAt])
+  @@index([component])
+  @@index([createdAt])
+}
+

@@ -5,6 +5,7 @@ import { success, error } from '../../utils/response.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
 import socketService from '../../services/socketService.js';
 import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
+import analyticsService from '../../services/analyticsService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -323,6 +324,13 @@ router.post('/send-request', requireAuth, async (req, res) => {
       data: { senderId: sender.id, requestId: newRequest.id },
     });
 
+    analyticsService.trackEvent({
+      eventType: 'LIKE_SENT',
+      userId: sender.id,
+      collegeName: sender.education?.collegeName || null,
+      metadata: { receiverId },
+    });
+
     return success(res, { request: newRequest }, 'Match request sent', 201);
   } catch (err) {
     return error(res, err.message, 500);
@@ -474,6 +482,13 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       message: `You accepted ${matchReq.sender.displayName}'s request! You are now Mutual Friends.`,
       relatedEntityId: result.match.id,
       data: { matchId: result.match.id, conversationId: result.conversation.id },
+    });
+
+    analyticsService.trackEvent({
+      eventType: 'MATCH_ACCEPTED',
+      userId: currentUserId,
+      collegeName: currentUser?.education?.collegeName || null,
+      metadata: { partnerId: matchReq.senderId, matchId: result.match?.id },
     });
 
     return success(res, result, 'Match accepted! You are now Mutual Friends.');

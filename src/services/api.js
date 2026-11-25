@@ -529,6 +529,49 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ action, reason }),
       }),
+
+    // Product Analytics & Metrics
+    getAnalyticsOverview: () => request('/admin/analytics/overview'),
+    getAnalyticsTrends: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.range) sp.set('range', params.range);
+      if (params.startDate) sp.set('startDate', params.startDate);
+      if (params.endDate) sp.set('endDate', params.endDate);
+      const q = sp.toString();
+      return request(`/admin/analytics/trends${q ? `?${q}` : ''}`);
+    },
+
+    // System Monitoring & SRE Health
+    getSystemHealth: () => request('/admin/monitoring/health'),
+    getAlerts: () => request('/admin/monitoring/alerts'),
+    getErrorLogs: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.limit) sp.set('limit', params.limit);
+      if (params.severity) sp.set('severity', params.severity);
+      if (params.category) sp.set('category', params.category);
+      const q = sp.toString();
+      return request(`/admin/monitoring/errors${q ? `?${q}` : ''}`);
+    },
+
+    // Incident Management
+    getIncidents: (params = {}) => {
+      const sp = new URLSearchParams();
+      if (params.status) sp.set('status', params.status);
+      if (params.severity) sp.set('severity', params.severity);
+      const q = sp.toString();
+      return request(`/admin/incidents${q ? `?${q}` : ''}`);
+    },
+    getIncidentDetails: (id) => request(`/admin/incidents/${encodeURIComponent(id)}`),
+    updateIncidentStatus: (id, status, notes = '') =>
+      request(`/admin/incidents/${encodeURIComponent(id)}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, notes }),
+      }),
+    resolveIncident: (id, resolutionNotes) =>
+      request(`/admin/incidents/${encodeURIComponent(id)}/resolve`, {
+        method: 'POST',
+        body: JSON.stringify({ resolutionNotes }),
+      }),
   },
 
   // Discovery

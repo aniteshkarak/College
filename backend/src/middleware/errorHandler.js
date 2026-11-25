@@ -2,6 +2,7 @@ import multer from 'multer';
 import { ZodError } from 'zod';
 import logger from '../utils/logger.js';
 import { error } from '../utils/response.js';
+import incidentService from '../services/incidentService.js';
 
 export const errorHandler = (err, req, res, next) => {
   if (res.headersSent) {
@@ -28,10 +29,27 @@ export const errorHandler = (err, req, res, next) => {
     return error(res, `Upload error: ${err.message}`, 400);
   }
 
-  logger.error(`Error on ${req.method} ${req.url}:`, err.stack || err.message);
+  logger.error(`[${req.correlationId || 'no-cid'}] Error on ${req.method} ${req.url}:`, err.stack || err.message);
 
   const statusCode = err.status || err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
+
+  if (statusCode >= 500) {
+    incidentService.recordError({
+      severity: statusCode >= 500 ? 'ERROR' : 'WARN',
+      component: 'api',
+      category: 'api_server_error',
+      message: err.message || 'Internal Server Error',
+      correlationId: req.correlationId || null,
+      metadata: {
+        method: req.method,
+        path: req.originalUrl || req.url,
+        ip: req.ip,
+        userId: req.user?.id || req.user?.userId || null,
+        statusCode,
+      },
+    }).catch((recErr) => logger.error('Failed to record error incident:', recErr));
+  }
 
   return error(res, message, statusCode, err);
 };

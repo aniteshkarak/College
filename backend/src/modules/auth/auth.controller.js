@@ -12,6 +12,7 @@ import prisma from '../../config/prisma.js';
 import { serializePrivateAccount } from '../../utils/serializers.js';
 import { success, error } from '../../utils/response.js';
 import socketService from '../../services/socketService.js';
+import analyticsService from '../../services/analyticsService.js';
 
 export const register = async (req, res) => {
   try {
@@ -79,6 +80,13 @@ export const login = async (req, res) => {
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
     }
+
+    analyticsService.trackEvent({
+      eventType: 'LOGIN_SUCCESSFUL',
+      userId: result.user?.id || null,
+      collegeName: result.user?.education?.collegeName || null,
+      metadata: { ip: reqMeta.ip },
+    });
 
     return success(res, result, result.message);
   } catch (err) {

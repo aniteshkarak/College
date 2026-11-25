@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import swaggerUi from 'swagger-ui-express';
 import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
 
 import config from './config/env.js';
 import passport from './config/passport.js';
@@ -37,6 +38,14 @@ import adminRoutes from './modules/admin/admin.routes.js';
 import { STORAGE_PATHS } from './config/storage.js';
 
 const app = express();
+
+// Correlation ID Tracking Middleware
+app.use((req, res, next) => {
+  const correlationId = req.headers['x-correlation-id'] || crypto.randomUUID();
+  req.correlationId = correlationId;
+  res.setHeader('x-correlation-id', correlationId);
+  next();
+});
 
 // Security and utility middlewares
 app.use(

@@ -7,6 +7,7 @@ import { success, error } from '../../utils/response.js';
 import { serializePublicProfile } from '../../utils/serializers.js';
 import socketService from '../../services/socketService.js';
 import notificationService, { NOTIFICATION_TYPES } from '../../services/notificationService.js';
+import analyticsService from '../../services/analyticsService.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -355,6 +356,13 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
     // 2. Sender's other active devices receive 'message_sync'
     socketService.broadcastNewMessage(newMessage, recipientId, currentUserId, conversation.id);
 
+    analyticsService.trackEvent({
+      eventType: parsed.data.messageType === 'VOICE_NOTE' ? 'VOICE_MESSAGE_SENT' : 'MESSAGE_SENT',
+      userId: currentUserId,
+      collegeName: req.user?.education?.collegeName || null,
+      metadata: { conversationId: conversation.id, messageType: parsed.data.messageType },
+    });
+
     return success(res, { message: newMessage }, 'Message sent', 201);
   } catch (err) {
     return error(res, err.message, 500);
@@ -437,6 +445,13 @@ router.post('/conversations/:id/voice', requireAuth, (req, res, next) => {
 
       // Broadcast voice message metadata to recipient and sender's other devices
       socketService.broadcastNewMessage(newMessage, recipientId, currentUserId, conversation.id);
+
+      analyticsService.trackEvent({
+        eventType: 'VOICE_MESSAGE_SENT',
+        userId: currentUserId,
+        collegeName: req.user?.education?.collegeName || null,
+        metadata: { conversationId: conversation.id, duration: durationSeconds },
+      });
 
       return success(res, { message: newMessage }, 'Voice message sent successfully', 201);
     } catch (routeErr) {

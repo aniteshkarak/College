@@ -12,6 +12,11 @@ import {
   requireAdminRoles,
 } from './auth/adminAuth.middleware.js';
 
+import analyticsService from '../../services/analyticsService.js';
+import incidentService from '../../services/incidentService.js';
+import alertService from '../../services/alertService.js';
+import healthService from '../../services/healthService.js';
+
 const router = Router();
 
 // Public administrator login.
@@ -588,6 +593,164 @@ router.post(
       return success(res, { announcement: updated }, `Announcement moderated (${action})`);
     } catch (err) {
       return error(res, err.message, 500);
+    }
+  }
+);
+
+// =============================================================
+// PRODUCTION MONITORING, ANALYTICS & INCIDENT MANAGEMENT APIS
+// =============================================================
+
+const requireAdminManager = requireAdminRoles('SUPER_ADMIN', 'ADMIN');
+
+// 1. Product Analytics Overview (Real DB metrics)
+router.get(
+  '/analytics/overview',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const stats = await analyticsService.getOverviewStats();
+      return success(res, stats, 'Platform analytics overview retrieved');
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
+// 2. Product Analytics Time-Series Trends (7d, 30d, 90d, custom)
+router.get(
+  '/analytics/trends',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const { range = '7d', startDate, endDate } = req.query;
+      const trends = await analyticsService.getProductTrends({ range, startDate, endDate });
+      return success(res, trends, 'Product analytics trends retrieved');
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
+// 3. System Health Overview (SRE view: API, DB, Redis, Storage, OS metrics)
+router.get(
+  '/monitoring/health',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const health = await healthService.getHealthStatus();
+      return success(res, health, 'System health diagnostics retrieved');
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
+// 4. Live System Alerts & Rules Evaluation
+router.get(
+  '/monitoring/alerts',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const alertsData = await alertService.evaluateSystemAlerts();
+      return success(res, alertsData, 'System alert rules evaluated');
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
+// 5. Structured Error Logs Listing
+router.get(
+  '/monitoring/errors',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const { severity, component, page, limit } = req.query;
+      const logsData = await incidentService.listErrorLogs({ severity, component, page, limit });
+      return success(res, logsData, 'System error logs retrieved');
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
+// 6. List Incidents
+router.get(
+  '/incidents',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const { status, severity, page, limit } = req.query;
+      const incidentsData = await incidentService.listIncidents({ status, severity, page, limit });
+      return success(res, incidentsData, 'System incidents retrieved');
+    } catch (err) {
+      return error(res, err.message, 500);
+    }
+  }
+);
+
+// 7. Get Incident Details
+router.get(
+  '/incidents/:id',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const incident = await incidentService.getIncidentDetails(req.params.id);
+      return success(res, { incident }, 'Incident details retrieved');
+    } catch (err) {
+      return error(res, err.message, err.statusCode || 500);
+    }
+  }
+);
+
+// 8. Update Incident Status
+router.patch(
+  '/incidents/:id/status',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const { status, notes } = req.body || {};
+      if (!status) {
+        return error(res, 'New status is required', 400);
+      }
+      const updated = await incidentService.updateIncidentStatus(req.params.id, {
+        status,
+        notes,
+        adminId: req.admin.id,
+        adminName: req.admin.fullName,
+      });
+      return success(res, { incident: updated }, `Incident status updated to ${status}`);
+    } catch (err) {
+      return error(res, err.message, err.statusCode || 500);
+    }
+  }
+);
+
+// 9. Resolve Incident
+router.post(
+  '/incidents/:id/resolve',
+  requireAdminAuth,
+  requireAdminManager,
+  async (req, res) => {
+    try {
+      const { resolutionNotes } = req.body || {};
+      const resolved = await incidentService.resolveIncident(req.params.id, {
+        resolutionNotes,
+        adminId: req.admin.id,
+        adminName: req.admin.fullName,
+      });
+      return success(res, { incident: resolved }, 'Incident marked as RESOLVED');
+    } catch (err) {
+      return error(res, err.message, err.statusCode || 500);
     }
   }
 );

@@ -5,6 +5,7 @@ import { announcementUpload } from '../../middleware/uploadMiddleware.js';
 import { success, error } from '../../utils/response.js';
 import campusService from './campus.service.js';
 import { storageService } from '../../services/storageService.js';
+import analyticsService from '../../services/analyticsService.js';
 import {
   requireAdminAuth,
   requireAdminRoles,
@@ -130,6 +131,12 @@ const createHandler = (req, res, next) => {
       }
 
       const result = await campusService.createAnnouncement(req.user, parsed.data, req.file);
+      analyticsService.trackEvent({
+        eventType: 'POST_CREATED',
+        userId: req.user.id,
+        collegeName: req.user.education?.collegeName || null,
+        metadata: { postId: result?.id || result?.post?.id, postType: parsed.data.postType },
+      });
       return success(
         res,
         result,

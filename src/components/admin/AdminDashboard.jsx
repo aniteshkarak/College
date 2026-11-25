@@ -37,7 +37,16 @@ import {
   LogOut,
   Database,
   Lock,
-  Activity
+  Activity,
+  BarChart3,
+  Server,
+  Cpu,
+  HardDrive,
+  Terminal,
+  Radio,
+  TrendingUp,
+  CheckCircle,
+  Flame
 } from 'lucide-react';
 
 /**
@@ -220,6 +229,126 @@ export const AdminDashboard = () => {
   const [selectedReport, setSelectedReport] = useState(null);
 
   // -------------------------------------------------------------
+  // Production Monitoring, Analytics & Incidents State
+  // -------------------------------------------------------------
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [analyticsTrends, setAnalyticsTrends] = useState(null);
+  const [analyticsRange, setAnalyticsRange] = useState('7d');
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+
+  const [systemHealthData, setSystemHealthData] = useState(null);
+  const [alertsData, setAlertsData] = useState(null);
+  const [errorLogs, setErrorLogs] = useState([]);
+  const [isLoadingHealth, setIsLoadingHealth] = useState(false);
+
+  const [incidentsList, setIncidentsList] = useState([]);
+  const [incidentSeverityFilter, setIncidentSeverityFilter] = useState('ALL');
+  const [incidentStatusFilter, setIncidentStatusFilter] = useState('ALL');
+  const [resolveModalIncident, setResolveModalIncident] = useState(null);
+  const [incidentResolutionNotes, setIncidentResolutionNotes] = useState('');
+  const [isSubmittingIncidentAction, setIsSubmittingIncidentAction] = useState(false);
+  const [isLoadingIncidents, setIsLoadingIncidents] = useState(false);
+
+  const loadAnalyticsData = useCallback(async () => {
+    setIsLoadingAnalytics(true);
+    try {
+      const [overviewRes, trendsRes] = await Promise.all([
+        api.admin.getAnalyticsOverview().catch(() => null),
+        api.admin.getAnalyticsTrends({ range: analyticsRange }).catch(() => null),
+      ]);
+      if (overviewRes && overviewRes.success) {
+        setAnalyticsData(overviewRes.data);
+      }
+      if (trendsRes && trendsRes.success) {
+        setAnalyticsTrends(trendsRes.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load analytics:', err.message);
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  }, [analyticsRange]);
+
+  const loadHealthData = useCallback(async () => {
+    setIsLoadingHealth(true);
+    try {
+      const [healthRes, alertsRes, errorsRes] = await Promise.all([
+        api.admin.getSystemHealth().catch(() => null),
+        api.admin.getAlerts().catch(() => null),
+        api.admin.getErrorLogs({ limit: 50 }).catch(() => null),
+      ]);
+      if (healthRes && (healthRes.success || healthRes.status)) {
+        setSystemHealthData(healthRes.data || healthRes);
+      }
+      if (alertsRes && alertsRes.success) {
+        setAlertsData(alertsRes.data);
+      }
+      if (errorsRes && errorsRes.success) {
+        setErrorLogs(errorsRes.data?.errorLogs || errorsRes.data || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load system health:', err.message);
+    } finally {
+      setIsLoadingHealth(false);
+    }
+  }, []);
+
+  const loadIncidentsData = useCallback(async () => {
+    setIsLoadingIncidents(true);
+    try {
+      const res = await api.admin.getIncidents({
+        severity: incidentSeverityFilter === 'ALL' ? undefined : incidentSeverityFilter,
+        status: incidentStatusFilter === 'ALL' ? undefined : incidentStatusFilter,
+      });
+      if (res && res.success) {
+        setIncidentsList(res.data?.incidents || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load incidents:', err.message);
+    } finally {
+      setIsLoadingIncidents(false);
+    }
+  }, [incidentSeverityFilter, incidentStatusFilter]);
+
+  const handleUpdateIncidentStatus = async (incidentId, newStatus) => {
+    try {
+      const res = await api.admin.updateIncidentStatus(incidentId, newStatus);
+      if (res && res.success) {
+        addToast(`Incident status updated to ${newStatus}`, 'success');
+        loadIncidentsData();
+      } else {
+        addToast(res?.message || 'Failed to update incident', 'error');
+      }
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  const handleResolveIncident = async (e) => {
+    e.preventDefault();
+    if (!resolveModalIncident || !incidentResolutionNotes.trim()) {
+      addToast('Please provide resolution notes', 'error');
+      return;
+    }
+    setIsSubmittingIncidentAction(true);
+    try {
+      const res = await api.admin.resolveIncident(resolveModalIncident.id, incidentResolutionNotes.trim());
+      if (res && res.success) {
+        addToast('Incident resolved successfully', 'success');
+        setResolveModalIncident(null);
+        setIncidentResolutionNotes('');
+        loadIncidentsData();
+      } else {
+        addToast(res?.message || 'Failed to resolve incident', 'error');
+      }
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setIsSubmittingIncidentAction(false);
+    }
+  };
+
+  // -------------------------------------------------------------
   // Data Fetching: Live Applications & Platform Metrics
   // -------------------------------------------------------------
   const loadLiveData = useCallback(async () => {
@@ -267,6 +396,17 @@ export const AdminDashboard = () => {
       loadLiveData();
     }
   }, [adminUser, loadLiveData]);
+
+  useEffect(() => {
+    if (!adminUser) return;
+    if (activeTab === 'analytics') {
+      loadAnalyticsData();
+    } else if (activeTab === 'system-health') {
+      loadHealthData();
+    } else if (activeTab === 'incidents') {
+      loadIncidentsData();
+    }
+  }, [adminUser, activeTab, loadAnalyticsData, loadHealthData, loadIncidentsData]);
 
   // If not logged in as Administrator, render AdminLogin view
   if (!adminUser) {
@@ -605,6 +745,9 @@ export const AdminDashboard = () => {
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto w-full md:w-auto scrollbar-none">
             {[
               { id: 'verifications', label: `Queue (${pendingApps + underReviewApps + resubmittedApps})` },
+              { id: 'analytics', label: 'Product Analytics' },
+              { id: 'system-health', label: 'System Health' },
+              { id: 'incidents', label: 'Incidents' },
               { id: 'overview', label: 'Platform Metrics' },
               { id: 'reports', label: `Safety Reports (${adminReports.length})` },
               { id: 'logs', label: 'Audit Trail' }
@@ -901,6 +1044,537 @@ export const AdminDashboard = () => {
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* -------------------- PRODUCT ANALYTICS TAB -------------------- */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header & Controls */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div>
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-purple-600" />
+                Product Analytics & User Activity
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Real-time database aggregated metrics and privacy-conscious event trends (Asia/Kolkata timezone).
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Range Selector */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+                {[
+                  { id: '7d', label: 'Last 7 Days' },
+                  { id: '30d', label: 'Last 30 Days' },
+                  { id: '90d', label: 'Last 90 Days' },
+                  { id: 'all', label: 'All Time' },
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setAnalyticsRange(r.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      analyticsRange === r.id
+                        ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={loadAnalyticsData}
+                disabled={isLoadingAnalytics}
+                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-colors"
+                title="Refresh Analytics"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingAnalytics ? 'animate-spin text-purple-600' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Core Product KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: 'Registered Students', value: analyticsData?.overview?.totalRegistered ?? 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50/60 dark:bg-blue-950/30' },
+              { label: 'Approved Students', value: analyticsData?.overview?.totalApproved ?? 0, icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50/60 dark:bg-emerald-950/30' },
+              { label: 'Pending Applications', value: analyticsData?.overview?.pendingApplications ?? 0, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50/60 dark:bg-amber-950/30' },
+              { label: 'Daily Active (DAU)', value: analyticsData?.overview?.dau ?? 0, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50/60 dark:bg-purple-950/30' },
+              { label: 'Weekly Active (WAU)', value: analyticsData?.overview?.wau ?? 0, icon: TrendingUp, color: 'text-indigo-600', bg: 'bg-indigo-50/60 dark:bg-indigo-950/30' },
+              { label: 'Monthly Active (MAU)', value: analyticsData?.overview?.mau ?? 0, icon: BarChart3, color: 'text-violet-600', bg: 'bg-violet-50/60 dark:bg-violet-950/30' },
+              { label: 'Successful Matches', value: analyticsData?.overview?.successfulMatches ?? 0, icon: Sparkles, color: 'text-pink-600', bg: 'bg-pink-50/60 dark:bg-pink-950/30' },
+              { label: 'Conversations Started', value: analyticsData?.overview?.totalConversations ?? 0, icon: Mail, color: 'text-cyan-600', bg: 'bg-cyan-50/60 dark:bg-cyan-950/30' },
+              { label: 'Messages Sent', value: analyticsData?.overview?.messagesSent ?? 0, icon: FileText, color: 'text-teal-600', bg: 'bg-teal-50/60 dark:bg-teal-950/30' },
+              { label: 'Voice Notes Sent', value: analyticsData?.overview?.voiceMessagesSent ?? 0, icon: Radio, color: 'text-emerald-600', bg: 'bg-emerald-50/60 dark:bg-emerald-950/30' },
+              { label: 'Campus Board Posts', value: analyticsData?.overview?.campusPosts ?? 0, icon: Building, color: 'text-orange-600', bg: 'bg-orange-50/60 dark:bg-orange-950/30' },
+              { label: 'Unresolved Reports', value: analyticsData?.overview?.unresolvedReports ?? 0, icon: AlertTriangle, color: 'text-rose-600', bg: 'bg-rose-50/60 dark:bg-rose-950/30' },
+            ].map((kpi, idx) => (
+              <div key={idx} className={`p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 ${kpi.bg} shadow-xs`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{kpi.label}</span>
+                  <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                </div>
+                <p className={`text-2xl font-extrabold mt-1.5 ${kpi.color}`}>
+                  {kpi.value.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Trends & Breakdown Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Event Distribution Card */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+                <Activity className="w-4 h-4 text-purple-600" />
+                Tracked Event Volume ({analyticsTrends?.range || analyticsRange})
+              </h4>
+              <div className="space-y-3">
+                {analyticsTrends?.eventDistribution && Object.keys(analyticsTrends.eventDistribution).length > 0 ? (
+                  Object.entries(analyticsTrends.eventDistribution).map(([evtType, count]) => (
+                    <div key={evtType} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono text-[11px]">{evtType}</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{count.toLocaleString()}</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-purple-600 rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, Math.max(5, (count / (analyticsTrends.totalEventsCount || 1)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    No activity events recorded in this timeframe yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Daily Active Trends Timeline */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                Daily Activity Timeline ({analyticsTrends?.timeline?.length || 0} Days)
+              </h4>
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {analyticsTrends?.timeline && analyticsTrends.timeline.length > 0 ? (
+                  analyticsTrends.timeline.map((day) => (
+                    <div
+                      key={day.date}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs"
+                    >
+                      <span className="font-mono text-slate-600 dark:text-slate-300 font-semibold">{day.date}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 text-[11px]">{day.dau} DAU</span>
+                        <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2.5 py-0.5 rounded-md font-mono">
+                          {day.totalEvents} events
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    Timeline empty for selected period.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------- SYSTEM HEALTH & MONITORING TAB -------------------- */}
+      {activeTab === 'system-health' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div>
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                <Server className="w-5 h-5 text-emerald-600" />
+                System Health & SRE Diagnostic Center
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Active end-to-end probes across PostgreSQL, Redis, Socket.IO, storage vaults and system host resources.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 ${
+                  systemHealthData?.status === 'UP'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300'
+                    : systemHealthData?.status === 'DEGRADED'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300'
+                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${systemHealthData?.status === 'UP' ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'}`} />
+                Status: {systemHealthData?.status || 'UNKNOWN'}
+              </span>
+
+              <button
+                onClick={loadHealthData}
+                disabled={isLoadingHealth}
+                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-colors"
+                title="Refresh Health Status"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingHealth ? 'animate-spin text-purple-600' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Infrastructure Health Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* PostgreSQL Card */}
+            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">PostgreSQL Database</span>
+                <Database className="w-5 h-5 text-blue-500" />
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  {systemHealthData?.services?.database?.status || 'UNKNOWN'}
+                </span>
+                <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md">
+                  {systemHealthData?.services?.database?.latencyMs != null ? `${systemHealthData.services.database.latencyMs} ms` : 'OK'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">Active connection pool verified via raw query ping.</p>
+            </div>
+
+            {/* Redis Card */}
+            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Redis Cache & PubSub</span>
+                <Radio className="w-5 h-5 text-rose-500" />
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  {systemHealthData?.services?.redis?.status || 'UNKNOWN'}
+                </span>
+                <span className="text-xs font-mono font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md">
+                  {systemHealthData?.services?.redis?.latencyMs != null ? `${systemHealthData.services.redis.latencyMs} ms` : 'OK'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">{systemHealthData?.services?.redis?.mode || 'In-Memory / Sentinel'}</p>
+            </div>
+
+            {/* Socket.IO Real-Time Gateway */}
+            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Real-Time Socket.IO</span>
+                <Activity className="w-5 h-5 text-purple-500" />
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  {systemHealthData?.services?.socketIo?.status || 'ONLINE'}
+                </span>
+                <span className="text-xs font-mono font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md">
+                  {systemHealthData?.services?.socketIo?.connectedClients ?? 0} Sockets
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">Adapter: {systemHealthData?.services?.socketIo?.adapter || 'Standard Memory'}</p>
+            </div>
+
+            {/* Storage Vaults */}
+            <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Private File Storage</span>
+                <HardDrive className="w-5 h-5 text-indigo-500" />
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  {systemHealthData?.services?.storage?.status || 'UP'}
+                </span>
+                <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md">
+                  4 Vaults
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">Photos, Thumbnails, Discovery & Documents.</p>
+            </div>
+          </div>
+
+          {/* System Hardware & Process Resource Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Memory & Process Resources */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+                <Cpu className="w-4 h-4 text-purple-600" />
+                Server & Node.js Memory Utilization
+              </h4>
+              <div className="space-y-4 text-xs">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-slate-500 font-semibold">Host System RAM Usage</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                      {systemHealthData?.resources?.systemMemory?.usedPercent || 0}% ({systemHealthData?.resources?.systemMemory?.freeMb || 0} MB Free)
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        (systemHealthData?.resources?.systemMemory?.usedPercent || 0) > 85 ? 'bg-rose-500' : 'bg-purple-600'
+                      }`}
+                      style={{ width: `${systemHealthData?.resources?.systemMemory?.usedPercent || 0}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Process RSS</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">
+                      {systemHealthData?.resources?.memory?.rssMb || 0} MB
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Heap Used</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">
+                      {systemHealthData?.resources?.memory?.heapUsedMb || 0} MB
+                    </span>
+                  </div>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-center">
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Heap Total</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">
+                      {systemHealthData?.resources?.memory?.heapTotalMb || 0} MB
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Automated Alerts */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+                Automated SRE Rule Alerts ({alertsData?.alerts?.length || 0})
+              </h4>
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {alertsData?.alerts && alertsData.alerts.length > 0 ? (
+                  alertsData.alerts.map((al, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs flex items-center justify-between"
+                    >
+                      <div className="space-y-0.5">
+                        <span className="font-bold text-amber-900 dark:text-amber-200">{al.title || al.rule}</span>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">{al.message}</p>
+                      </div>
+                      <span className="px-2 py-0.5 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 rounded font-mono font-bold text-[10px]">
+                        {al.severity}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-70" />
+                    All alert rules passing normally. Zero active system warnings.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------- INCIDENTS & ERROR LOGS TAB -------------------- */}
+      {activeTab === 'incidents' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div>
+              <h3 className="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-600" />
+                Platform Incident Management & Resolution
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Track, triage, and record resolution notes for system errors and operational outages with full admin audit logging.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Severity Filter */}
+              <select
+                value={incidentSeverityFilter}
+                onChange={(e) => setIncidentSeverityFilter(e.target.value)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white"
+              >
+                <option value="ALL">All Severities</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="LOW">LOW</option>
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={incidentStatusFilter}
+                onChange={(e) => setIncidentStatusFilter(e.target.value)}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-white"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="INVESTIGATING">INVESTIGATING</option>
+                <option value="IDENTIFIED">IDENTIFIED</option>
+                <option value="MONITORING">MONITORING</option>
+                <option value="RESOLVED">RESOLVED</option>
+              </select>
+
+              <button
+                onClick={loadIncidentsData}
+                disabled={isLoadingIncidents}
+                className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl transition-colors"
+                title="Refresh Incidents"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoadingIncidents ? 'animate-spin text-purple-600' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Incidents List Table */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs overflow-hidden">
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-3">
+              Incidents ({incidentsList.length})
+            </h4>
+            {incidentsList.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-70" />
+                No incidents match the active filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold uppercase text-[10px]">
+                    <tr>
+                      <th className="py-3 px-3">Severity</th>
+                      <th className="py-3 px-3">Title & Component</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Created</th>
+                      <th className="py-3 px-3">Correlation ID</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {incidentsList.map((inc) => (
+                      <tr key={inc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-md font-mono font-bold text-[10px] ${
+                              inc.severity === 'CRITICAL'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300'
+                                : inc.severity === 'HIGH'
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300'
+                                : inc.severity === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            }`}
+                          >
+                            {inc.severity}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="font-bold text-slate-900 dark:text-white block">{inc.title}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Component: {inc.component}</span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              inc.status === 'RESOLVED'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            }`}
+                          >
+                            {inc.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-slate-500 font-mono text-[10px]">
+                          {new Date(inc.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-[10px] text-slate-400 truncate max-w-xs">
+                          {inc.correlationId || 'N/A'}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {inc.status !== 'RESOLVED' ? (
+                              <>
+                                <select
+                                  value={inc.status}
+                                  onChange={(e) => handleUpdateIncidentStatus(inc.id, e.target.value)}
+                                  className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-semibold"
+                                >
+                                  <option value="INVESTIGATING">INVESTIGATING</option>
+                                  <option value="IDENTIFIED">IDENTIFIED</option>
+                                  <option value="MONITORING">MONITORING</option>
+                                </select>
+                                <button
+                                  onClick={() => {
+                                    setResolveModalIncident(inc);
+                                    setIncidentResolutionNotes('');
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold"
+                                >
+                                  Resolve
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-emerald-600 font-semibold text-[11px]">Resolved</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Structured Application Error Logs Stream */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2 mb-3">
+              <Terminal className="w-4 h-4 text-purple-600" />
+              Recent Application Error Logs (Redacted & Sanitized)
+            </h4>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {errorLogs.length > 0 ? (
+                errorLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs flex flex-col gap-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 font-bold">
+                          {log.severity}
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-500">[{log.component}]</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{log.message}</span>
+                      </div>
+                      <span className="font-mono text-[10px] text-slate-400">
+                        {new Date(log.createdAt).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    {log.correlationId && (
+                      <span className="font-mono text-[10px] text-purple-600 dark:text-purple-400">
+                        Correlation: {log.correlationId}
+                      </span>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-400">
+                  No application runtime errors logged recently.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1931,6 +2605,80 @@ export const AdminDashboard = () => {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* INCIDENT RESOLUTION MODAL                                                 */}
+      {/* ========================================================================= */}
+      {resolveModalIncident && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-slide-up">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  Resolve Incident
+                </h3>
+              </div>
+              <button
+                onClick={() => setResolveModalIncident(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <p className="font-bold text-slate-800 dark:text-slate-200">{resolveModalIncident.title}</p>
+                <p className="text-slate-500 mt-1">{resolveModalIncident.description}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="px-2 py-0.5 rounded-md font-mono text-[10px] bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                    Component: {resolveModalIncident.component}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md font-mono text-[10px] bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300">
+                    Severity: {resolveModalIncident.severity}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleResolveIncident} className="space-y-3 pt-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Root Cause & Resolution Notes (Mandatory)
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={incidentResolutionNotes}
+                    onChange={(e) => setIncidentResolutionNotes(e.target.value)}
+                    placeholder="Describe how the incident was mitigated, verified, and restored to healthy state..."
+                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResolveModalIncident(null)}
+                    disabled={isSubmittingIncidentAction}
+                    className="px-4 py-2 text-slate-500 hover:text-slate-700 font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingIncidentAction || !incidentResolutionNotes.trim()}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSubmittingIncidentAction && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Confirm Resolution</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

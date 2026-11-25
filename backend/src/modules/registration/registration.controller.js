@@ -1,6 +1,7 @@
 import { fullRegistrationSchema, resubmitCorrectionSchema } from './registration.validator.js';
 import registrationService from './registration.service.js';
 import collegeService from '../../services/collegeService.js';
+import analyticsService from '../../services/analyticsService.js';
 import { success, error } from '../../utils/response.js';
 
 export const startRegistration = async (_req, res) => {
@@ -81,6 +82,12 @@ export const submitRegistration = async (req, res) => {
     }
 
     const result = await registrationService.submitRegistrationApplication(parseResult.data, req.files);
+    analyticsService.trackEvent({
+      eventType: 'REGISTRATION_COMPLETED',
+      userId: result.application?.id || null,
+      collegeName: parseResult.data.collegeName || null,
+      metadata: { applicationId: result.application?.applicationId },
+    });
     return success(res, result, result.message, 201);
   } catch (err) {
     return error(res, err.message, 400);
