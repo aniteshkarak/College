@@ -20,10 +20,18 @@ router.get('/incoming', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
 
+    if (req.user.accountStatus !== 'ACTIVE' || req.user.verificationStatus !== 'APPROVED') {
+      return error(res, 'Only active and approved students can view match requests.', 403);
+    }
+
     const incoming = await prisma.matchRequest.findMany({
       where: {
         receiverId: currentUserId,
         status: 'PENDING',
+        sender: {
+          accountStatus: 'ACTIVE',
+          verificationStatus: 'APPROVED',
+        },
       },
       include: {
         sender: {
@@ -56,14 +64,22 @@ router.get('/incoming', requireAuth, async (req, res) => {
   }
 });
 
-// 1b. Get Sent Requests
+// 1b. Get Sent Requests (Outgoing)
 router.get('/sent', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
 
+    if (req.user.accountStatus !== 'ACTIVE' || req.user.verificationStatus !== 'APPROVED') {
+      return error(res, 'Only active and approved students can view sent requests.', 403);
+    }
+
     const sent = await prisma.matchRequest.findMany({
       where: {
         senderId: currentUserId,
+        receiver: {
+          accountStatus: 'ACTIVE',
+          verificationStatus: 'APPROVED',
+        },
       },
       include: {
         receiver: {
@@ -102,10 +118,16 @@ router.get('/matches', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
 
+    if (req.user.accountStatus !== 'ACTIVE' || req.user.verificationStatus !== 'APPROVED') {
+      return error(res, 'Only active and approved students can view matches.', 403);
+    }
+
     const matches = await prisma.match.findMany({
       where: {
         status: 'ACTIVE',
         OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
+        user1: { accountStatus: 'ACTIVE' },
+        user2: { accountStatus: 'ACTIVE' },
       },
       include: {
         user1: {
@@ -188,6 +210,21 @@ router.post('/send-request', requireAuth, async (req, res) => {
       return error(res, 'Invalid receiver ID. You cannot like yourself.', 400);
     }
 
+    // Gatekeeping: Sender must be active and approved
+    if (sender.accountStatus !== 'ACTIVE' || sender.verificationStatus !== 'APPROVED') {
+      return error(res, 'Only active and approved students may send match requests.', 403);
+    }
+
+    // Gatekeeping: Receiver must exist, be active and approved
+    const receiver = await prisma.user.findUnique({
+      where: { id: receiverId },
+      select: { id: true, accountStatus: true, verificationStatus: true, displayName: true },
+    });
+
+    if (!receiver || receiver.accountStatus !== 'ACTIVE' || receiver.verificationStatus !== 'APPROVED') {
+      return error(res, 'Target student account is not active or approved.', 404);
+    }
+
     // Check if either user has blocked the other
     const blockCheck = await prisma.userBlock.findFirst({
       where: {
@@ -202,6 +239,25 @@ router.post('/send-request', requireAuth, async (req, res) => {
       return error(res, 'Unable to interact with this profile.', 403);
     }
 
+    // Check if there is already an existing match between these users
+    const existingMatch = await prisma.match.findFirst({
+      where: {
+        OR: [
+          { user1Id: sender.id, user2Id: receiverId },
+          { user1Id: receiverId, user2Id: sender.id },
+        ],
+      },
+    });
+
+    if (existingMatch) {
+      if (existingMatch.status === 'ACTIVE') {
+        return error(res, 'You are already mutual friends with this user.', 400);
+      }
+      if (existingMatch.status === 'BLOCKED' || existingMatch.status === 'UNMATCHED') {
+        return error(res, 'Unable to interact with this profile due to previous unmatch or block.', 403);
+      }
+    }
+
     // Check sent request limit based on plan
     const userLimits = PLAN_LIMITS[sender.subscriptionPlan] || PLAN_LIMITS.free;
     if (sender.sentRequestsCount >= userLimits.maxSent) {
@@ -212,7 +268,7 @@ router.post('/send-request', requireAuth, async (req, res) => {
       );
     }
 
-    // Check if already requested or matched
+    // Check if a request already exists between these users
     const existingReq = await prisma.matchRequest.findFirst({
       where: {
         OR: [
@@ -223,15 +279,28 @@ router.post('/send-request', requireAuth, async (req, res) => {
     });
 
     if (existingReq) {
-      return error(res, 'A request or match already exists between these users', 400);
+      if (existingReq.status === 'PENDING') {
+        return error(res, 'A pending match request already exists between these students.', 400);
+      }
+      if (existingReq.status === 'ACCEPTED') {
+        return error(res, 'A mutual match already exists between these students.', 400);
+      }
     }
 
     const newRequest = await prisma.$transaction(async (tx) => {
-      const r = await tx.matchRequest.create({
-        data: {
+      // Upsert to handle any previously rejected request between sender and receiver safely
+      const r = await tx.matchRequest.upsert({
+        where: {
+          senderId_receiverId: { senderId: sender.id, receiverId },
+        },
+        create: {
           senderId: sender.id,
           receiverId,
           status: 'PENDING',
+        },
+        update: {
+          status: 'PENDING',
+          updatedAt: new Date(),
         },
       });
 
@@ -266,6 +335,11 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
     const currentUserId = req.user.id;
     const { id } = req.params;
 
+    // Gatekeeping: Acceptor must be active and approved
+    if (req.user.accountStatus !== 'ACTIVE' || req.user.verificationStatus !== 'APPROVED') {
+      return error(res, 'Only active and approved students may accept match requests.', 403);
+    }
+
     const matchReq = await prisma.matchRequest.findUnique({
       where: { id },
       include: { sender: true },
@@ -277,6 +351,11 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
 
     if (matchReq.status !== 'PENDING') {
       return error(res, `Request is already ${matchReq.status}`, 400);
+    }
+
+    // Gatekeeping: Sender must still be active and approved
+    if (!matchReq.sender || matchReq.sender.accountStatus !== 'ACTIVE' || matchReq.sender.verificationStatus !== 'APPROVED') {
+      return error(res, 'Cannot accept request from a suspended or unapproved student account.', 403);
     }
 
     // Check mutual matches quota
@@ -312,19 +391,19 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       return error(res, 'Cannot accept request from a blocked user', 403);
     }
 
-    // Transaction to update request, create or restore Match and Conversation idempotently
+    // Deterministic ordering of user IDs for robust database constraint enforcement
+    const [user1Id, user2Id] = [matchReq.senderId, currentUserId].sort();
+
+    // Transaction to update request, create or restore Match and Conversation atomically
     const result = await prisma.$transaction(async (tx) => {
       await tx.matchRequest.update({
         where: { id },
         data: { status: 'ACCEPTED' },
       });
 
-      let match = await tx.match.findFirst({
+      let match = await tx.match.findUnique({
         where: {
-          OR: [
-            { user1Id: matchReq.senderId, user2Id: currentUserId },
-            { user1Id: currentUserId, user2Id: matchReq.senderId },
-          ],
+          user1Id_user2Id: { user1Id, user2Id },
         },
         include: { conversation: true },
       });
@@ -332,8 +411,8 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
       if (!match) {
         match = await tx.match.create({
           data: {
-            user1Id: matchReq.senderId,
-            user2Id: currentUserId,
+            user1Id,
+            user2Id,
             status: 'ACTIVE',
             stage: 'Friend',
           },
@@ -356,26 +435,43 @@ router.post('/requests/:id/accept', requireAuth, async (req, res) => {
         });
       }
 
-      // System greeting message
-      await tx.message.create({
-        data: {
-          conversationId: conv.id,
-          senderId: currentUserId,
-          content: `You and ${matchReq.sender.displayName} accepted each other and are now Mutual Friends! Start talking freely as friends.`,
-          messageType: 'SYSTEM_PROMPT',
-        },
+      // Initial system greeting message
+      const existingGreeting = await tx.message.findFirst({
+        where: { conversationId: conv.id, messageType: 'SYSTEM_PROMPT' },
       });
+
+      if (!existingGreeting) {
+        await tx.message.create({
+          data: {
+            conversationId: conv.id,
+            senderId: currentUserId,
+            content: `You and ${matchReq.sender.displayName} accepted each other and are now Mutual Friends! Start talking freely as friends.`,
+            messageType: 'SYSTEM_PROMPT',
+          },
+        });
+      }
 
       return { match, conversation: conv };
     });
 
-    // Create real-time notification for sender with Socket.IO emission
+    // 1. Send real-time notification to Sender (Student A)
     await notificationService.createNotification({
       recipientId: matchReq.senderId,
       actorId: currentUserId,
       type: NOTIFICATION_TYPES.LIKE_ACCEPTED,
       title: 'Mutual Match!',
       message: `${currentUser.displayName} accepted your match request! You are now Mutual Friends.`,
+      relatedEntityId: result.match.id,
+      data: { matchId: result.match.id, conversationId: result.conversation.id },
+    });
+
+    // 2. Send real-time confirmation notification to Acceptor (Student B)
+    await notificationService.createNotification({
+      recipientId: currentUserId,
+      actorId: matchReq.senderId,
+      type: NOTIFICATION_TYPES.LIKE_ACCEPTED,
+      title: 'Mutual Match!',
+      message: `You accepted ${matchReq.sender.displayName}'s request! You are now Mutual Friends.`,
       relatedEntityId: result.match.id,
       data: { matchId: result.match.id, conversationId: result.conversation.id },
     });
@@ -397,6 +493,10 @@ router.post('/requests/:id/reject', requireAuth, async (req, res) => {
       return error(res, 'Match request not found or unauthorized', 404);
     }
 
+    if (matchReq.status !== 'PENDING') {
+      return error(res, `Request is already ${matchReq.status}`, 400);
+    }
+
     await prisma.matchRequest.update({
       where: { id },
       data: { status: 'REJECTED' },
@@ -408,21 +508,98 @@ router.post('/requests/:id/reject', requireAuth, async (req, res) => {
   }
 });
 
+// 5b. Cancel Sent Match Request (Outgoing Pending)
+const handleCancelMatchRequest = async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { id } = req.params;
+
+    const matchReq = await prisma.matchRequest.findUnique({ where: { id } });
+    if (!matchReq || matchReq.senderId !== currentUserId) {
+      return error(res, 'Match request not found or unauthorized', 404);
+    }
+
+    if (matchReq.status !== 'PENDING') {
+      return error(res, `Cannot cancel request with status ${matchReq.status}`, 400);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Delete the pending match request
+      await tx.matchRequest.delete({ where: { id } });
+
+      // Decrement sender sentRequestsCount
+      const sender = await tx.user.findUnique({
+        where: { id: currentUserId },
+        select: { sentRequestsCount: true },
+      });
+      if (sender && sender.sentRequestsCount > 0) {
+        await tx.user.update({
+          where: { id: currentUserId },
+          data: { sentRequestsCount: { decrement: 1 } },
+        });
+      }
+
+      // Delete associated in-app notification from recipient's inbox
+      await tx.notification.deleteMany({
+        where: {
+          recipientId: matchReq.receiverId,
+          relatedEntityId: id,
+          type: NOTIFICATION_TYPES.NEW_LIKE,
+        },
+      });
+    });
+
+    return success(res, null, 'Match request cancelled successfully');
+  } catch (err) {
+    return error(res, err.message, 500);
+  }
+};
+
+router.delete('/requests/:id', requireAuth, handleCancelMatchRequest);
+router.post('/requests/:id/cancel', requireAuth, handleCancelMatchRequest);
+
 // 6. Unmatch Users
 router.post('/matches/:id/unmatch', requireAuth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { id } = req.params;
 
-    const match = await prisma.match.findUnique({ where: { id } });
+    const match = await prisma.match.findUnique({
+      where: { id },
+      include: { conversation: true },
+    });
+
     if (!match || (match.user1Id !== currentUserId && match.user2Id !== currentUserId)) {
       return error(res, 'Match not found or unauthorized', 404);
     }
 
-    await prisma.match.update({
-      where: { id },
-      data: { status: 'UNMATCHED' },
+    if (match.status === 'UNMATCHED') {
+      return success(res, null, 'Already unmatched');
+    }
+
+    const partnerId = match.user1Id === currentUserId ? match.user2Id : match.user1Id;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.match.update({
+        where: { id },
+        data: { status: 'UNMATCHED' },
+      });
+
+      if (match.conversation) {
+        await tx.message.create({
+          data: {
+            conversationId: match.conversation.id,
+            senderId: currentUserId,
+            content: 'This match was ended. Messaging is now disabled.',
+            messageType: 'SYSTEM_PROMPT',
+          },
+        });
+      }
     });
+
+    if (match.conversation) {
+      socketService.notifyConversationBlocked(match.conversation.id, currentUserId, partnerId);
+    }
 
     return success(res, null, 'Unmatched successfully');
   } catch (err) {

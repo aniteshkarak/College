@@ -148,6 +148,8 @@ model User {
   blocksReceived        UserBlock[]          @relation("BlocksReceived")
   notifications         Notification[]       @relation("RecipientNotifications")
   actedNotifications    Notification[]       @relation("ActorNotifications")
+
+  @@index([accountStatus, verificationStatus])
 }
 
 // -------------------------------------------------------------
@@ -261,6 +263,7 @@ model UserPhoto {
   user                  User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([registrationId, photoOrder])
+  @@index([userId, photoOrder])
 }
 
 // -------------------------------------------------------------
@@ -378,6 +381,9 @@ model MatchRequest {
   receiver    User     @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
+  @@index([receiverId, status])
+  @@index([senderId, status])
+  @@index([createdAt])
 }
 
 model Match {
@@ -395,6 +401,9 @@ model Match {
   goRequests     GoStageRequest[]
 
   @@unique([user1Id, user2Id])
+  @@index([user1Id, status])
+  @@index([user2Id, status])
+  @@index([updatedAt])
 }
 
 model GoStageRequest {
@@ -433,6 +442,10 @@ model Message {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, isRead])
+  @@index([senderId])
 }
 
 model CampusAnnouncement {
@@ -458,6 +471,7 @@ model CampusAnnouncement {
   @@index([collegeName])
   @@index([postType])
   @@index([createdAt])
+  @@index([collegeName, createdAt])
 }
 
 model PostLike {
@@ -523,6 +537,7 @@ model CampusEvent {
 
   @@index([collegeName])
   @@index([eventDate])
+  @@index([collegeName, eventDate])
 }
 
 model Report {
@@ -536,6 +551,10 @@ model Report {
 
   reporter       User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
   reportedUser   User     @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([reporterId])
+  @@index([reportedUserId])
 }
 
 // -------------------------------------------------------------

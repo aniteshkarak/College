@@ -52,7 +52,12 @@ export const initSocketServer = async (httpServer, app) => {
   const io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || (config.corsOrigins && config.corsOrigins.includes(origin))) {
+        if (
+          !origin ||
+          config.nodeEnv === 'development' ||
+          /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin) ||
+          (config.corsOrigins && config.corsOrigins.includes(origin))
+        ) {
           return callback(null, true);
         }
         return callback(new Error('Origin not allowed by Socket.IO CORS'));

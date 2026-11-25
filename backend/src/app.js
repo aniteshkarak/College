@@ -51,8 +51,11 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (curl, mobile apps, Postman)
       if (!origin) return callback(null, true);
-      // Allow any localhost / 127.0.0.1 port in development
-      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      // Allow any localhost / 127.0.0.1 or local network IP (LAN/Wi-Fi) in development
+      if (
+        config.nodeEnv === 'development' ||
+        /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin)
+      ) {
         return callback(null, true);
       }
       if (config.corsOrigins && config.corsOrigins.includes(origin)) {
@@ -123,13 +126,13 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Rate Limiting (Applied across student & general API endpoints, not health checks)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 600,
+  max: config.nodeEnv === 'development' ? 10000 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
     error: 'RATE_LIMIT_EXCEEDED',
-    message: 'Too many requests from this IP. Please try again after 15 minutes.',
+    message: 'Too many requests. Please try again after a few minutes.',
   },
 });
 app.use('/api/', apiLimiter);
@@ -163,12 +166,12 @@ app.use('/api/v1/admin', adminRoutes);
 const staticPhotoHeaders = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400, immutable');
 };
 
-app.use('/api/v1/photos', express.static(STORAGE_PATHS.PHOTOS_DIR, { setHeaders: staticPhotoHeaders }));
-app.use('/api/v1/thumbnails', express.static(STORAGE_PATHS.THUMBNAILS_DIR, { setHeaders: staticPhotoHeaders }));
-app.use('/api/v1/discovery-photos', express.static(STORAGE_PATHS.DISCOVERY_DIR, { setHeaders: staticPhotoHeaders }));
+app.use('/api/v1/photos', express.static(STORAGE_PATHS.PHOTOS_DIR, { setHeaders: staticPhotoHeaders, maxAge: '7d', etag: true }));
+app.use('/api/v1/thumbnails', express.static(STORAGE_PATHS.THUMBNAILS_DIR, { setHeaders: staticPhotoHeaders, maxAge: '7d', etag: true }));
+app.use('/api/v1/discovery-photos', express.static(STORAGE_PATHS.DISCOVERY_DIR, { setHeaders: staticPhotoHeaders, maxAge: '7d', etag: true }));
 
 // Fallback image placeholder if requested photo is missing on disk (prevents broken image icons)
 const placeholderSvg = Buffer.from(

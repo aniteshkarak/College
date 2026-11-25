@@ -395,6 +395,10 @@ export const AppProvider = ({ children }) => {
   // Incoming Likes ("Who liked you" with Accept / Reject buttons)
   const [incomingLikes, setIncomingLikes] = useState(INITIAL_INCOMING_LIKES);
 
+  // Sent Requests (Outgoing like requests with status & cancellation)
+  const [sentRequests, setSentRequests] = useState([]);
+  const [isMatchingLoading, setIsMatchingLoading] = useState(false);
+
   // Mutual Friends / Matches (Can only message after Accept!)
   const [matches, setMatches] = useState(INITIAL_MUTUAL_FRIENDS);
   const [conversations, setConversations] = useState(INITIAL_CONVERSATIONS);
@@ -598,6 +602,34 @@ export const AppProvider = ({ children }) => {
         setIncomingLikes(mapped);
       })
       .catch((err) => console.warn('Could not load incoming likes:', err.message));
+
+    // 2b. Fetch Sent (Outgoing) Requests
+    api.matching.getSent()
+      .then((res) => {
+        if (!isMounted) return;
+        const sent = res?.data?.sentRequests || res?.data?.requests || [];
+        const mapped = sent.map((r) => ({
+          id: r.id,
+          receiver_id: r.receiverId || r.user?.id,
+          status: r.status,
+          user: {
+            id: r.user?.id || r.receiverId,
+            display_name: r.user?.displayName || r.user?.display_name || 'Campus Student',
+            avatar_url: r.user?.avatarUrl || r.user?.avatar_url,
+            additional_photos: r.user?.additionalPhotos || r.user?.additional_photos || [],
+            college_name: r.user?.collegeName || r.user?.college_name || 'Campus',
+            course: r.user?.course || 'Student',
+            age: r.user?.age || 21,
+            gender: r.user?.gender || 'Student',
+            bio: r.user?.bio || '',
+            interests: r.user?.interests || [],
+            city: r.user?.city || '',
+          },
+          created_at: r.createdAt || r.sentAt,
+        }));
+        setSentRequests(mapped);
+      })
+      .catch((err) => console.warn('Could not load sent requests:', err.message));
 
     // 3. Fetch Matches
     api.matching.getMatches()
@@ -1155,6 +1187,9 @@ export const AppProvider = ({ children }) => {
     setMatches((prev) => [newMutualFriend, ...prev]);
     setIncomingLikes((prev) => prev.filter((item) => item.id !== likeItem.id));
 
+    // Show celebratory match modal
+    setMatchedCelebrationUser(likeItem.user);
+
     // Create initial conversation thread
     setConversations((prev) => ({
       ...prev,
@@ -1186,6 +1221,124 @@ export const AppProvider = ({ children }) => {
     addToast('Match request declined.', 'info');
   };
 
+  const handleCancelRequest = async (requestId) => {
+    try {
+      await api.matching.cancelRequest(requestId);
+      setSentRequests((prev) => prev.filter((r) => r.id !== requestId));
+      setCurrentUser((prev) => ({
+        ...prev,
+        sent_requests_count: Math.max(0, (prev?.sent_requests_count || 1) - 1),
+      }));
+      addToast('Match request cancelled.', 'info');
+    } catch (err) {
+      addToast(err.message || 'Failed to cancel request.', 'error');
+    }
+  };
+
+  const handleUnmatch = async (matchId) => {
+    try {
+      await api.matching.unmatch(matchId);
+      setMatches((prev) => prev.filter((m) => m.id !== matchId));
+      if (activeChatMatch?.id === matchId) {
+        setActiveChatMatch(null);
+      }
+      addToast('Unmatched successfully.', 'info');
+    } catch (err) {
+      addToast(err.message || 'Failed to unmatch.', 'error');
+    }
+  };
+
+  const refreshMatchingData = async () => {
+    try {
+      setIsMatchingLoading(true);
+      const [incRes, sentRes, matchRes] = await Promise.allSettled([
+        api.matching.getIncoming(),
+        api.matching.getSent(),
+        api.matching.getMatches(),
+      ]);
+
+      if (incRes.status === 'fulfilled') {
+        const requests = incRes.value?.data?.incomingLikes || incRes.value?.data?.requests || [];
+        setIncomingLikes(requests.map((r) => ({
+          id: r.id,
+          sender_id: r.senderId || r.user?.id,
+          user: {
+            id: r.user?.id || r.senderId,
+            display_name: r.user?.displayName || r.user?.display_name || 'Campus Student',
+            avatar_url: r.user?.avatarUrl || r.user?.avatar_url,
+            additional_photos: r.user?.additionalPhotos || r.user?.additional_photos || [],
+            college_name: r.user?.collegeName || r.user?.college_name || 'Campus',
+            course: r.user?.course || 'Student',
+            age: r.user?.age || 21,
+            gender: r.user?.gender || 'Student',
+            bio: r.user?.bio || '',
+            interests: r.user?.interests || [],
+            city: r.user?.city || '',
+          },
+          created_at: r.createdAt || r.likedAt,
+        })));
+      }
+
+      if (sentRes.status === 'fulfilled') {
+        const sent = sentRes.value?.data?.sentRequests || sentRes.value?.data?.requests || [];
+        setSentRequests(sent.map((r) => ({
+          id: r.id,
+          receiver_id: r.receiverId || r.user?.id,
+          status: r.status,
+          user: {
+            id: r.user?.id || r.receiverId,
+            display_name: r.user?.displayName || r.user?.display_name || 'Campus Student',
+            avatar_url: r.user?.avatarUrl || r.user?.avatar_url,
+            additional_photos: r.user?.additionalPhotos || r.user?.additional_photos || [],
+            college_name: r.user?.collegeName || r.user?.college_name || 'Campus',
+            course: r.user?.course || 'Student',
+            age: r.user?.age || 21,
+            gender: r.user?.gender || 'Student',
+            bio: r.user?.bio || '',
+            interests: r.user?.interests || [],
+            city: r.user?.city || '',
+          },
+          created_at: r.createdAt || r.sentAt,
+        })));
+      }
+
+      if (matchRes.status === 'fulfilled') {
+        const matchesList = matchRes.value?.data?.matches || [];
+        setMatches(matchesList.map((m) => {
+          const partner = m.user || (m.user1Id === currentUser?.id ? m.user2 : m.user1);
+          return {
+            id: m.id,
+            conversation_id: m.conversationId || m.id,
+            user: {
+              id: partner?.id,
+              display_name: partner?.displayName || partner?.display_name || partner?.fullName || 'Campus Match',
+              avatar_url: partner?.avatarUrl || partner?.avatar_url || partner?.photos?.[0]?.url,
+              additional_photos: partner?.additionalPhotos || partner?.additional_photos || (partner?.photos?.slice(1) || []).map((p) => p.url),
+              college_name: partner?.collegeName || partner?.college_name || partner?.education?.collegeName || 'Campus',
+              course: partner?.course || partner?.education?.course || 'Student',
+              bio: partner?.bio || partner?.profile?.bio || '',
+              interests: partner?.interests || partner?.profile?.interests || [],
+              mood: partner?.currentMood || partner?.mood || 'Want to make friends',
+              age: partner?.age || 21,
+              gender: partner?.gender || 'Student',
+              city: partner?.city || '',
+            },
+            matched_at: m.matched_at || m.createdAt,
+            status: m.status || 'active',
+            stage: m.stage || 'Friend',
+            unread_count: m.unread_count || 0,
+            go_request: m.go_request || null,
+            last_message: m.last_message || null,
+          };
+        }));
+      }
+    } catch (e) {
+      console.warn('Error refreshing matching data:', e.message);
+    } finally {
+      setIsMatchingLoading(false);
+    }
+  };
+
   // SEND MATCH REQUEST (In Discover feed)
   const handleSendMatchRequest = (profile) => {
     // Check sent requests limit
@@ -1206,6 +1359,16 @@ export const AppProvider = ({ children }) => {
       return next;
     });
     setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
+    setSentRequests((prev) => [
+      {
+        id: 'sent_' + Date.now(),
+        receiver_id: profile.id,
+        status: 'PENDING',
+        user: profile,
+        created_at: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
     setCurrentUser((prev) => ({
       ...prev,
       sent_requests_count: (prev?.sent_requests_count || 0) + 1
@@ -1993,6 +2156,12 @@ export const AppProvider = ({ children }) => {
         incomingLikes,
         handleAcceptLike,
         handleRejectLike,
+        sentRequests,
+        setSentRequests,
+        handleCancelRequest,
+        handleUnmatch,
+        refreshMatchingData,
+        isMatchingLoading,
         matches,
         setMatches,
         conversations,

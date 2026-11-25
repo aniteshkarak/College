@@ -81,26 +81,45 @@ router.get('/conversations', requireAuth, async (req, res) => {
       orderBy: { updatedAt: 'desc' },
     });
 
-    const nonBlockedConversations = [];
-    for (const conv of conversations) {
-      if (!(await isConversationBlocked(conv.match))) {
-        nonBlockedConversations.push(conv);
-      }
-    }
+    // 1. Batch fetch all blocks for current user in one query (eliminates N+1 query loop)
+    const userBlocks = await prisma.userBlock.findMany({
+      where: {
+        OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }],
+      },
+      select: { blockerId: true, blockedId: true },
+    });
+    const blockedUserIds = new Set(
+      userBlocks.map((b) => (b.blockerId === currentUserId ? b.blockedId : b.blockerId))
+    );
 
-    const formatted = await Promise.all(
-      nonBlockedConversations.map(async (conv) => {
-        const partner = conv.match.user1Id === currentUserId ? conv.match.user2 : conv.match.user1;
-        const publicPartner = serializePublicProfile(partner);
+    const nonBlockedConversations = conversations.filter((conv) => {
+      if (!conv.match || conv.match.status === 'BLOCKED' || conv.match.status === 'UNMATCHED') return false;
+      const partnerId = conv.match.user1Id === currentUserId ? conv.match.user2Id : conv.match.user1Id;
+      return !blockedUserIds.has(partnerId);
+    });
 
-        // Calculate unread count for current user
-        const unreadCount = await prisma.message.count({
+    // 2. Batch calculate unread counts across all active conversations in one query (eliminates N+1 count queries)
+    const nonBlockedIds = nonBlockedConversations.map((c) => c.id);
+    const unreadCountsGroup = nonBlockedIds.length > 0
+      ? await prisma.message.groupBy({
+          by: ['conversationId'],
           where: {
-            conversationId: conv.id,
+            conversationId: { in: nonBlockedIds },
             senderId: { not: currentUserId },
             isRead: false,
           },
-        });
+          _count: { id: true },
+        })
+      : [];
+
+    const unreadMap = new Map(
+      unreadCountsGroup.map((item) => [item.conversationId, item._count.id])
+    );
+
+    const formatted = nonBlockedConversations.map((conv) => {
+      const partner = conv.match.user1Id === currentUserId ? conv.match.user2 : conv.match.user1;
+      const publicPartner = serializePublicProfile(partner);
+      const unreadCount = unreadMap.get(conv.id) || 0;
 
         const lastMsg = conv.messages[0] || null;
 
@@ -125,8 +144,7 @@ router.get('/conversations', requireAuth, async (req, res) => {
           unreadCount,
           updatedAt: conv.updatedAt,
         };
-      })
-    );
+      });
 
     return success(res, { conversations: formatted }, 'Conversations retrieved');
   } catch (err) {

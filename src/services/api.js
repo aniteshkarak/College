@@ -13,12 +13,15 @@ const getApiBaseUrl = () => {
     // If running on Vite dev/preview server, route through Vite proxy /api/v1
     // This completely eliminates cross-origin port issues, localhost vs 127.0.0.1 mismatch,
     // and works out of the box when accessed from mobile devices on local Wi-Fi!
-    const port = window.location.port;
+    const { port, hostname, protocol } = window.location;
     if (port === '3000' || port === '5173' || port === '4173') {
       return '/api/v1';
     }
     if (port === '5000') {
       return '/api/v1';
+    }
+    if (hostname) {
+      return `${protocol}//${hostname}:5000/api/v1`;
     }
   }
   return 'http://localhost:5000/api/v1';
@@ -571,6 +574,10 @@ export const api = {
       }),
     rejectRequest: (requestId) =>
       request(`/matching/requests/${encodeURIComponent(requestId)}/reject`, {
+        method: 'POST',
+      }),
+    cancelRequest: (requestId) =>
+      request(`/matching/requests/${encodeURIComponent(requestId)}/cancel`, {
         method: 'POST',
       }),
     unmatch: (matchId) =>

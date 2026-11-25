@@ -31,7 +31,8 @@ import {
   Activity,
   Info,
   MapPin,
-  GraduationCap
+  GraduationCap,
+  UserX
 } from 'lucide-react';
 
 export const ChatRoom = ({ match, onBack }) => {
@@ -45,6 +46,7 @@ export const ChatRoom = ({ match, onBack }) => {
     setBlockTarget,
     handleSendGoRequest,
     handleRespondToGoRequest,
+    handleUnmatch,
     navigateTo,
     addToast
   } = useApp();
@@ -237,11 +239,23 @@ export const ChatRoom = ({ match, onBack }) => {
                 <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
 
                 <button
+                  onClick={async () => {
+                    setShowOptionsMenu(false);
+                    if (window.confirm(`Are you sure you want to unmatch ${match.user.display_name}? Messaging will be disabled.`)) {
+                      await handleUnmatch(match.id);
+                      onBack();
+                    }
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl"
+                >
+                  <UserX className="w-3.5 h-3.5" /> Unmatch Friend
+                </button>
+                <button
                   onClick={() => {
                     setShowOptionsMenu(false);
                     setReportTarget({ user: match.user });
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-xl"
                 >
                   <Flag className="w-3.5 h-3.5" /> Report Conversation
                 </button>
