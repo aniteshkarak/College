@@ -53,15 +53,7 @@ export const requireAdminAuth = async (req, res, next) => {
         },
       });
     } catch (dbErr) {
-      if (payload.roleName && ALLOWED_ADMIN_ROLES.includes(payload.roleName)) {
-        admin = {
-          id: payload.sub,
-          email: payload.email || 'aniteshkarak@gmail.com',
-          fullName: payload.fullName || 'Super Administrator Anitesh',
-          roleName: payload.roleName,
-          isActive: true,
-        };
-      }
+      return error(res, 'Administrator authentication verification failed due to database error.', 500);
     }
 
     if (!admin || !admin.isActive) {

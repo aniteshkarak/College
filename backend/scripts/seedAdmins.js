@@ -5,8 +5,11 @@ import prisma from '../src/config/prisma.js';
 dotenv.config();
 
 async function seedAdmins() {
-  const superPassword = process.env.ADMIN_SUPER_PASSWORD || 'SuperAdminSecurePass2026!';
-  const platformPassword = process.env.ADMIN_REVIEWER_PASSWORD || 'AdminRootPassword2026!';
+  const superPassword = process.env.ADMIN_SUPER_PASSWORD;
+  const platformPassword = process.env.ADMIN_REVIEWER_PASSWORD;
+  if (!superPassword || !platformPassword) {
+    throw new Error('ADMIN_SUPER_PASSWORD and ADMIN_REVIEWER_PASSWORD must be defined in environment.');
+  }
   const userPasswordHash = await argon2.hash(superPassword);
   const platformAdminHash = await argon2.hash(platformPassword);
 

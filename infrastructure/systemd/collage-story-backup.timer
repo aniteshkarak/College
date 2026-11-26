@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Collage Story Daily Backup Timer
+Requires=collage-story-backup.service
+
+[Timer]
+# Runs daily at 02:00 AM (server local time)
+OnCalendar=*-*-* 02:00:00
+# Persistent=true ensures the backup runs immediately if server was powered off at 02:00
+Persistent=true
+# Run within 15 minutes after system boot
+OnBootSec=15min
+
+[Install]
+WantedBy=timers.target

@@ -1,4 +1,6 @@
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
 import prisma from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import incidentService, { INCIDENT_SEVERITY } from './incidentService.js';
@@ -93,6 +95,39 @@ export const alertService = {
       });
     }
 
+    // 6. Daily Backup Recency & Integrity Check
+    const localBackupDir = path.resolve('storage/backups/local');
+    let backupHealthy = true;
+    let backupMessage = 'Backups up to date';
+    if (!fs.existsSync(localBackupDir)) {
+      backupHealthy = false;
+      backupMessage = 'Local backup directory does not exist.';
+    } else {
+      const manifests = fs.readdirSync(localBackupDir).filter(f => f.startsWith('backup_manifest_') && f.endsWith('.json'));
+      if (manifests.length === 0) {
+        backupHealthy = false;
+        backupMessage = 'No backup manifests found. System has never completed an automated backup.';
+      } else {
+        manifests.sort().reverse();
+        const latestManifestPath = path.join(localBackupDir, manifests[0]);
+        const mtime = fs.statSync(latestManifestPath).mtimeMs;
+        const hoursSinceBackup = (now - mtime) / (1000 * 60 * 60);
+        if (hoursSinceBackup > 26) {
+          backupHealthy = false;
+          backupMessage = `Last successful backup was ${hoursSinceBackup.toFixed(1)} hours ago (Threshold: 26 hours).`;
+        }
+      }
+    }
+
+    if (!backupHealthy) {
+      alerts.push({
+        rule: 'BACKUP_OVERDUE',
+        severity: INCIDENT_SEVERITY.CRITICAL,
+        message: backupMessage,
+        component: 'BACKUP',
+      });
+    }
+
     // Process alerts through deduplication and escalate to incidents
     for (const alert of alerts) {
       const cooldownKey = `${alert.rule}_${alert.component}`;
@@ -124,6 +159,7 @@ export const alertService = {
         redisUp: redis.status === 'HEALTHY',
         storageWritable: storage.status === 'HEALTHY',
         memoryHealthy: memUsagePercent < ALERT_CONFIG.MEMORY_USAGE_PERCENT_THRESHOLD,
+        backupUpToDate: backupHealthy,
       },
     };
   },

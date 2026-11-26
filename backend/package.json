@@ -10,7 +10,10 @@
     "supervisor": "node scripts/devSupervisor.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "backup": "node scripts/backup/runBackup.js",
+    "backup:restore-test": "node scripts/backup/runRestoreTest.js",
     "test": "node --test tests/**/*.test.js"
   },
   "dependencies": {

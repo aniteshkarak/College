@@ -43,6 +43,9 @@ dist-ssr
 # Sensitive storage and test outputs
 reports/
 backend/storage/private/*
+backend/storage/backups/*
+backend/storage/security/*
+backend/storage/isolated_*
 !backend/storage/private/.gitkeep
 !backend/storage/private/documents/.gitkeep
 !backend/storage/private/photos/.gitkeep

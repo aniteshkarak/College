@@ -1,0 +1,6 @@
+# Collage Story Daily Scheduled Backup Cron Job
+# Runs every night at 02:00 AM server time
+# Format: m h dom mon dow user command
+0 2 * * * cd /var/www/collage-story/backend && /usr/bin/node scripts/backup/runScheduledBackup.js >> /var/log/collage-story/backup_cron.log 2>&1
+# Catch-up check on system reboot
+@reboot sleep 60 && cd /var/www/collage-story/backend && /usr/bin/node scripts/backup/runScheduledBackup.js >> /var/log/collage-story/backup_reboot.log 2>&1
