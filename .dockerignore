@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ssr
+.git
+.github
+.vscode
+.env
+.env.*
+*.log
+backend/storage/private/*
+backend/storage/backups/*
+backend/storage/security/*
+reports/

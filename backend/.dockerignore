@@ -1,0 +1,12 @@
+node_modules
+.git
+.github
+.env
+.env.*
+*.log
+storage/private/*
+storage/backups/*
+storage/security/*
+storage/isolated_*
+tests/
+reports/

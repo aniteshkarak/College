@@ -1,0 +1,170 @@
+version: '3.8'
+
+# ==============================================================
+# Collage Story - Production Stack for Oracle Cloud Always Free
+# Deployment Target: Coolify / Standalone Docker Compose (ARM64 & AMD64)
+# ==============================================================
+
+services:
+  # ------------------------------------------------------------
+  # 1. PostgreSQL 17 Database Service (Isolated Internal Network)
+  # ------------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    container_name: collage-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-college_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be provided}
+      POSTGRES_DB: ${POSTGRES_DB:-college_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    expose:
+      - "5432"
+    volumes:
+      - collage_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-college_admin} -d ${POSTGRES_DB:-college_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - collage_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ------------------------------------------------------------
+  # 2. Redis 7 Cache & Pub/Sub Adapter (Isolated Internal Network)
+  # ------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: collage-redis
+    restart: unless-stopped
+    command: >
+      sh -c "redis-server --appendonly yes --requirepass $${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be provided}
+    expose:
+      - "6379"
+    volumes:
+      - collage_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - collage_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ------------------------------------------------------------
+  # 3. Collage Story Backend API & Socket.IO Service
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: collage-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-college_admin}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-college_db}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be provided}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET must be provided}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-30d}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:?ADMIN_JWT_SECRET must be provided}
+      ADMIN_JWT_EXPIRES_IN: ${ADMIN_JWT_EXPIRES_IN:-8h}
+      ADMIN_SUPER_PASSWORD: ${ADMIN_SUPER_PASSWORD}
+      ADMIN_REVIEWER_PASSWORD: ${ADMIN_REVIEWER_PASSWORD}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY required}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost,http://localhost:8080,https://${APP_DOMAIN:-localhost}}
+    expose:
+      - "5000"
+    volumes:
+      - collage_private_storage:/app/storage/private
+      - collage_backups:/app/storage/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - collage_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ------------------------------------------------------------
+  # 4. Frontend Web SPA & Nginx Reverse Proxy
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: collage-frontend
+    restart: unless-stopped
+    ports:
+      - "${HOST_HTTP_PORT:-80}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - collage_internal
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+# --------------------------------------------------------------
+# Persistent Volume Declarations
+# --------------------------------------------------------------
+volumes:
+  collage_postgres_data:
+    name: collage_postgres_prod_data
+  collage_redis_data:
+    name: collage_redis_prod_data
+  collage_private_storage:
+    name: collage_private_prod_storage
+  collage_backups:
+    name: collage_backups_prod_data
+
+# --------------------------------------------------------------
+# Isolated Internal Network (Database & Redis not exposed publicly)
+# --------------------------------------------------------------
+networks:
+  collage_internal:
+    name: collage_internal_network
+    driver: bridge

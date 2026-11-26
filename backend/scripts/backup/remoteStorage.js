@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { calculateFileSha256, encryptArchive, decryptArchive } from './cryptoUtils.js';
+import S3StorageAdapter from './s3StorageAdapter.js';
 import logger from '../../src/utils/logger.js';
 
 export const STORAGE_DESTINATION_TYPES = {
@@ -68,30 +69,54 @@ export const replicateEncryptedToOffsite = async (
   const baseFileName = path.basename(localFilePath);
   const encFileName = `${baseFileName}.enc`;
   const tempEncPath = path.join(path.dirname(localFilePath), encFileName);
-  const destEncPath = path.join(offsiteVaultDir, encFileName);
-  const destShaPath = path.join(offsiteVaultDir, `${encFileName}.sha256`);
 
   console.log(`[OFFSITE REPLICATION] Encrypting ${baseFileName} with AES-256-GCM...`);
   
   // 1. Encrypt archive locally using AES-256-GCM
   const { sha256: localEncSha256, encryptedBytes } = await encryptArchive(localFilePath, tempEncPath, encryptionKey);
 
-  // 2. Replicate encrypted file to offsite vault
+  // 2. Check if S3 Cloud Storage is configured
+  const s3Adapter = new S3StorageAdapter();
+  if (s3Adapter.isConfigured()) {
+    console.log(`[OFFSITE REPLICATION] Remote destination: Cloud S3 Bucket (${s3Adapter.bucket})...`);
+    const s3Result = await s3Adapter.uploadFile(tempEncPath, encFileName, localEncSha256);
+    
+    // Clean up temporary local encrypted file
+    if (fs.existsSync(tempEncPath)) {
+      fs.unlinkSync(tempEncPath);
+    }
+
+    return {
+      baseFileName,
+      encryptedFileName: encFileName,
+      s3Bucket: s3Adapter.bucket,
+      s3Key: encFileName,
+      encryptedBytes,
+      sha256: localEncSha256,
+      storageClassification: destinationClassification,
+      verified: true,
+      provider: 'S3_CLOUD_OBJECT_STORAGE',
+    };
+  }
+
+  // 3. Independent physical / local vault replication
+  const destEncPath = path.join(offsiteVaultDir, encFileName);
+  const destShaPath = path.join(offsiteVaultDir, `${encFileName}.sha256`);
+
   console.log(`[OFFSITE REPLICATION] Replicating encrypted payload (${(encryptedBytes / 1024).toFixed(2)} KB) to ${destEncPath}...`);
   fs.copyFileSync(tempEncPath, destEncPath);
 
-  // 3. Verify destination checksum
+  // Verify destination checksum
   const remoteSha256 = await calculateFileSha256(destEncPath);
   if (localEncSha256 !== remoteSha256) {
-    // Remove corrupt destination copy
     if (fs.existsSync(destEncPath)) fs.unlinkSync(destEncPath);
     throw new Error(`Offsite replication checksum mismatch for ${encFileName}. Expected ${localEncSha256}, got ${remoteSha256}`);
   }
 
-  // 4. Write destination checksum file
+  // Write destination checksum file
   fs.writeFileSync(destShaPath, `${remoteSha256}  ${encFileName}\n`, 'utf8');
 
-  // 5. Clean up temporary local encrypted file
+  // Clean up temporary local encrypted file
   if (fs.existsSync(tempEncPath)) {
     fs.unlinkSync(tempEncPath);
   }
